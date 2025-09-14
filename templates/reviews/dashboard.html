@@ -1,0 +1,279 @@
+{% extends 'base.html' %}
+
+{% block title %}Review - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <h1 class="h3 mb-4">
+            <i class="fas fa-search me-2"></i>Review
+        </h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i class="fas fa-calendar-check fa-2x"></i>
+                    </div>
+                    <div>
+                        <h5 class="card-title mb-1">Total Meetings</h5>
+                        <h3 class="mb-0">{{ total_meetings }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i class="fas fa-check-circle fa-2x"></i>
+                    </div>
+                    <div>
+                        <h5 class="card-title mb-1">Completed</h5>
+                        <h3 class="mb-0">{{ completed_meetings }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i class="fas fa-clock fa-2x"></i>
+                    </div>
+                    <div>
+                        <h5 class="card-title mb-1">Upcoming</h5>
+                        <h3 class="mb-0">{{ upcoming_meetings.count }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i class="fas fa-tasks fa-2x"></i>
+                    </div>
+                    <div>
+                        <h5 class="card-title mb-1">Pending Actions</h5>
+                        <h3 class="mb-0">{{ pending_actions }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tab Navigation -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="reviewTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="review-home-tab" data-bs-toggle="tab" data-bs-target="#review-home" type="button" role="tab">
+                            <i class="fas fa-home me-2"></i>Review Home
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="new-review-tab" data-bs-toggle="tab" data-bs-target="#new-review" type="button" role="tab">
+                            <i class="fas fa-plus me-2"></i>New Review
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="edit-review-tab" data-bs-toggle="tab" data-bs-target="#edit-review" type="button" role="tab">
+                            <i class="fas fa-edit me-2"></i>Edit Review
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="reviewTabContent">
+                    <!-- Review Home Tab -->
+                    <div class="tab-pane fade show active" id="review-home" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5 class="mb-3">Recent Meetings</h5>
+                                {% if recent_meetings %}
+                                    <div class="list-group">
+                                        {% for meeting in recent_meetings %}
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <h6 class="mb-1">{{ meeting.team.name }} - {{ meeting.get_meeting_type_display }}</h6>
+                                                    <p class="mb-1">{{ meeting.meeting_date|date:"M d, Y" }}</p>
+                                                    <small class="text-muted">Conducted by {{ meeting.conducted_by.get_full_name }}</small>
+                                                </div>
+                                                <div>
+                                                    <span class="badge bg-{% if meeting.status == 'completed' %}success{% elif meeting.status == 'in_progress' %}primary{% else %}secondary{% endif %}">
+                                                        {{ meeting.get_status_display }}
+                                                    </span>
+                                                    <div class="btn-group btn-group-sm mt-2">
+                                                        <a href="{% url 'reviews:meeting' meeting.pk %}" class="btn btn-outline-primary"
+                                                           data-bs-toggle="tooltip" data-bs-placement="top" title="View Meeting">
+                                                            <i class="fas fa-eye"></i>
+                                                        </a>
+                                                        <a href="{% url 'reviews:edit_review' meeting.pk %}" class="btn btn-outline-secondary"
+                                                           data-bs-toggle="tooltip" data-bs-placement="top" title="Edit Review">
+                                                            <i class="fas fa-edit"></i>
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <div class="text-center py-4">
+                                        <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted">No meetings found.</p>
+                                        <a href="#new-review" data-bs-toggle="tab" class="btn btn-primary">Create First Meeting</a>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-md-6">
+                                <h5 class="mb-3">Upcoming Meetings</h5>
+                                {% if upcoming_meetings %}
+                                    <div class="list-group">
+                                        {% for meeting in upcoming_meetings %}
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <h6 class="mb-1">{{ meeting.team.name }} - {{ meeting.get_meeting_type_display }}</h6>
+                                                    <p class="mb-1">{{ meeting.meeting_date|date:"M d, Y" }}</p>
+                                                    <small class="text-muted">To be conducted by {{ meeting.conducted_by.get_full_name }}</small>
+                                                </div>
+                                                <div>
+                                                    <a href="{% url 'reviews:meeting' meeting.pk %}" class="btn btn-primary btn-sm">Start Meeting</a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <div class="text-center py-4">
+                                        <i class="fas fa-calendar-plus fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted">No upcoming meetings scheduled.</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- New Review Tab -->
+                    <div class="tab-pane fade" id="new-review" role="tabpanel">
+                        <h5 class="mb-4">Schedule New Review Meeting</h5>
+
+                        <form method="get" action="{% url 'reviews:new_review' %}">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Team</label>
+                                        <select class="form-control" name="team" required>
+                                            <option value="">Select Team</option>
+                                            {% for team in user_teams %}
+                                            <option value="{{ team.id }}">{{ team.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Meeting Type</label>
+                                        <select class="form-control" name="meeting_type" required>
+                                            <option value="">Select Type</option>
+                                            <option value="weekly">Weekly Review</option>
+                                            <option value="monthly">Monthly Review</option>
+                                            <option value="quarterly">Quarterly Review</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Meeting Date</label>
+                                        <input type="date" class="form-control" name="meeting_date" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-calendar-plus me-2"></i>Create Meeting
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Edit Review Tab -->
+                    <div class="tab-pane fade" id="edit-review" role="tabpanel">
+                        <h5 class="mb-4">Edit Recent Meeting</h5>
+
+                        {% if recent_meetings %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Team</th>
+                                            <th>Type</th>
+                                            <th>Date</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for meeting in recent_meetings %}
+                                        <tr>
+                                            <td>{{ meeting.team.name }}</td>
+                                            <td>{{ meeting.get_meeting_type_display }}</td>
+                                            <td>{{ meeting.meeting_date|date:"M d, Y" }}</td>
+                                            <td>
+                                                <span class="badge bg-{% if meeting.status == 'completed' %}success{% elif meeting.status == 'in_progress' %}primary{% else %}secondary{% endif %}">
+                                                    {{ meeting.get_status_display }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <a href="{% url 'reviews:meeting' meeting.pk %}" class="btn btn-outline-primary"
+                                                       data-bs-toggle="tooltip" data-bs-placement="top" title="View Meeting">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                    <a href="{% url 'reviews:edit_review' meeting.pk %}" class="btn btn-outline-secondary"
+                                                       data-bs-toggle="tooltip" data-bs-placement="top" title="Edit Review">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                    {% if meeting.status != 'completed' %}
+                                                    <a href="{% url 'reviews:finalize' meeting.pk %}" class="btn btn-outline-success"
+                                                       data-bs-toggle="tooltip" data-bs-placement="top" title="Finalize Review">
+                                                        <i class="fas fa-check-circle"></i>
+                                                    </a>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-edit fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">No meetings available to edit.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

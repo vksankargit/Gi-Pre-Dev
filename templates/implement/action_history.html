@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+
+{% block title %}Action History - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'implement:dashboard' %}">Implement</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'implement:my_todo' %}">My To Do</a></li>
+                <li class="breadcrumb-item active">Action History</li>
+            </ol>
+        </nav>
+
+        <h1 class="h3 mb-4">
+            <i class="fas fa-history me-2"></i>Action History
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Change History</h5>
+            </div>
+            <div class="card-body">
+                {% if history %}
+                    <div class="timeline">
+                        {% for entry in history %}
+                        <div class="timeline-item mb-4">
+                            <div class="row">
+                                <div class="col-md-2 text-end">
+                                    <small class="text-muted">
+                                        {{ entry.updated_at|date:"M d, Y" }}<br>
+                                        {{ entry.updated_at|date:"H:i" }}
+                                    </small>
+                                </div>
+                                <div class="col-md-1 text-center">
+                                    <div class="timeline-marker">
+                                        <i class="fas fa-circle text-primary"></i>
+                                    </div>
+                                </div>
+                                <div class="col-md-9">
+                                    <div class="card">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <h6 class="mb-1">Status Update</h6>
+                                                    <p class="mb-2">
+                                                        Status changed to:
+                                                        <span class="badge bg-{% if entry.status == 'completed' %}success{% elif entry.status == 'in_progress' %}primary{% elif entry.status == 'at_risk' %}warning{% elif entry.status == 'danger' %}danger{% elif entry.status == 'rejected' %}dark{% else %}secondary{% endif %}">
+                                                            {{ entry.status|title }}
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                                <small class="text-muted">
+                                                    by {{ entry.updated_by.get_full_name }}
+                                                </small>
+                                            </div>
+
+                                            {% if entry.revised_due_date %}
+                                            <p class="mb-2">
+                                                <strong>Revised Due Date:</strong> {{ entry.revised_due_date|date:"M d, Y" }}
+                                            </p>
+                                            {% endif %}
+
+                                            {% if entry.challenge %}
+                                            <div class="mb-2">
+                                                <strong>Challenge:</strong>
+                                                <p class="text-muted mb-0">{{ entry.challenge }}</p>
+                                            </div>
+                                            {% endif %}
+
+                                            {% if entry.comments %}
+                                            <div>
+                                                <strong>Comments:</strong>
+                                                <p class="text-muted mb-0">{{ entry.comments }}</p>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-history fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No history available for this action.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Action Summary</h6>
+            </div>
+            <div class="card-body">
+                <h6>{{ action.action|truncatechars:100 }}</h6>
+
+                <dl class="row mt-3">
+                    <dt class="col-sm-5">Current Status:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% elif action.status == 'at_risk' %}warning{% elif action.status == 'danger' %}danger{% elif action.status == 'rejected' %}dark{% else %}secondary{% endif %}">
+                            {{ action.get_status_display }}
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-5">Priority:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}secondary{% endif %}">
+                            {{ action.get_priority_display }}
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-5">Team:</dt>
+                    <dd class="col-sm-7">{{ action.team.name }}</dd>
+
+                    <dt class="col-sm-5">Assigned To:</dt>
+                    <dd class="col-sm-7">{{ action.assigned_to.get_full_name }}</dd>
+
+                    <dt class="col-sm-5">Created By:</dt>
+                    <dd class="col-sm-7">{{ action.created_by.get_full_name }}</dd>
+
+                    <dt class="col-sm-5">Original Due:</dt>
+                    <dd class="col-sm-7">{{ action.original_due_date|date:"M d, Y" }}</dd>
+
+                    {% if action.revised_due_date %}
+                    <dt class="col-sm-5">Revised Due:</dt>
+                    <dd class="col-sm-7">{{ action.revised_due_date|date:"M d, Y" }}</dd>
+                    {% endif %}
+
+                    <dt class="col-sm-5">Created:</dt>
+                    <dd class="col-sm-7">{{ action.created_at|date:"M d, Y H:i" }}</dd>
+
+                    <dt class="col-sm-5">Last Updated:</dt>
+                    <dd class="col-sm-7">{{ action.updated_at|date:"M d, Y H:i" }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">Quick Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'implement:action_edit' action.pk %}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-edit me-2"></i>Edit Action
+                    </a>
+                    <a href="{% url 'implement:action_reassign' action.pk %}" class="btn btn-outline-warning btn-sm">
+                        <i class="fas fa-user-edit me-2"></i>Reassign
+                    </a>
+                    <a href="{% url 'implement:sub_actions' action.pk %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-list me-2"></i>Sub Actions
+                    </a>
+                    <a href="{% url 'implement:my_todo' %}" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-arrow-left me-2"></i>Back to To Do
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.timeline-marker {
+    position: relative;
+}
+.timeline-marker::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 60px;
+    background-color: #dee2e6;
+    top: 20px;
+}
+.timeline-item:last-child .timeline-marker::before {
+    display: none;
+}
+</style>
+{% endblock %}

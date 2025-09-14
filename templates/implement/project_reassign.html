@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+
+{% block title %}Reassign Project - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'implement:dashboard' %}">Implement</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'implement:my_projects' %}">My Projects</a></li>
+                <li class="breadcrumb-item active">Reassign Project</li>
+            </ol>
+        </nav>
+
+        <h1 class="h3 mb-4">
+            <i class="fas fa-user-edit me-2"></i>Reassign Project
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Reassign Project</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6>Current Project:</h6>
+                    <p class="mb-1"><strong>{{ project.name }}</strong></p>
+                    <p class="mb-1">{{ project.completion_criteria|truncatechars:150 }}</p>
+                    <small class="text-muted">Currently assigned to: {{ project.responsible_user.get_full_name }}</small>
+                </div>
+
+                <form method="post" id="reassignProjectForm">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label for="responsible_user" class="form-label">Assign To <span class="text-danger">*</span></label>
+                        <select class="form-control" id="responsible_user" name="responsible_user" required>
+                            <option value="">Select User</option>
+                            {% for user in available_users %}
+                            <option value="{{ user.id }}" {% if user.id == project.responsible_user.id %}selected{% endif %}>
+                                {{ user.get_full_name }} ({{ user.email }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="reassignment_reason" class="form-label">Reason for Reassignment</label>
+                        <textarea class="form-control" id="reassignment_reason" name="reassignment_reason" rows="3" placeholder="Optional: Explain why this project is being reassigned"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="handover_notes" class="form-label">Handover Notes</label>
+                        <textarea class="form-control" id="handover_notes" name="handover_notes" rows="4" placeholder="Important information for the new project owner..."></textarea>
+                        <div class="form-text">These notes will be shared with the new responsible person.</div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="notify_assignee" name="notify_assignee" checked>
+                        <label class="form-check-label" for="notify_assignee">
+                            Send notification email to new responsible person
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="transfer_tasks" name="transfer_tasks" checked>
+                        <label class="form-check-label" for="transfer_tasks">
+                            Transfer all related tasks to the new responsible person
+                        </label>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-user-edit me-2"></i>Reassign Project
+                        </button>
+                        <a href="{% url 'implement:my_projects' %}" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Project Details</h6>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-5">Quarter:</dt>
+                    <dd class="col-sm-7">{{ project.quarterly_plan.quarter }} - {{ project.quarterly_plan.financial_year.year }}</dd>
+
+                    <dt class="col-sm-5">Team:</dt>
+                    <dd class="col-sm-7">{{ project.quarterly_plan.team.name }}</dd>
+
+                    <dt class="col-sm-5">Start Date:</dt>
+                    <dd class="col-sm-7">{{ project.start_date|date:"M d, Y" }}</dd>
+
+                    <dt class="col-sm-5">Due Date:</dt>
+                    <dd class="col-sm-7">{{ project.due_date|date:"M d, Y" }}</dd>
+
+                    {% with project.status_history.first as latest_status %}
+                    {% if latest_status %}
+                    <dt class="col-sm-5">Status:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge bg-{% if latest_status.status == 'completed' %}success{% elif latest_status.status == 'on_track' %}primary{% elif latest_status.status == 'at_risk' %}warning{% else %}danger{% endif %}">
+                            {{ latest_status.get_status_display }}
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-5">Progress:</dt>
+                    <dd class="col-sm-7">{{ latest_status.completion_percentage }}%</dd>
+
+                    {% if latest_status.challenge %}
+                    <dt class="col-sm-5">Challenges:</dt>
+                    <dd class="col-sm-7"><small>{{ latest_status.challenge|truncatechars:100 }}</small></dd>
+                    {% endif %}
+                    {% endif %}
+                    {% endwith %}
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">Related Tasks</h6>
+            </div>
+            <div class="card-body">
+                {% if project.tasks.exists %}
+                    <p class="mb-2"><strong>{{ project.tasks.count }}</strong> tasks in this project:</p>
+                    <ul class="list-unstyled">
+                        {% for task in project.tasks.all|slice:":5" %}
+                        <li class="mb-1">
+                            <small>
+                                <i class="fas fa-{% if task.is_completed %}check text-success{% else %}clock text-warning{% endif %} me-1"></i>
+                                Week {{ task.week_number }}: {{ task.task_description|truncatechars:40 }}
+                            </small>
+                        </li>
+                        {% endfor %}
+                        {% if project.tasks.count > 5 %}
+                        <li><small class="text-muted">... and {{ project.tasks.count|add:"-5" }} more</small></li>
+                        {% endif %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted mb-0">No tasks defined for this project.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Form submission
+document.getElementById('reassignProjectForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+
+    fetch(`/implement/project/{{ project.id }}/reassign/`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            alert('Project reassigned successfully!');
+            window.location.href = '{% url "implement:my_projects" %}';
+        } else {
+            return response.text().then(text => {
+                throw new Error(text);
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error reassigning project: ' + error.message);
+    });
+});
+
+// CSRF token helper
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

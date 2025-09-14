@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if object %}Edit Action{% else %}Create Action{% endif %} - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'implement:dashboard' %}">Implement</a></li>
+                <li class="breadcrumb-item active">{% if object %}Edit Action{% else %}Create Action{% endif %}</li>
+            </ol>
+        </nav>
+
+        <h1 class="h3 mb-4">
+            <i class="fas fa-{% if object %}edit{% else %}plus{% endif %} me-2"></i>
+            {% if object %}Edit Action{% else %}Create New Action{% endif %}
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Action Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label for="id_action" class="form-label">Action Description <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="id_action" name="action" rows="4" required>{% if form.action.value %}{{ form.action.value }}{% endif %}</textarea>
+                        {% if form.action.errors %}
+                            <div class="invalid-feedback d-block">{{ form.action.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="id_priority" class="form-label">Priority <span class="text-danger">*</span></label>
+                                <select class="form-control" id="id_priority" name="priority" required>
+                                    <option value="low" {% if form.priority.value == 'low' %}selected{% endif %}>Low</option>
+                                    <option value="medium" {% if form.priority.value == 'medium' or not form.priority.value %}selected{% endif %}>Medium</option>
+                                    <option value="high" {% if form.priority.value == 'high' %}selected{% endif %}>High</option>
+                                </select>
+                                {% if form.priority.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.priority.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {% if object %}
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="id_status" class="form-label">Status</label>
+                                <select class="form-control" id="id_status" name="status">
+                                    <option value="not_started" {% if form.status.value == 'not_started' %}selected{% endif %}>Not Started</option>
+                                    <option value="in_progress" {% if form.status.value == 'in_progress' %}selected{% endif %}>In Progress</option>
+                                    <option value="at_risk" {% if form.status.value == 'at_risk' %}selected{% endif %}>At Risk</option>
+                                    <option value="danger" {% if form.status.value == 'danger' %}selected{% endif %}>Danger</option>
+                                    <option value="done" {% if form.status.value == 'done' %}selected{% endif %}>Done</option>
+                                    <option value="completed" {% if form.status.value == 'completed' %}selected{% endif %}>Completed</option>
+                                </select>
+                                {% if form.status.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.status.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if not object %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="id_assigned_to" class="form-label">Assigned To <span class="text-danger">*</span></label>
+                                <select class="form-control" id="id_assigned_to" name="assigned_to" required>
+                                    <option value="">Select User</option>
+                                    {% for user in available_users %}
+                                    <option value="{{ user.id }}" {% if form.assigned_to.value == user.id %}selected{% endif %}>{{ user.get_full_name }} ({{ user.email }})</option>
+                                    {% endfor %}
+                                </select>
+                                {% if form.assigned_to.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.assigned_to.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="id_original_due_date" class="form-label">Due Date <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="id_original_due_date" name="original_due_date" value="{% if form.original_due_date.value %}{{ form.original_due_date.value|date:'Y-m-d' }}{% endif %}" required>
+                                {% if form.original_due_date.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.original_due_date.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label for="id_revised_due_date" class="form-label">Revised Due Date</label>
+                        <input type="date" class="form-control" id="id_revised_due_date" name="revised_due_date" value="{% if form.revised_due_date.value %}{{ form.revised_due_date.value|date:'Y-m-d' }}{% endif %}">
+                        {% if form.revised_due_date.errors %}
+                            <div class="invalid-feedback d-block">{{ form.revised_due_date.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_challenge" class="form-label">Challenges</label>
+                        <textarea class="form-control" id="id_challenge" name="challenge" rows="3">{% if form.challenge.value %}{{ form.challenge.value }}{% endif %}</textarea>
+                        {% if form.challenge.errors %}
+                            <div class="invalid-feedback d-block">{{ form.challenge.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label for="id_comments" class="form-label">Comments</label>
+                        <textarea class="form-control" id="id_comments" name="comments" rows="3">{% if form.comments.value %}{{ form.comments.value }}{% endif %}</textarea>
+                        {% if form.comments.errors %}
+                            <div class="invalid-feedback d-block">{{ form.comments.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Save Action
+                        </button>
+                        <a href="{% url 'implement:my_todo' %}" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {% if object %}
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Action Information</h6>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-5">Assigned To:</dt>
+                    <dd class="col-sm-7">{{ object.assigned_to.get_full_name }}</dd>
+
+                    <dt class="col-sm-5">Created By:</dt>
+                    <dd class="col-sm-7">{{ object.created_by.get_full_name }}</dd>
+
+                    <dt class="col-sm-5">Team:</dt>
+                    <dd class="col-sm-7">{{ object.team.name }}</dd>
+
+                    <dt class="col-sm-5">Original Due:</dt>
+                    <dd class="col-sm-7">{{ object.original_due_date|date:"M d, Y" }}</dd>
+
+                    <dt class="col-sm-5">Created:</dt>
+                    <dd class="col-sm-7">{{ object.created_at|date:"M d, Y H:i" }}</dd>
+
+                    <dt class="col-sm-5">Last Updated:</dt>
+                    <dd class="col-sm-7">{{ object.updated_at|date:"M d, Y H:i" }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">Quick Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'implement:action_history' object.pk %}" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-history me-2"></i>View History
+                    </a>
+                    <a href="{% url 'implement:action_reassign' object.pk %}" class="btn btn-outline-warning btn-sm">
+                        <i class="fas fa-user-edit me-2"></i>Reassign
+                    </a>
+                    <a href="{% url 'implement:sub_actions' object.pk %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-list me-2"></i>Sub Actions
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

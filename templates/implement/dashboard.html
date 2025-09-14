@@ -1,0 +1,531 @@
+{% extends 'base.html' %}
+
+{% block title %}Implement - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <h1 class="h3 mb-4">
+            <i class="fas fa-cogs me-2"></i>Implement
+        </h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i class="fas fa-tasks fa-2x"></i>
+                    </div>
+                    <div>
+                        <h5 class="card-title mb-1">My Actions</h5>
+                        <h3 class="mb-0">{{ my_actions_count }}</h3>
+                        <small>Active tasks</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i class="fas fa-project-diagram fa-2x"></i>
+                    </div>
+                    <div>
+                        <h5 class="card-title mb-1">My Projects</h5>
+                        <h3 class="mb-0">{{ my_projects_count }}</h3>
+                        <small>Assigned projects</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                    </div>
+                    <div>
+                        <h5 class="card-title mb-1">Pending Numbers</h5>
+                        <h3 class="mb-0">{{ pending_numbers }}</h3>
+                        <small>To be updated</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tab Navigation -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="implementTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="my-numbers-tab" data-bs-toggle="tab" data-bs-target="#my-numbers" type="button" role="tab">
+                            <i class="fas fa-calculator me-2"></i>My Numbers
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="my-projects-tab" data-bs-toggle="tab" data-bs-target="#my-projects" type="button" role="tab">
+                            <i class="fas fa-project-diagram me-2"></i>My Projects
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="my-todo-tab" data-bs-toggle="tab" data-bs-target="#my-todo" type="button" role="tab">
+                            <i class="fas fa-list-check me-2"></i>My To Do
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="implementTabContent">
+                    <!-- My Numbers Tab -->
+                    <div class="tab-pane fade show active" id="my-numbers" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">My Numbers Tracking</h5>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-primary active" id="weeklyBtn" onclick="toggleNumbersView('weekly')">Weekly</button>
+                                <button type="button" class="btn btn-outline-primary" id="monthlyBtn" onclick="toggleNumbersView('monthly')">Monthly</button>
+                            </div>
+                        </div>
+
+                        <!-- Weekly Numbers Section -->
+                        <div id="weeklyNumbers" class="numbers-section">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Parameter</th>
+                                            <th>Team</th>
+                                            <th>Type</th>
+                                            <th>Year-Week</th>
+                                            <th>Last Period Budget</th>
+                                            <th>Last Period Plan</th>
+                                            <th>Last Period Actual</th>
+                                            <th>Next Period Budget</th>
+                                            <th>Next Period Plan</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="weeklyNumbersBody">
+                                        {% for number in weekly_numbers %}
+                                        <tr>
+                                            <td>{{ number }}</td>
+                                            <td>{{ number.team.name }}</td>
+                                            <td>
+                                                <span class="badge bg-{% if number.source_type == 'fpi' %}primary{% else %}success{% endif %}">
+                                                    {{ number.source_type|upper }}
+                                                </span>
+                                            </td>
+                                            <td>{{ number.year }}-W{{ number.week_number }}</td>
+                                            <td>₹{{ number.last_period_budget|floatformat:2 }}</td>
+                                            <td>₹{{ number.last_period_plan|floatformat:2 }}</td>
+                                            <td>₹{{ number.last_period_actual|floatformat:2 }}</td>
+                                            <td>₹{{ number.next_period_budget|floatformat:2 }}</td>
+                                            <td>₹{{ number.next_period_plan|floatformat:2 }}</td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-primary" onclick="editNumber({{ number.id }})" data-bs-toggle="tooltip" data-bs-placement="top" title="Edit Number">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-success" onclick="viewNumberHistory({{ number.id }})"
+                                                            data-bs-toggle="tooltip" data-bs-placement="top" title="View History">
+                                                        <i class="fas fa-history"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-info" onclick="addComment({{ number.id }})"
+                                                            data-bs-toggle="tooltip" data-bs-placement="top" title="Add Comment">
+                                                        <i class="fas fa-comment"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="10" class="text-center text-muted">No weekly numbers assigned to you</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Monthly Numbers Section -->
+                        <div id="monthlyNumbers" class="numbers-section" style="display: none;">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Parameter</th>
+                                            <th>Team</th>
+                                            <th>Type</th>
+                                            <th>Year-Month</th>
+                                            <th>Last Period Budget</th>
+                                            <th>Last Period Plan</th>
+                                            <th>Last Period Actual</th>
+                                            <th>Next Period Budget</th>
+                                            <th>Next Period Plan</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="monthlyNumbersBody">
+                                        {% for number in monthly_numbers %}
+                                        <tr>
+                                            <td>{{ number }}</td>
+                                            <td>{{ number.team.name }}</td>
+                                            <td>
+                                                <span class="badge bg-{% if number.source_type == 'fpi' %}primary{% else %}success{% endif %}">
+                                                    {{ number.source_type|upper }}
+                                                </span>
+                                            </td>
+                                            <td>{{ number.year }}-M{{ number.month_number }}</td>
+                                            <td>₹{{ number.last_period_budget|floatformat:2 }}</td>
+                                            <td>₹{{ number.last_period_plan|floatformat:2 }}</td>
+                                            <td>₹{{ number.last_period_actual|floatformat:2 }}</td>
+                                            <td>₹{{ number.next_period_budget|floatformat:2 }}</td>
+                                            <td>₹{{ number.next_period_plan|floatformat:2 }}</td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-primary" onclick="editNumber({{ number.id }})" data-bs-toggle="tooltip" data-bs-placement="top" title="Edit Number">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-success" onclick="viewNumberHistory({{ number.id }})"
+                                                            data-bs-toggle="tooltip" data-bs-placement="top" title="View History">
+                                                        <i class="fas fa-history"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-info" onclick="addComment({{ number.id }})"
+                                                            data-bs-toggle="tooltip" data-bs-placement="top" title="Add Comment">
+                                                        <i class="fas fa-comment"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="10" class="text-center text-muted">No monthly numbers assigned to you</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- My Projects Tab -->
+                    <div class="tab-pane fade" id="my-projects" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">My Projects</h5>
+                            <button type="button" class="btn btn-primary" onclick="createProject()">
+                                <i class="fas fa-plus me-2"></i>New Project
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Project Name</th>
+                                        <th>Team</th>
+                                        <th>Completion Criteria</th>
+                                        <th>Due Date</th>
+                                        <th>Status</th>
+                                        <th>Progress</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for project in projects %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ project.name }}</strong>
+                                            <br><small class="text-muted">{{ project.quarterly_plan.quarter }} - {{ project.quarterly_plan.financial_year.year }}</small>
+                                        </td>
+                                        <td>{{ project.quarterly_plan.team.name }}</td>
+                                        <td>{{ project.completion_criteria|truncatechars:100 }}</td>
+                                        <td>{{ project.due_date|date:"M d, Y" }}</td>
+                                        <td>
+                                            {% with project.status_history.first as latest_status %}
+                                            {% if latest_status %}
+                                                <span class="badge bg-{% if latest_status.status == 'completed' %}success{% elif latest_status.status == 'on_track' %}primary{% elif latest_status.status == 'at_risk' %}warning{% else %}danger{% endif %}">
+                                                    {{ latest_status.get_status_display }}
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Not Set</span>
+                                            {% endif %}
+                                            {% endwith %}
+                                        </td>
+                                        <td>
+                                            {% with project.status_history.first as latest_status %}
+                                            {% if latest_status %}
+                                                <div class="progress" style="height: 20px;">
+                                                    <div class="progress-bar" role="progressbar" style="width: {{ latest_status.completion_percentage }}%" aria-valuenow="{{ latest_status.completion_percentage }}" aria-valuemin="0" aria-valuemax="100">
+                                                        {{ latest_status.completion_percentage }}%
+                                                    </div>
+                                                </div>
+                                            {% else %}
+                                                <div class="progress" style="height: 20px;">
+                                                    <div class="progress-bar bg-secondary" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                                        0%
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                            {% endwith %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary" onclick="editProject({{ project.id }})"
+                                                        data-bs-toggle="tooltip" data-bs-placement="top" title="Edit Project">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-outline-warning" onclick="reassignProject({{ project.id }})"
+                                                        data-bs-toggle="tooltip" data-bs-placement="top" title="Reassign Project">
+                                                    <i class="fas fa-user-edit"></i>
+                                                </button>
+                                                <button class="btn btn-outline-success" onclick="toggleProjectComplete({{ project.id }})"
+                                                        data-bs-toggle="tooltip" data-bs-placement="top" title="Toggle Complete">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                                <button class="btn btn-outline-info" onclick="viewProjectHistory({{ project.id }})"
+                                                        data-bs-toggle="tooltip" data-bs-placement="top" title="View History">
+                                                    <i class="fas fa-history"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted">No projects assigned to you</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- My To Do Tab -->
+                    <div class="tab-pane fade" id="my-todo" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">My Action Items</h5>
+                            <button type="button" class="btn btn-primary" onclick="createAction()">
+                                <i class="fas fa-plus me-2"></i>New Action
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Team</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Original Due</th>
+                                        <th>Revised Due</th>
+                                        <th>Created By</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for action in actions %}
+                                    <tr class="{% if action.original_due_date < today and action.status != 'completed' %}table-warning{% endif %}">
+                                        <td>
+                                            <strong>{{ action.action|truncatechars:80 }}</strong>
+                                            {% if action.comments %}
+                                                <br><small class="text-muted">{{ action.comments|truncatechars:100 }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ action.team.name }}</td>
+                                        <td>
+                                            <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}secondary{% endif %}">
+                                                {{ action.get_priority_display }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% elif action.status == 'at_risk' %}warning{% elif action.status == 'danger' %}danger{% elif action.status == 'rejected' %}dark{% else %}secondary{% endif %}">
+                                                {{ action.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>{{ action.original_due_date|date:"M d, Y" }}</td>
+                                        <td>
+                                            {% if action.revised_due_date %}
+                                                {{ action.revised_due_date|date:"M d, Y" }}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ action.created_by.get_full_name }}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary" onclick="editAction({{ action.id }})" title="Edit">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-outline-warning" onclick="reassignAction({{ action.id }})" title="Reassign">
+                                                    <i class="fas fa-user-edit"></i>
+                                                </button>
+                                                <button class="btn btn-outline-success" onclick="toggleActionComplete({{ action.id }})" title="Toggle Complete">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger" onclick="rejectAction({{ action.id }})" title="Reject">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                                <button class="btn btn-outline-info" onclick="viewActionHistory({{ action.id }})" title="History">
+                                                    <i class="fas fa-history"></i>
+                                                </button>
+                                                <button class="btn btn-outline-secondary" onclick="viewSubActions({{ action.id }})" title="Sub Actions">
+                                                    <i class="fas fa-list"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted">No action items assigned to you</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleNumbersView(type) {
+    if (type === 'weekly') {
+        document.getElementById('weeklyNumbers').style.display = 'block';
+        document.getElementById('monthlyNumbers').style.display = 'none';
+        document.getElementById('weeklyBtn').classList.add('active');
+        document.getElementById('monthlyBtn').classList.remove('active');
+    } else {
+        document.getElementById('weeklyNumbers').style.display = 'none';
+        document.getElementById('monthlyNumbers').style.display = 'block';
+        document.getElementById('weeklyBtn').classList.remove('active');
+        document.getElementById('monthlyBtn').classList.add('active');
+    }
+}
+
+// Numbers Actions
+function editNumber(numberId) {
+    window.location.href = `/implement/number/${numberId}/edit/`;
+}
+
+function viewNumberHistory(numberId) {
+    window.location.href = `/implement/number/${numberId}/history/`;
+}
+
+function addComment(numberId) {
+    const comment = prompt('Add comment for this number:');
+    if (comment) {
+        // AJAX call to save comment
+        alert('Comment functionality will be implemented');
+    }
+}
+
+// Project Actions
+function createProject() {
+    window.location.href = '{% url "implement:project_create" %}';
+}
+
+function editProject(projectId) {
+    window.location.href = `/implement/project/${projectId}/edit/`;
+}
+
+function reassignProject(projectId) {
+    window.location.href = `/implement/project/${projectId}/reassign/`;
+}
+
+function toggleProjectComplete(projectId) {
+    if (confirm('Toggle project completion status?')) {
+        fetch(`/implement/project/${projectId}/toggle-complete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Error updating project status');
+            }
+        });
+    }
+}
+
+function viewProjectHistory(projectId) {
+    window.location.href = `/implement/project/${projectId}/history/`;
+}
+
+// Action Functions
+function createAction() {
+    window.location.href = '{% url "implement:action_create" %}';
+}
+
+function editAction(actionId) {
+    window.location.href = `/implement/action/${actionId}/edit/`;
+}
+
+function reassignAction(actionId) {
+    window.location.href = `/implement/action/${actionId}/reassign/`;
+}
+
+function toggleActionComplete(actionId) {
+    if (confirm('Toggle action completion status?')) {
+        fetch(`/implement/action/${actionId}/toggle-complete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Error updating action status');
+            }
+        });
+    }
+}
+
+function rejectAction(actionId) {
+    window.location.href = `/implement/action/${actionId}/reject/`;
+}
+
+function viewActionHistory(actionId) {
+    window.location.href = `/implement/action/${actionId}/history/`;
+}
+
+function viewSubActions(actionId) {
+    window.location.href = `/implement/action/${actionId}/sub-actions/`;
+}
+
+// CSRF token helper
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

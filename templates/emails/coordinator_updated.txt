@@ -1,0 +1,21 @@
+Account Information Updated - PRE System
+
+Hello {{ coordinator.get_full_name|default:coordinator.username }},
+
+Your coordinator account information for {{ organization.name }} has been updated in the PRE system.
+
+Updated Information:
+Name: {{ coordinator.get_full_name|default:coordinator.username }}
+Email: {{ coordinator.email }}
+Mobile: {{ coordinator.mobile_number|default:"Not provided" }}
+Organization: {{ organization.name }}
+
+If you did not request these changes or believe this is an error, please contact your system administrator immediately.
+
+You can access the system at: {{ system_url }}
+
+Thank you,
+PRE System Team
+
+---
+This is an automated message from PRE - Periodic Review Environment v1.0

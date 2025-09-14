@@ -1,0 +1,40 @@
+	The dashboard  launched does not have an action or login screen
+
+Login was created but no user got created. Tried to login with admin /Admin , but did not accept as the user id needs a mail format. Hence given below command
+ 
+	Add a user preadmin@groupinfinite.com with role admin and password Admin@12345
+
+	Add a user support@groupinfinite.com with role admin and password Admin@12345 and delete user
+  preadmin@groupinfinite.com
+
+Now able to login and dashboard is shown with manage organization
+
+	In Dashboard manage organization button not working
+
+	in the dashboard on the click of manage organization button , open manage organization screen as defined in the   
+  prd
+
+	New orgnization button gives error in manage organization 
+
+	Add new coordinator screen the save button gives message Save will be implemented and the data is not saved and   
+  reflected on the manage organization grid
+
+	When new coordinator is added or edited the mail functionality mentioned in the prd is not working
+
+	why are you not implementing for all the button clicks in one go as defined in   
+  the prd? example once login is done change password is giving error for the      
+  first time user or the edit button in the coordinator grid in manage
+  organization gives "not implemented".
+
+	Have you made sure the button functionality has been implemented for all the buttons in the  prd
+
+	What about the Review & Improve functionalities?
+
+	When I login as another user, the menu should change as per the General user which should show Plan, Implement, Review & Improve along with Change Password options; at the moment, it still shows the configurator's options.
+
+> it still shows coordinator name (Sankar) although it does display the My Login button 
+
+OperationalError at /review/
+no such column: review_meetings.status on Review click
+
+logout does not work

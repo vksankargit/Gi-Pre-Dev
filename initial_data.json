@@ -1,0 +1,29 @@
+[
+{
+    "model": "plans.financialyear",
+    "pk": 1,
+    "fields": {
+        "year": "FY 24-25",
+        "start_date": "2024-04-01",
+        "end_date": "2025-03-31"
+    }
+},
+{
+    "model": "plans.financialyear",
+    "pk": 2,
+    "fields": {
+        "year": "FY 25-26",
+        "start_date": "2025-04-01",
+        "end_date": "2026-03-31"
+    }
+},
+{
+    "model": "plans.financialyear",
+    "pk": 3,
+    "fields": {
+        "year": "FY 26-27",
+        "start_date": "2026-04-01",
+        "end_date": "2027-03-31"
+    }
+}
+]

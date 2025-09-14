@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ organization.name }} Coordinators - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{% url 'organizations:list' %}" class="btn btn-outline-secondary me-3">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-user-tie me-2"></i>{{ organization.name }} Coordinators
+            </h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Assigned Coordinators</h5>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addCoordinatorModal">
+                    <i class="fas fa-plus me-2"></i>Add Coordinator
+                </button>
+            </div>
+            <div class="card-body">
+                {% if coordinators %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Assigned Date</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for coordinator_rel in coordinators %}
+                            <tr>
+                                <td>
+                                    <strong>{{ coordinator_rel.coordinator.get_full_name|default:coordinator_rel.coordinator.username }}</strong>
+                                </td>
+                                <td>{{ coordinator_rel.coordinator.email }}</td>
+                                <td>
+                                    {% if coordinator_rel.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small class="text-muted">{{ coordinator_rel.assigned_at|date:"M d, Y" }}</small>
+                                </td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            onclick="removeCoordinator({{ coordinator_rel.id }})"
+                                            data-bs-toggle="tooltip" data-bs-placement="top" title="Remove Coordinator">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No Coordinators Assigned</h5>
+                    <p class="text-muted">Assign coordinators to help manage this organization.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Coordinator Modal -->
+<div class="modal fade" id="addCoordinatorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Coordinator</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">This feature will be implemented to allow assigning coordinators to organizations.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function removeCoordinator(coordinatorId) {
+    if (confirm('Are you sure you want to remove this coordinator?')) {
+        // This functionality will be implemented
+        alert('This feature will be implemented to remove coordinators.');
+    }
+}
+</script>
+{% endblock %}

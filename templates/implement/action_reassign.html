@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+
+{% block title %}Reassign Action - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'implement:dashboard' %}">Implement</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'implement:my_todo' %}">My To Do</a></li>
+                <li class="breadcrumb-item active">Reassign Action</li>
+            </ol>
+        </nav>
+
+        <h1 class="h3 mb-4">
+            <i class="fas fa-user-edit me-2"></i>Reassign Action
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Reassign Action</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6>Current Action:</h6>
+                    <p class="mb-1"><strong>{{ action.action|truncatechars:150 }}</strong></p>
+                    <small class="text-muted">Currently assigned to: {{ action.assigned_to.get_full_name }}</small>
+                </div>
+
+                <form method="post" id="reassignForm">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label for="team" class="form-label">Select Team <span class="text-danger">*</span></label>
+                        <select class="form-control" id="team" name="team" onchange="loadTeamMembers()" required>
+                            <option value="">Choose Team</option>
+                            {% for team in teams %}
+                            <option value="{{ team.id }}">{{ team.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="assigned_to" class="form-label">Assign To <span class="text-danger">*</span></label>
+                        <select class="form-control" id="assigned_to" name="assigned_to" required disabled>
+                            <option value="">Select team first</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="reassignment_reason" class="form-label">Reason for Reassignment</label>
+                        <textarea class="form-control" id="reassignment_reason" name="reassignment_reason" rows="3" placeholder="Optional: Explain why this action is being reassigned"></textarea>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="notify_assignee" name="notify_assignee" checked>
+                        <label class="form-check-label" for="notify_assignee">
+                            Send notification email to new assignee
+                        </label>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" disabled id="reassignBtn">
+                            <i class="fas fa-user-edit me-2"></i>Reassign Action
+                        </button>
+                        <a href="{% url 'implement:my_todo' %}" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Action Details</h6>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-5">Priority:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}secondary{% endif %}">
+                            {{ action.get_priority_display }}
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-5">Status:</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% elif action.status == 'at_risk' %}warning{% else %}secondary{% endif %}">
+                            {{ action.get_status_display }}
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-5">Team:</dt>
+                    <dd class="col-sm-7">{{ action.team.name }}</dd>
+
+                    <dt class="col-sm-5">Created By:</dt>
+                    <dd class="col-sm-7">{{ action.created_by.get_full_name }}</dd>
+
+                    <dt class="col-sm-5">Due Date:</dt>
+                    <dd class="col-sm-7">{{ action.original_due_date|date:"M d, Y" }}</dd>
+
+                    {% if action.revised_due_date %}
+                    <dt class="col-sm-5">Revised Due:</dt>
+                    <dd class="col-sm-7">{{ action.revised_due_date|date:"M d, Y" }}</dd>
+                    {% endif %}
+
+                    <dt class="col-sm-5">Created:</dt>
+                    <dd class="col-sm-7">{{ action.created_at|date:"M d, Y H:i" }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        {% if action.comments %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">Comments</h6>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ action.comments }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function loadTeamMembers() {
+    const teamId = document.getElementById('team').value;
+    const assigneeSelect = document.getElementById('assigned_to');
+    const reassignBtn = document.getElementById('reassignBtn');
+
+    if (teamId) {
+        // Enable the assignee dropdown
+        assigneeSelect.disabled = false;
+        assigneeSelect.innerHTML = '<option value="">Loading...</option>';
+
+        // Fetch team members
+        fetch(`/api/teams/${teamId}/members/`)
+            .then(response => response.json())
+            .then(data => {
+                assigneeSelect.innerHTML = '<option value="">Select Member</option>';
+                data.members.forEach(member => {
+                    const option = document.createElement('option');
+                    option.value = member.id;
+                    option.textContent = `${member.name} (${member.email})`;
+                    assigneeSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading team members:', error);
+                assigneeSelect.innerHTML = '<option value="">Error loading members</option>';
+            });
+    } else {
+        assigneeSelect.disabled = true;
+        assigneeSelect.innerHTML = '<option value="">Select team first</option>';
+        reassignBtn.disabled = true;
+    }
+}
+
+// Enable reassign button when assignee is selected
+document.getElementById('assigned_to').addEventListener('change', function() {
+    const reassignBtn = document.getElementById('reassignBtn');
+    reassignBtn.disabled = !this.value;
+});
+
+// Form submission
+document.getElementById('reassignForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+
+    fetch(`/implement/action/{{ action.id }}/reassign/`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            alert('Action reassigned successfully!');
+            window.location.href = '{% url "implement:my_todo" %}';
+        } else {
+            return response.text().then(text => {
+                throw new Error(text);
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error reassigning action: ' + error.message);
+    });
+});
+
+// CSRF token helper
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

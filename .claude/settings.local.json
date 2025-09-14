@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:\\Users\\hp\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\" manage.py shell -c \"\nfrom organizations.forms import TeamForm\nfrom accounts.models import User\n\n# Test creating a TeamForm to see if there are any issues\ncoordinator = User.objects.get(email=''coordinator@groupinfinite.com'')\nform = TeamForm(user=coordinator)\n\nprint(''=== TESTING TEAM FORM ==='')\nprint(f''Form name field: {form.fields[\"\"name\"\"]}'')\nprint(f''Form name widget: {form.fields[\"\"name\"\"].widget}'')\nprint(f''Form name required: {form.fields[\"\"name\"\"].required}'')\n\n# Check for any form errors\nprint(f''Form is bound: {form.is_bound}'')\nprint(f''Form errors: {form.errors}'')\n\")",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
