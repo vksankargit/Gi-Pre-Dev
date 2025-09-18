@@ -21,7 +21,8 @@ urlpatterns = [
     path('plans/', include('plans.urls')),
     path('implement/', include('implement.urls')),
     path('review/', include('reviews.urls')),
-    path('improve/', include('improvements.urls')),
+    path('improve/', include('improve.urls')),
+    path('api/', include('api.urls')),
 ]
 
 if settings.DEBUG:

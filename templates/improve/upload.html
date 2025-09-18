@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block title %}Upload Improvement Projects - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'improve:dashboard' %}">Improve</a></li>
+                <li class="breadcrumb-item active">Upload</li>
+            </ol>
+        </nav>
+
+        <h1 class="h3 mb-4">
+            <i class="fas fa-upload me-2"></i>Upload Improvement Projects
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Upload PPI-Style Improvement Projects</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="team" class="form-label">Team <span class="text-danger">*</span></label>
+                                <select class="form-control" id="team" name="team" required>
+                                    <option value="">Select Team</option>
+                                    {% for team in managed_teams %}
+                                    <option value="{{ team.id }}">{{ team.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="financial_year" class="form-label">Financial Year <span class="text-danger">*</span></label>
+                                <select class="form-control" id="financial_year" name="financial_year" required>
+                                    <option value="">Select Financial Year</option>
+                                    {% for fy in financial_years %}
+                                    <option value="{{ fy.id }}">{{ fy.year }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quarter" class="form-label">Quarter <span class="text-danger">*</span></label>
+                                <select class="form-control" id="quarter" name="quarter" required>
+                                    <option value="">Select Quarter</option>
+                                    {% for quarter_value, quarter_label in quarters %}
+                                    <option value="{{ quarter_value }}">{{ quarter_label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Excel File <span class="text-danger">*</span></label>
+                                <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls" required>
+                                <div class="form-text">Please upload an Excel file (.xlsx or .xls) with improvement projects in PPI format.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload me-2"></i>Upload & Process
+                        </button>
+                        <a href="{% url 'improve:download_template' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-download me-2"></i>Download Template
+                        </a>
+                        <a href="{% url 'improve:dashboard' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Instructions</h6>
+            </div>
+            <div class="card-body">
+                <h6>File Format Requirements:</h6>
+                <ul class="small">
+                    <li>Excel file (.xlsx or .xls)</li>
+                    <li>Use PPI format identical to quarterly plans</li>
+                    <li>Headers at row 6, data starts at row 7</li>
+                    <li>Columns: Project Name, Completion Criteria, Responsibility, Start Date, End Date, Steps, W1-W13</li>
+                </ul>
+
+                <h6 class="mt-3">Data Requirements:</h6>
+                <ul class="small">
+                    <li>Project Name is required</li>
+                    <li>Responsibility should be user email</li>
+                    <li>Dates in YYYY-MM-DD format</li>
+                    <li>Weekly tasks can include @user@email.com for assignment</li>
+                </ul>
+
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Tip:</strong> Download the template to see the exact format required.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

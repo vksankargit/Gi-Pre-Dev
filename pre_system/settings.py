@@ -24,14 +24,16 @@ INSTALLED_APPS = [
     'crispy_forms',
     'crispy_bootstrap5',
     'django_extensions',
-    
+
     # Local apps
     'accounts',
     'organizations',
     'plans',
     'implement',
     'reviews',
+    'improve',
     'improvements',
+    'api',
 ]
 
 MIDDLEWARE = [
