@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Plan - PRE System{% endblock %}
 
@@ -108,9 +109,14 @@
                                     <select class="form-control" id="quarterlyQuarter" required>
                                         <option value="">Select Quarter</option>
                                         {% for quarter in quarters %}
-                                        <option value="{{ quarter.id }}">{{ quarter }}</option>
+                                        <option value="{{ quarter.0 }}">{{ quarter.1 }}</option>
                                         {% endfor %}
+                                        {% if not quarters %}
+                                        <option disabled>No quarters available</option>
+                                        {% endif %}
                                     </select>
+                                    <!-- Debug info (remove after testing) -->
+                                    <!-- Quarters count: {{ quarters|length }} -->
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -181,89 +187,10 @@
     </div>
 </div>
 
-<!-- Create Issue Modal -->
-<div class="modal fade" id="createIssueModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Create Issue</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="issueForm">
-                    <div class="mb-3">
-                        <label class="form-label">Title</label>
-                        <input type="text" class="form-control" id="issueTitle" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Description</label>
-                        <textarea class="form-control" id="issueDescription" rows="3" required></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Priority</label>
-                        <select class="form-control" id="issuePriority">
-                            <option value="medium">Medium</option>
-                            <option value="low">Low</option>
-                            <option value="high">High</option>
-                            <option value="critical">Critical</option>
-                        </select>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveIssue()">Save</button>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Include the new issue and action modals -->
+{% include 'includes/new_issue_modal.html' %}
+{% include 'includes/new_action_modal.html' %}
 
-<!-- Add Action Modal -->
-<div class="modal fade" id="addActionModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Add Action</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="actionForm">
-                    <div class="mb-3">
-                        <label class="form-label">Title</label>
-                        <input type="text" class="form-control" id="actionTitle" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Description</label>
-                        <textarea class="form-control" id="actionDescription" rows="3" required></textarea>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">Priority</label>
-                                <select class="form-control" id="actionPriority">
-                                    <option value="medium">Medium</option>
-                                    <option value="low">Low</option>
-                                    <option value="high">High</option>
-                                    <option value="critical">Critical</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">Due Date</label>
-                                <input type="date" class="form-control" id="actionDueDate" required>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveAction()">Save</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <script>
 // Enable/disable upload button based on form completion
@@ -348,13 +275,59 @@ function uploadAnnualPlan() {
 }
 
 function uploadQuarterlyPlan() {
-    // Similar implementation for quarterly plan upload
-    alert('Quarterly plan upload functionality will be implemented next.');
+    const formData = new FormData();
+    formData.append('team_id', document.getElementById('quarterlyTeam').value);
+    formData.append('quarter_id', document.getElementById('quarterlyQuarter').value);
+    formData.append('file', document.getElementById('quarterlyFile').files[0]);
+
+    const statusDiv = document.getElementById('quarterlyUploadStatus');
+    statusDiv.className = 'alert alert-info';
+    statusDiv.textContent = 'Uploading and processing file...';
+    statusDiv.style.display = 'block';
+
+    fetch('{% url "plans:quarterly_upload" %}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.className = 'alert alert-success';
+            statusDiv.textContent = data.message;
+
+            // Reset form
+            document.getElementById('quarterlyTeam').value = '';
+            document.getElementById('quarterlyQuarter').value = '';
+            document.getElementById('quarterlyFile').value = '';
+            document.getElementById('uploadQuarterlyBtn').disabled = true;
+            document.getElementById('downloadQuarterlyBtn').disabled = true;
+        } else {
+            statusDiv.className = 'alert alert-danger';
+            let errorText = data.error;
+            if (data.errors && data.errors.length > 0) {
+                errorText += ':\\n' + data.errors.join('\\n');
+            }
+            statusDiv.textContent = errorText;
+        }
+    })
+    .catch(error => {
+        statusDiv.className = 'alert alert-danger';
+        statusDiv.textContent = 'Upload failed: ' + error.message;
+    });
 }
 
 function viewHistory(planType) {
     const url = planType === 'annual' ? '{% url "plans:annual_history" %}' : '{% url "plans:quarterly_history" %}';
-    fetch(url)
+    fetch(url, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
@@ -370,10 +343,10 @@ function viewHistory(planType) {
                     <td>${plan.uploaded_date}</td>
                     <td><span class="badge bg-${plan.status === 'Successful' ? 'success' : plan.status === 'Failed' ? 'danger' : 'warning'}">${plan.status}</span></td>
                     <td>
-                        <button class="btn btn-sm btn-primary" onclick="downloadFile(${plan.id})">
+                        <button class="btn btn-sm btn-primary" onclick="downloadFile(${plan.id}, '${planType}')">
                             <i class="fas fa-download"></i> Download File
                         </button>
-                        ${plan.status === 'Failed' ? `<button class="btn btn-sm btn-danger ms-1" onclick="viewErrorLog(${plan.id})"><i class="fas fa-exclamation-triangle"></i> Error Log</button>` : ''}
+                        ${plan.status === 'Failed' ? `<button class="btn btn-sm btn-danger ms-1" onclick="viewErrorLog(${plan.id}, '${planType}')"><i class="fas fa-exclamation-triangle"></i> Error Log</button>` : ''}
                     </td>
                 `;
             });
@@ -383,37 +356,30 @@ function viewHistory(planType) {
         } else {
             alert('Error loading history: ' + data.error);
         }
+    })
+    .catch(error => {
+        alert('Error loading history: ' + error.message);
     });
 }
 
+// These functions are now handled by the included JavaScript file
+// but kept here for compatibility with existing onclick handlers
 function createIssue(planType) {
-    const modal = new bootstrap.Modal(document.getElementById('createIssueModal'));
-    modal.show();
+    openNewIssueModal();
 }
 
 function addAction(planType) {
-    const modal = new bootstrap.Modal(document.getElementById('addActionModal'));
-    modal.show();
+    openNewActionModal();
 }
 
-function saveIssue() {
-    // Implementation for saving issue
-    alert('Issue creation functionality will be implemented next.');
+function downloadFile(planId, planType) {
+    // Download the uploaded plan file
+    window.location.href = `{% url "plans:download_file" plan_id=0 plan_type="annual" %}`.replace('0/annual', `${planId}/${planType}`);
 }
 
-function saveAction() {
-    // Implementation for saving action
-    alert('Action creation functionality will be implemented next.');
-}
-
-function downloadFile(planId) {
-    // Implementation for downloading uploaded file
-    alert('File download functionality will be implemented next.');
-}
-
-function viewErrorLog(planId) {
-    // Implementation for viewing error log
-    alert('Error log viewing functionality will be implemented next.');
+function viewErrorLog(planId, planType) {
+    // View error log for failed uploads
+    window.location.href = `{% url "plans:error_log" plan_id=0 plan_type="annual" %}`.replace('0/annual', `${planId}/${planType}`);
 }
 
 // CSRF token helper function
@@ -432,4 +398,7 @@ function getCookie(name) {
     return cookieValue;
 }
 </script>
+
+<!-- Include the common issue and action modal JavaScript -->
+<script src="{% static 'js/issue_action_modals.js' %}"></script>
 {% endblock %}

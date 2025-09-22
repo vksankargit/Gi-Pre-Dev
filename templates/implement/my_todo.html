@@ -1,0 +1,402 @@
+{% extends 'base.html' %}
+
+{% block title %}My To Do - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'implement:dashboard' %}">Implement</a></li>
+                <li class="breadcrumb-item active">My To Do</li>
+            </ol>
+        </nav>
+
+        <h1 class="h3 mb-4">
+            <i class="fas fa-list-check me-2"></i>My To Do
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">My Action Items</h5>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-info" onclick="openNewIssueModal()">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
+                        </button>
+                        <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
+                            <i class="fas fa-plus-circle me-2"></i>Add Action
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Team</th>
+                                <th>Source</th>
+                                <th>Action</th>
+                                <th>Priority</th>
+                                <th>Assigned To</th>
+                                <th>Original Due Date</th>
+                                <th>Status</th>
+                                <th>Revised Due Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for action in actions %}
+                            <tr class="{% if action.original_due_date < today and action.status != 'completed' %}table-warning{% endif %}">
+                                <td>{{ action.team.name }}</td>
+                                <td>
+                                    <span class="badge bg-{% if action.source == 'manual' %}primary{% elif action.source == 'ppi' %}success{% elif action.source == 'improvement' %}danger{% elif action.source == 'review' %}warning{% else %}info{% endif %}">
+                                        {{ action.get_source_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong>{{ action.action|truncatechars:80 }}</strong>
+                                    {% if action.comments %}
+                                        <br><small class="text-muted">{{ action.comments|truncatechars:100 }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}secondary{% endif %}">
+                                        {{ action.get_priority_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if action.assigned_to == user %}
+                                        <strong>Me</strong>
+                                    {% else %}
+                                        {{ action.assigned_to.get_full_name }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ action.original_due_date|date:"M d, Y" }}</td>
+                                <td>
+                                    <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% elif action.status == 'at_risk' %}warning{% elif action.status == 'danger' %}danger{% elif action.status == 'rejected' %}dark{% else %}secondary{% endif %}">
+                                        {{ action.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if action.revised_due_date %}
+                                        {{ action.revised_due_date|date:"M d, Y" }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <!-- Debug: Action ID = {{ action.id }} -->
+                                        {% if action.id and action.id > 0 %}
+                                        <button class="btn btn-outline-primary" onclick="editAction({{ action.id }})" title="Edit (ID: {{ action.id }})">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        {% else %}
+                                        <button class="btn btn-outline-secondary" disabled title="Invalid Action ID: {{ action.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        {% endif %}
+                                        <button class="btn btn-outline-warning" onclick="reassignAction({{ action.id }})" title="Reassign">
+                                            <i class="fas fa-user-edit"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success" onclick="toggleActionComplete({{ action.id }})" title="Toggle Complete">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" onclick="rejectAction({{ action.id }})" title="Reject">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info" onclick="viewActionHistory({{ action.id }})" title="History">
+                                            <i class="fas fa-history"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="viewSubActions({{ action.id }})" title="Sub Actions">
+                                            <i class="fas fa-list"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="9" class="text-center text-muted">No action items assigned to you</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Action Modal Container -->
+<div id="editActionModalContainer"></div>
+
+<!-- Include the issue and action modals -->
+{% include 'includes/new_issue_modal.html' %}
+{% include 'includes/new_action_modal.html' %}
+
+<script>
+// Action Functions
+function editAction(actionId) {
+    // Add debugging
+    console.log('=== editAction called ===');
+    console.log('actionId received:', actionId);
+    console.log('actionId type:', typeof actionId);
+
+    // Validate actionId
+    if (!actionId || actionId <= 0) {
+        console.error('Invalid actionId detected:', actionId);
+        alert('Invalid action ID: ' + actionId);
+        return;
+    }
+
+    // Load the action edit modal content via AJAX
+    fetch(`/implement/action/${actionId}/edit/`, {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Accept': 'text/html'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('Action not found');
+            } else if (response.status === 403) {
+                throw new Error('You do not have permission to edit this action');
+            } else if (response.status === 500) {
+                return response.text().then(text => {
+                    throw new Error(text || 'Server error occurred');
+                });
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        }
+        return response.text();
+    })
+    .then(html => {
+        // Insert the modal HTML into the container
+        document.getElementById('editActionModalContainer').innerHTML = html;
+
+        // Initialize the form after DOM is ready
+        setTimeout(() => {
+            console.log('Checking for initializeActionForm function...');
+            if (typeof initializeActionForm === 'function') {
+                console.log('Calling initializeActionForm');
+                initializeActionForm();
+            } else {
+                console.error('initializeActionForm function not found');
+            }
+
+            // Also try to directly attach the event listener as backup
+            const statusSelect = document.getElementById('editActionStatus');
+            if (statusSelect) {
+                console.log('Found action status select, adding direct listener');
+                statusSelect.addEventListener('change', function() {
+                    console.log('Action status changed to:', this.value);
+                    toggleActionFields();
+                });
+                // Call once to set initial state
+                toggleActionFields();
+            } else {
+                console.error('Action status select element not found');
+            }
+        }, 200);
+
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('editActionModal'));
+        modal.show();
+    })
+    .catch(error => {
+        console.error('Error loading action edit modal:', error);
+        alert('Error loading action edit form: ' + error.message);
+    });
+}
+
+function reassignAction(actionId) {
+    window.location.href = `/implement/action/${actionId}/reassign/`;
+}
+
+function toggleActionComplete(actionId) {
+    if (confirm('Toggle action completion status?')) {
+        fetch(`/implement/action/${actionId}/toggle-complete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error updating action status: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error updating action status:', error);
+            alert('Error updating action status: ' + error.message);
+        });
+    }
+}
+
+function rejectAction(actionId) {
+    if (confirm('Are you sure you want to reject this action?')) {
+        fetch(`/implement/action/${actionId}/reject/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error rejecting action: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error rejecting action:', error);
+            alert('Error rejecting action: ' + error.message);
+        });
+    }
+}
+
+function viewActionHistory(actionId) {
+    window.location.href = `/implement/action/${actionId}/history/`;
+}
+
+function viewSubActions(actionId) {
+    window.location.href = `/implement/action/${actionId}/sub-actions/`;
+}
+
+// Action Modal Functions (copied from dashboard.html)
+function toggleActionFields() {
+    console.log('=== toggleActionFields called ===');
+
+    const statusElement = document.getElementById('editActionStatus');
+    const revisedDueDateGroup = document.getElementById('revisedDueDateGroup');
+    const challengeGroup = document.getElementById('challengeGroup');
+
+    console.log('Elements found:');
+    console.log('- statusElement:', statusElement);
+    console.log('- revisedDueDateGroup:', revisedDueDateGroup);
+    console.log('- challengeGroup:', challengeGroup);
+
+    if (!statusElement) {
+        console.error('Action status element not found');
+        return;
+    }
+    if (!revisedDueDateGroup) {
+        console.error('Revised due date group not found');
+        return;
+    }
+    if (!challengeGroup) {
+        console.error('Challenge group not found');
+        return;
+    }
+
+    const status = statusElement.value;
+    console.log('Current status:', status);
+
+    // Hide all conditional fields first
+    revisedDueDateGroup.style.display = 'none';
+    challengeGroup.style.display = 'none';
+
+    // Show fields based on status (based on PRD specifications)
+    if (status === 'danger') {
+        console.log('Status is danger - showing both revised due date and challenge');
+        revisedDueDateGroup.style.display = 'block';
+        challengeGroup.style.display = 'block';
+    } else if (status === 'at_risk') {
+        console.log('Status is at_risk - showing challenge only');
+        challengeGroup.style.display = 'block';
+    } else {
+        console.log('Status is in_progress or other - hiding all conditional fields');
+    }
+}
+
+function initializeActionForm() {
+    console.log('Initializing action form');
+
+    // Add event listener to status dropdown
+    const statusSelect = document.getElementById('editActionStatus');
+    if (statusSelect) {
+        statusSelect.addEventListener('change', toggleActionFields);
+        console.log('Added change listener to action status select');
+    }
+
+    // Set initial visibility based on current status
+    toggleActionFields();
+
+    // Handle form submission
+    const form = document.getElementById('editActionForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Action updated successfully!');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editActionModal'));
+                    modal.hide();
+                    location.reload(); // Refresh to show updated data
+                } else {
+                    alert('Error updating action: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating action: ' + error.message);
+            });
+        });
+        console.log('Added action form submit listener');
+    } else {
+        console.error('Action form not found');
+    }
+}
+
+// Modal management functions
+function openNewIssueModal() {
+    // Redirect to issue creation page
+    window.location.href = '{% url "implement:issue_create" %}';
+}
+
+function openNewActionModal() {
+    // Redirect to action creation page
+    window.location.href = '{% url "implement:action_create" %}';
+}
+
+// CSRF token helper
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

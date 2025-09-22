@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% load static %}
+{% load l10n %}
 
 {% block title %}Implement - PRE System{% endblock %}
 
@@ -8,58 +10,6 @@
         <h1 class="h3 mb-4">
             <i class="fas fa-cogs me-2"></i>Implement
         </h1>
-    </div>
-</div>
-
-<!-- Statistics Cards -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="me-3">
-                        <i class="fas fa-tasks fa-2x"></i>
-                    </div>
-                    <div>
-                        <h5 class="card-title mb-1">My Actions</h5>
-                        <h3 class="mb-0">{{ my_actions_count }}</h3>
-                        <small>Active tasks</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="me-3">
-                        <i class="fas fa-project-diagram fa-2x"></i>
-                    </div>
-                    <div>
-                        <h5 class="card-title mb-1">My Projects</h5>
-                        <h3 class="mb-0">{{ my_projects_count }}</h3>
-                        <small>Assigned projects</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="me-3">
-                        <i class="fas fa-chart-line fa-2x"></i>
-                    </div>
-                    <div>
-                        <h5 class="card-title mb-1">Pending Numbers</h5>
-                        <h3 class="mb-0">{{ pending_numbers }}</h3>
-                        <small>To be updated</small>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -93,56 +43,88 @@
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="mb-0">My Numbers Tracking</h5>
                             <div class="btn-group" role="group">
-                                <button type="button" class="btn btn-outline-primary active" id="weeklyBtn" onclick="toggleNumbersView('weekly')">Weekly</button>
-                                <button type="button" class="btn btn-outline-primary" id="monthlyBtn" onclick="toggleNumbersView('monthly')">Monthly</button>
+                                <input type="radio" class="btn-check" name="numbersView" id="weeklyNumbers" checked onclick="toggleNumbersView('weekly')">
+                                <label class="btn btn-outline-primary" for="weeklyNumbers">Weekly Numbers</label>
+                                <input type="radio" class="btn-check" name="numbersView" id="monthlyNumbers" onclick="toggleNumbersView('monthly')">
+                                <label class="btn btn-outline-primary" for="monthlyNumbers">Monthly Numbers</label>
                             </div>
                         </div>
 
+                        <!-- Period Display - shows appropriate period based on selected tab -->
+                        <div class="alert alert-info mb-3 text-center" id="periodDisplay">
+                            <h5 class="mb-0" id="periodText">{{ current_week_display }}</h5>
+                        </div>
+
                         <!-- Weekly Numbers Section -->
-                        <div id="weeklyNumbers" class="numbers-section">
+                        <div id="weeklyNumbersSection" class="numbers-section">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <button type="button" class="btn btn-info" onclick="openNewIssueModal()">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
+                                    <i class="fas fa-plus-circle me-2"></i>Add Action
+                                </button>
+                            </div>
                             <div class="table-responsive">
                                 <table class="table table-bordered table-hover">
                                     <thead class="table-dark">
                                         <tr>
-                                            <th>Parameter</th>
                                             <th>Team</th>
-                                            <th>Type</th>
-                                            <th>Year-Week</th>
-                                            <th>Last Period Budget</th>
-                                            <th>Last Period Plan</th>
-                                            <th>Last Period Actual</th>
-                                            <th>Next Period Budget</th>
-                                            <th>Next Period Plan</th>
+                                            <th>GPI (including unit of measure)</th>
+                                            <th>Last Week Budget</th>
+                                            <th>Last Week Plan</th>
+                                            <th>Last Week Actual</th>
+                                            <th>Current Week Budget</th>
+                                            <th>Current Week Plan</th>
+                                            <th>Comments</th>
+                                            <th>Assigned To</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="weeklyNumbersBody">
-                                        {% for number in weekly_numbers %}
+                                    <tbody>
+                                        {% for gpi in weekly_numbers %}
                                         <tr>
-                                            <td>{{ number }}</td>
-                                            <td>{{ number.team.name }}</td>
+                                            <td>{{ gpi.quarterly_plan.team.name }}</td>
                                             <td>
-                                                <span class="badge bg-{% if number.source_type == 'fpi' %}primary{% else %}success{% endif %}">
-                                                    {{ number.source_type|upper }}
-                                                </span>
+                                                <strong>{{ gpi.name }}</strong>
+                                                {% if gpi.unit_of_measure %}
+                                                <br><small class="text-muted">({{ gpi.unit_of_measure }})</small>
+                                                {% endif %}
                                             </td>
-                                            <td>{{ number.year }}-W{{ number.week_number }}</td>
-                                            <td>₹{{ number.last_period_budget|floatformat:2 }}</td>
-                                            <td>₹{{ number.last_period_plan|floatformat:2 }}</td>
-                                            <td>₹{{ number.last_period_actual|floatformat:2 }}</td>
-                                            <td>₹{{ number.next_period_budget|floatformat:2 }}</td>
-                                            <td>₹{{ number.next_period_plan|floatformat:2 }}</td>
+                                            <td class="text-end">{{ gpi.last_week_budget|floatformat:2 }}</td>
+                                            <td class="text-end">-</td>
+                                            <td class="text-end">
+                                                <input type="number" class="form-control form-control-sm text-end"
+                                                       value="{{ gpi.last_week_actual|default:'0.00' }}" step="0.01"
+                                                       data-gpi-id="{{ gpi.id }}"
+                                                       data-field="last_week_actual"
+                                                       onchange="autoSave(this)">
+                                            </td>
+                                            <td class="text-end">{{ gpi.current_week_budget|floatformat:2 }}</td>
+                                            <td class="text-end">
+                                                <input type="number" class="form-control form-control-sm text-end"
+                                                       value="{{ gpi.current_week_plan|default:'0.00' }}" step="0.01"
+                                                       data-gpi-id="{{ gpi.id }}"
+                                                       data-field="current_week_plan"
+                                                       onchange="autoSave(this)">
+                                            </td>
+                                            <td>
+                                                <textarea class="form-control form-control-sm" rows="1"
+                                                          data-gpi-id="{{ gpi.id }}"
+                                                          data-field="explanation"
+                                                          onchange="autoSave(this)"
+                                                          placeholder="Add comments...">{{ gpi.explanation|default:"" }}</textarea>
+                                            </td>
+                                            <td>{{ gpi.responsible_user.get_full_name }}</td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <button class="btn btn-outline-primary" onclick="editNumber({{ number.id }})" data-bs-toggle="tooltip" data-bs-placement="top" title="Edit Number">
-                                                        <i class="fas fa-edit"></i>
+                                                    <button class="btn btn-outline-warning" onclick="reassignParameter({{ gpi.id }})"
+                                                            data-bs-toggle="tooltip" title="Reassign"
+                                                            {% if gpi.responsible_user != user %}disabled{% endif %}>
+                                                        <i class="fas fa-user-edit"></i>
                                                     </button>
-                                                    <button class="btn btn-outline-success" onclick="viewNumberHistory({{ number.id }})"
-                                                            data-bs-toggle="tooltip" data-bs-placement="top" title="View History">
-                                                        <i class="fas fa-history"></i>
-                                                    </button>
-                                                    <button class="btn btn-outline-info" onclick="addComment({{ number.id }})"
-                                                            data-bs-toggle="tooltip" data-bs-placement="top" title="Add Comment">
+                                                    <button class="btn btn-outline-info" onclick="viewComments({{ gpi.id }})"
+                                                            data-bs-toggle="tooltip" title="View Comments">
                                                         <i class="fas fa-comment"></i>
                                                     </button>
                                                 </div>
@@ -150,7 +132,7 @@
                                         </tr>
                                         {% empty %}
                                         <tr>
-                                            <td colspan="10" class="text-center text-muted">No weekly numbers assigned to you</td>
+                                            <td colspan="10" class="text-center text-muted">No weekly GPI parameters assigned to you</td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>
@@ -159,50 +141,98 @@
                         </div>
 
                         <!-- Monthly Numbers Section -->
-                        <div id="monthlyNumbers" class="numbers-section" style="display: none;">
+                        <div id="monthlyNumbersSection" class="numbers-section" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <button type="button" class="btn btn-info" onclick="openNewIssueModal()">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
+                                    <i class="fas fa-plus-circle me-2"></i>Add Action
+                                </button>
+                            </div>
                             <div class="table-responsive">
                                 <table class="table table-bordered table-hover">
                                     <thead class="table-dark">
                                         <tr>
-                                            <th>Parameter</th>
+                                            <th>Month</th>
                                             <th>Team</th>
-                                            <th>Type</th>
-                                            <th>Year-Month</th>
-                                            <th>Last Period Budget</th>
-                                            <th>Last Period Plan</th>
-                                            <th>Last Period Actual</th>
-                                            <th>Next Period Budget</th>
-                                            <th>Next Period Plan</th>
+                                            <th>FPI/GPI</th>
+                                            <th>Last Month Budget</th>
+                                            <th>Last Month Plan</th>
+                                            <th>Last Month Actual</th>
+                                            <th>Current Month Budget</th>
+                                            <th>Current Month Plan</th>
+                                            <th>Comments</th>
+                                            <th>Assigned To</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="monthlyNumbersBody">
-                                        {% for number in monthly_numbers %}
+                                    <tbody>
+                                        {% for param in monthly_numbers %}
                                         <tr>
-                                            <td>{{ number }}</td>
-                                            <td>{{ number.team.name }}</td>
+                                            <td>{{ current_month }}</td>
+                                            <td>{{ param.quarterly_plan.team.name }}</td>
                                             <td>
-                                                <span class="badge bg-{% if number.source_type == 'fpi' %}primary{% else %}success{% endif %}">
-                                                    {{ number.source_type|upper }}
-                                                </span>
+                                                {% if param.main_head %}
+                                                    <strong>{{ param.sub_head }}</strong>
+                                                    <br><small class="text-primary">FPI - {{ param.get_main_head_display }}</small>
+                                                {% else %}
+                                                    <strong>{{ param.name }}</strong>
+                                                    {% if param.unit_of_measure %}
+                                                    <br><small class="text-muted">({{ param.unit_of_measure }})</small>
+                                                    {% endif %}
+                                                    <br><small class="text-success">GPI - {{ param.get_indicator_type_display }}</small>
+                                                {% endif %}
                                             </td>
-                                            <td>{{ number.year }}-M{{ number.month_number }}</td>
-                                            <td>₹{{ number.last_period_budget|floatformat:2 }}</td>
-                                            <td>₹{{ number.last_period_plan|floatformat:2 }}</td>
-                                            <td>₹{{ number.last_period_actual|floatformat:2 }}</td>
-                                            <td>₹{{ number.next_period_budget|floatformat:2 }}</td>
-                                            <td>₹{{ number.next_period_plan|floatformat:2 }}</td>
+                                            <td class="text-end">
+                                                {% if param.main_head %}
+                                                    ₹{{ param.last_month_budget|floatformat:2 }}
+                                                {% else %}
+                                                    {{ param.last_month_budget|floatformat:2 }}
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end">-</td>
+                                            <td class="text-end">
+                                                <input type="number" class="form-control form-control-sm text-end"
+                                                       value="{{ param.last_month_actual|default:'0.00' }}" step="0.01"
+                                                       data-param-id="{{ param.id }}"
+                                                       data-param-type="{% if param.main_head %}fpi{% else %}gpi{% endif %}"
+                                                       data-field="last_month_actual"
+                                                       onchange="autoSave(this)">
+                                            </td>
+                                            <td class="text-end">
+                                                {% if param.main_head %}
+                                                    ₹{{ param.current_month_budget|floatformat:2 }}
+                                                {% else %}
+                                                    {{ param.current_month_budget|floatformat:2 }}
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end">
+                                                <input type="number" class="form-control form-control-sm text-end"
+                                                       value="{{ param.current_month_plan|default:'0.00' }}" step="0.01"
+                                                       data-param-id="{{ param.id }}"
+                                                       data-param-type="{% if param.main_head %}fpi{% else %}gpi{% endif %}"
+                                                       data-field="current_month_plan"
+                                                       onchange="autoSave(this)">
+                                            </td>
+                                            <td>
+                                                <textarea class="form-control form-control-sm" rows="1"
+                                                          data-param-id="{{ param.id }}"
+                                                          data-param-type="{% if param.main_head %}fpi{% else %}gpi{% endif %}"
+                                                          data-field="explanation"
+                                                          onchange="autoSave(this)"
+                                                          placeholder="Add comments...">{{ param.explanation|default:"" }}</textarea>
+                                            </td>
+                                            <td>{{ param.responsible_user.get_full_name }}</td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <button class="btn btn-outline-primary" onclick="editNumber({{ number.id }})" data-bs-toggle="tooltip" data-bs-placement="top" title="Edit Number">
-                                                        <i class="fas fa-edit"></i>
+                                                    <button class="btn btn-outline-warning" onclick="reassignParameter({{ param.id }}, '{% if param.main_head %}fpi{% else %}gpi{% endif %}')"
+                                                            data-bs-toggle="tooltip" title="Reassign"
+                                                            {% if param.responsible_user != user %}disabled{% endif %}>
+                                                        <i class="fas fa-user-edit"></i>
                                                     </button>
-                                                    <button class="btn btn-outline-success" onclick="viewNumberHistory({{ number.id }})"
-                                                            data-bs-toggle="tooltip" data-bs-placement="top" title="View History">
-                                                        <i class="fas fa-history"></i>
-                                                    </button>
-                                                    <button class="btn btn-outline-info" onclick="addComment({{ number.id }})"
-                                                            data-bs-toggle="tooltip" data-bs-placement="top" title="Add Comment">
+                                                    <button class="btn btn-outline-info" onclick="viewComments({{ param.id }}, '{% if param.main_head %}fpi{% else %}gpi{% endif %}')"
+                                                            data-bs-toggle="tooltip" title="View Comments">
                                                         <i class="fas fa-comment"></i>
                                                     </button>
                                                 </div>
@@ -210,7 +240,7 @@
                                         </tr>
                                         {% empty %}
                                         <tr>
-                                            <td colspan="10" class="text-center text-muted">No monthly numbers assigned to you</td>
+                                            <td colspan="11" class="text-center text-muted">No monthly FPI/GPI parameters assigned to you</td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>
@@ -221,36 +251,71 @@
 
                     <!-- My Projects Tab -->
                     <div class="tab-pane fade" id="my-projects" role="tabpanel">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="mb-0">My Projects</h5>
-                            <button type="button" class="btn btn-primary" onclick="createProject()">
-                                <i class="fas fa-plus me-2"></i>New Project
-                            </button>
+                        <!-- Current Quarter Display -->
+                        <div class="mb-3">
+                            <h5 class="mb-2">My Projects</h5>
+                            <p class="text-muted mb-0">{{ current_quarter_display }}</p>
                         </div>
 
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-start align-items-center mb-3">
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-info" onclick="openNewIssueModal()">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
+                                    <i class="fas fa-plus-circle me-2"></i>Add Action
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Projects Grid -->
                         <div class="table-responsive">
                             <table class="table table-bordered table-hover">
                                 <thead class="table-dark">
                                     <tr>
-                                        <th>Project Name</th>
+                                        <th width="40">+</th>
                                         <th>Team</th>
+                                        <th>PPI (Project) Name</th>
                                         <th>Completion Criteria</th>
-                                        <th>Due Date</th>
+                                        <th>Original Due Date</th>
+                                        <th>% Completion</th>
                                         <th>Status</th>
-                                        <th>Progress</th>
+                                        <th>Revised Due Date</th>
+                                        <th>Assigned To</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for project in projects %}
-                                    <tr>
-                                        <td>
-                                            <strong>{{ project.name }}</strong>
-                                            <br><small class="text-muted">{{ project.quarterly_plan.quarter }} - {{ project.quarterly_plan.financial_year.year }}</small>
+                                    <tr id="project-row-{{ project.id }}">
+                                        <td class="text-center">
+                                            <button class="btn btn-link btn-sm p-0" onclick="toggleProjectDetails({{ project.id }})"
+                                                    id="expand-btn-{{ project.id }}" title="Expand Project Details">
+                                                <i class="fas fa-plus text-primary"></i>
+                                            </button>
                                         </td>
                                         <td>{{ project.quarterly_plan.team.name }}</td>
-                                        <td>{{ project.completion_criteria|truncatechars:100 }}</td>
-                                        <td>{{ project.due_date|date:"M d, Y" }}</td>
+                                        <td>
+                                            <strong>{{ project.name }}</strong>
+                                            {% if project.project_type %}
+                                            <span class="badge bg-{% if project.project_type == 'PPI' %}primary{% else %}warning{% endif %} ms-2">{{ project.project_type }}</span>
+                                            {% endif %}
+                                            <br><small class="text-muted">Q{{ project.quarterly_plan.quarter }} - {{ project.quarterly_plan.financial_year.year|unlocalize }}</small>
+                                        </td>
+                                        <td>{{ project.completion_criteria|truncatechars:80 }}</td>
+                                        <td>{{ project.end_date|date:"M d, Y" }}</td>
+                                        <td>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar bg-{% if project.completion_percentage >= 100 %}success{% elif project.completion_percentage >= 75 %}info{% elif project.completion_percentage >= 50 %}warning{% else %}danger{% endif %}"
+                                                     role="progressbar"
+                                                     style="width: {{ project.completion_percentage }}%"
+                                                     aria-valuenow="{{ project.completion_percentage }}"
+                                                     aria-valuemin="0" aria-valuemax="100">
+                                                    {{ project.completion_percentage|floatformat:0 }}%
+                                                </div>
+                                            </div>
+                                        </td>
                                         <td>
                                             {% with project.status_history.first as latest_status %}
                                             {% if latest_status %}
@@ -264,45 +329,115 @@
                                         </td>
                                         <td>
                                             {% with project.status_history.first as latest_status %}
-                                            {% if latest_status %}
-                                                <div class="progress" style="height: 20px;">
-                                                    <div class="progress-bar" role="progressbar" style="width: {{ latest_status.completion_percentage }}%" aria-valuenow="{{ latest_status.completion_percentage }}" aria-valuemin="0" aria-valuemax="100">
-                                                        {{ latest_status.completion_percentage }}%
-                                                    </div>
-                                                </div>
+                                            {% if latest_status and latest_status.revised_due_date %}
+                                                {{ latest_status.revised_due_date|date:"M d, Y" }}
                                             {% else %}
-                                                <div class="progress" style="height: 20px;">
-                                                    <div class="progress-bar bg-secondary" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                                                        0%
-                                                    </div>
-                                                </div>
+                                                -
                                             {% endif %}
                                             {% endwith %}
                                         </td>
                                         <td>
+                                            {% if project.responsible_user == user %}
+                                                Self
+                                            {% else %}
+                                                {{ project.responsible_user.get_full_name }}
+                                            {% endif %}
+                                        </td>
+                                        <td>
                                             <div class="btn-group btn-group-sm">
                                                 <button class="btn btn-outline-primary" onclick="editProject({{ project.id }})"
-                                                        data-bs-toggle="tooltip" data-bs-placement="top" title="Edit Project">
+                                                        data-bs-toggle="tooltip" title="Edit">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
+                                                {% if project.responsible_user == user %}
                                                 <button class="btn btn-outline-warning" onclick="reassignProject({{ project.id }})"
-                                                        data-bs-toggle="tooltip" data-bs-placement="top" title="Reassign Project">
+                                                        data-bs-toggle="tooltip" title="Reassign">
                                                     <i class="fas fa-user-edit"></i>
                                                 </button>
-                                                <button class="btn btn-outline-success" onclick="toggleProjectComplete({{ project.id }})"
-                                                        data-bs-toggle="tooltip" data-bs-placement="top" title="Toggle Complete">
+                                                {% if project.completion_percentage == 100 %}
+                                                <button class="btn btn-outline-success" onclick="markProjectComplete({{ project.id }})"
+                                                        data-bs-toggle="tooltip" title="Mark Complete">
                                                     <i class="fas fa-check"></i>
                                                 </button>
+                                                {% endif %}
+                                                {% endif %}
                                                 <button class="btn btn-outline-info" onclick="viewProjectHistory({{ project.id }})"
-                                                        data-bs-toggle="tooltip" data-bs-placement="top" title="View History">
+                                                        data-bs-toggle="tooltip" title="View History">
                                                     <i class="fas fa-history"></i>
                                                 </button>
                                             </div>
                                         </td>
                                     </tr>
+                                    <!-- Project Details Slider Row (Initially Hidden) -->
+                                    <tr id="project-details-{{ project.id }}" class="project-details-row" style="display: none;">
+                                        <td colspan="10">
+                                            <div class="card border-0 bg-light">
+                                                <div class="card-body">
+                                                    <h6 class="card-title">Project Tasks</h6>
+                                                    <div class="table-responsive">
+                                                        <table class="table table-sm">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Task</th>
+                                                                    <th>Original Due Date</th>
+                                                                    <th>Status</th>
+                                                                    <th>Revised Due Date</th>
+                                                                    <th>Assigned To</th>
+                                                                    <th>Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {% for task in project.tasks.all %}
+                                                                <tr>
+                                                                    <td>
+                                                                        <strong>Week {{ task.week_number }}</strong>
+                                                                        <br>{{ task.task_description|truncatechars:60 }}
+                                                                    </td>
+                                                                    <td>-</td>
+                                                                    <td>
+                                                                        <span class="badge bg-{% if task.is_completed %}success{% else %}secondary{% endif %}">
+                                                                            {% if task.is_completed %}Completed{% else %}Pending{% endif %}
+                                                                        </span>
+                                                                        {% if task.completed_at %}
+                                                                        <br><small class="text-muted">{{ task.completed_at|date:"M d, Y" }}</small>
+                                                                        {% endif %}
+                                                                    </td>
+                                                                    <td>-</td>
+                                                                    <td>
+                                                                        {% if task.assigned_to == user %}
+                                                                            Self
+                                                                        {% else %}
+                                                                            {{ task.assigned_to.get_full_name }}
+                                                                        {% endif %}
+                                                                    </td>
+                                                                    <td>
+                                                                        {% if project.responsible_user == user %}
+                                                                        <button class="btn btn-outline-warning btn-sm" onclick="reassignTask({{ task.id }})"
+                                                                                data-bs-toggle="tooltip" title="Reassign">
+                                                                            <i class="fas fa-user-edit"></i>
+                                                                        </button>
+                                                                        {% endif %}
+                                                                        <button class="btn btn-outline-info btn-sm" onclick="viewTaskHistory({{ task.id }})"
+                                                                                data-bs-toggle="tooltip" title="View History">
+                                                                            <i class="fas fa-history"></i>
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                                {% empty %}
+                                                                <tr>
+                                                                    <td colspan="6" class="text-center text-muted">No tasks defined for this project</td>
+                                                                </tr>
+                                                                {% endfor %}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
                                     {% empty %}
                                     <tr>
-                                        <td colspan="7" class="text-center text-muted">No projects assigned to you</td>
+                                        <td colspan="10" class="text-center text-muted">No projects assigned to you</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -314,46 +449,64 @@
                     <div class="tab-pane fade" id="my-todo" role="tabpanel">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="mb-0">My Action Items</h5>
-                            <button type="button" class="btn btn-primary" onclick="createAction()">
-                                <i class="fas fa-plus me-2"></i>New Action
-                            </button>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-info" onclick="openNewIssueModal()">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
+                                    <i class="fas fa-plus-circle me-2"></i>Add Action
+                                </button>
+                            </div>
                         </div>
 
                         <div class="table-responsive">
                             <table class="table table-bordered table-hover">
                                 <thead class="table-dark">
                                     <tr>
-                                        <th>Action</th>
                                         <th>Team</th>
+                                        <th>Source</th>
+                                        <th>Action</th>
                                         <th>Priority</th>
+                                        <th>Assigned To</th>
+                                        <th>Original Due Date</th>
                                         <th>Status</th>
-                                        <th>Original Due</th>
-                                        <th>Revised Due</th>
-                                        <th>Created By</th>
+                                        <th>Revised Due Date</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for action in actions %}
                                     <tr class="{% if action.original_due_date < today and action.status != 'completed' %}table-warning{% endif %}">
+                                        <td>{{ action.team.name }}</td>
+                                        <td>
+                                            <span class="badge bg-{% if action.source == 'manual' %}primary{% elif action.source == 'ppi' %}success{% elif action.source == 'improvement' %}danger{% elif action.source == 'review' %}warning{% else %}info{% endif %}">
+                                                {{ action.get_source_display }}
+                                            </span>
+                                        </td>
                                         <td>
                                             <strong>{{ action.action|truncatechars:80 }}</strong>
                                             {% if action.comments %}
                                                 <br><small class="text-muted">{{ action.comments|truncatechars:100 }}</small>
                                             {% endif %}
                                         </td>
-                                        <td>{{ action.team.name }}</td>
                                         <td>
                                             <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}secondary{% endif %}">
                                                 {{ action.get_priority_display }}
                                             </span>
                                         </td>
                                         <td>
+                                            {% if action.assigned_to == user %}
+                                                <strong>Me</strong>
+                                            {% else %}
+                                                {{ action.assigned_to.get_full_name }}
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ action.original_due_date|date:"M d, Y" }}</td>
+                                        <td>
                                             <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% elif action.status == 'at_risk' %}warning{% elif action.status == 'danger' %}danger{% elif action.status == 'rejected' %}dark{% else %}secondary{% endif %}">
                                                 {{ action.get_status_display }}
                                             </span>
                                         </td>
-                                        <td>{{ action.original_due_date|date:"M d, Y" }}</td>
                                         <td>
                                             {% if action.revised_due_date %}
                                                 {{ action.revised_due_date|date:"M d, Y" }}
@@ -361,12 +514,18 @@
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ action.created_by.get_full_name }}</td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
-                                                <button class="btn btn-outline-primary" onclick="editAction({{ action.id }})" title="Edit">
+                                                <!-- Debug: Action ID = {{ action.id }} -->
+                                                {% if action.id and action.id > 0 %}
+                                                <button class="btn btn-outline-primary" onclick="editAction({{ action.id }})" title="Edit (ID: {{ action.id }})">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
+                                                {% else %}
+                                                <button class="btn btn-outline-secondary" disabled title="Invalid Action ID: {{ action.id }}">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                {% endif %}
                                                 <button class="btn btn-outline-warning" onclick="reassignAction({{ action.id }})" title="Reassign">
                                                     <i class="fas fa-user-edit"></i>
                                                 </button>
@@ -402,17 +561,183 @@
 
 <script>
 function toggleNumbersView(type) {
+    const periodText = document.getElementById('periodText');
+
     if (type === 'weekly') {
-        document.getElementById('weeklyNumbers').style.display = 'block';
-        document.getElementById('monthlyNumbers').style.display = 'none';
-        document.getElementById('weeklyBtn').classList.add('active');
-        document.getElementById('monthlyBtn').classList.remove('active');
+        document.getElementById('weeklyNumbersSection').style.display = 'block';
+        document.getElementById('monthlyNumbersSection').style.display = 'none';
+        // Show current week information
+        periodText.textContent = '{{ current_week_display }}';
     } else {
-        document.getElementById('weeklyNumbers').style.display = 'none';
-        document.getElementById('monthlyNumbers').style.display = 'block';
-        document.getElementById('weeklyBtn').classList.remove('active');
-        document.getElementById('monthlyBtn').classList.add('active');
+        document.getElementById('weeklyNumbersSection').style.display = 'none';
+        document.getElementById('monthlyNumbersSection').style.display = 'block';
+        // Show current month information
+        periodText.textContent = '{{ current_month }} {{ current_year|unlocalize }}';
     }
+}
+
+// Auto save functionality for editable fields
+function autoSave(element) {
+    const paramId = element.getAttribute('data-param-id') || element.getAttribute('data-gpi-id');
+    const paramType = element.getAttribute('data-param-type') || 'gpi';
+    const field = element.getAttribute('data-field');
+    const value = element.value;
+
+    // Show saving indicator
+    element.style.backgroundColor = '#fff3cd';
+
+    const formData = new FormData();
+    formData.append('param_id', paramId);
+    formData.append('param_type', paramType);
+    formData.append('field', field);
+    formData.append('value', value);
+
+    fetch('/implement/save-number/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            element.style.backgroundColor = '#d1edff';
+            setTimeout(() => {
+                element.style.backgroundColor = '';
+            }, 1000);
+        } else {
+            element.style.backgroundColor = '#f8d7da';
+            alert('Error saving: ' + data.error);
+        }
+    })
+    .catch(error => {
+        element.style.backgroundColor = '#f8d7da';
+        console.error('Error:', error);
+    });
+}
+
+// Reassign parameter functionality
+function reassignParameter(paramId, paramType = 'gpi') {
+    // Set the parameter details in hidden fields
+    document.getElementById('reassignParamId').value = paramId;
+    document.getElementById('reassignParamType').value = paramType;
+    document.getElementById('reassignEntityType').value = 'parameter';
+
+    // Reset the form
+    document.getElementById('reassignTeam').value = '';
+    document.getElementById('reassignMember').value = '';
+    document.getElementById('reassignMember').innerHTML = '<option value="">Select</option>';
+
+    // Update modal title
+    document.getElementById('reassignModalLabel').textContent = 'Reassign Parameter';
+
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('reassignModal'));
+    modal.show();
+}
+
+// Handle team selection to populate members
+document.addEventListener('DOMContentLoaded', function() {
+    const teamSelect = document.getElementById('reassignTeam');
+    const memberSelect = document.getElementById('reassignMember');
+
+    if (teamSelect) {
+        teamSelect.addEventListener('change', function() {
+            const teamId = this.value;
+            memberSelect.innerHTML = '<option value="">Select</option>';
+
+            if (teamId) {
+                // Fetch team members via AJAX
+                fetch(`/organizations/ajax/get-team-members/${teamId}/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            data.members.forEach(member => {
+                                const option = document.createElement('option');
+                                option.value = member.id;
+                                option.textContent = member.name + (member.is_manager ? ' (Manager)' : '');
+                                memberSelect.appendChild(option);
+                            });
+                        } else {
+                            console.error('Error fetching team members:', data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching team members:', error);
+                    });
+            }
+        });
+    }
+});
+
+// Save reassignment
+function saveReassignment() {
+    const entityId = document.getElementById('reassignParamId').value;
+    const entityType = document.getElementById('reassignEntityType').value;
+    const paramType = document.getElementById('reassignParamType').value;
+    const teamId = document.getElementById('reassignTeam').value;
+    const memberId = document.getElementById('reassignMember').value;
+
+    if (!memberId) {
+        alert('Please select Member');
+        return;
+    }
+
+    // Send AJAX request to save reassignment
+    const formData = new FormData();
+    formData.append('entity_id', entityId);
+    formData.append('entity_type', entityType);
+    formData.append('param_type', paramType);
+    formData.append('member_id', memberId);
+    formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+
+    // Use different endpoint based on entity type
+    const url = entityType === 'task' ? '{% url "implement:reassign_task" %}' : '{% url "implement:reassign_parameter" %}';
+
+    fetch(url, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Close modal and refresh page
+            const modal = bootstrap.Modal.getInstance(document.getElementById('reassignModal'));
+            modal.hide();
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while reassigning the parameter');
+    });
+}
+
+// View comments functionality
+function viewComments(paramId, paramType = 'gpi') {
+    // Fetch parameter details and comments
+    fetch(`/implement/parameter/${paramId}/comments/?type=${paramType}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Populate modal with data
+                document.getElementById('commentParameterName').textContent = data.parameter_name;
+                document.getElementById('currentComments').innerHTML = data.comments || '<em class="text-muted">No comments available</em>';
+
+                // Show the modal
+                const modal = new bootstrap.Modal(document.getElementById('viewCommentsModal'));
+                modal.show();
+            } else {
+                alert('Error loading comments: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while loading comments');
+        });
 }
 
 // Numbers Actions
@@ -432,13 +757,273 @@ function addComment(numberId) {
     }
 }
 
+// Project edit modal functions - defined early to avoid reference errors
+function toggleProjectFields() {
+    console.log('=== toggleProjectFields called ===');
+
+    const statusElement = document.getElementById('editProjectStatus');
+    const revisedDueDateGroup = document.getElementById('revisedDueDateGroup');
+    const challengeGroup = document.getElementById('challengeGroup');
+    const revisedDueDateInput = document.getElementById('editProjectRevisedDueDate');
+    const challengeInput = document.getElementById('editProjectChallenge');
+
+    console.log('Elements found:');
+    console.log('- statusElement:', statusElement);
+    console.log('- revisedDueDateGroup:', revisedDueDateGroup);
+    console.log('- challengeGroup:', challengeGroup);
+    console.log('- revisedDueDateInput:', revisedDueDateInput);
+    console.log('- challengeInput:', challengeInput);
+
+    if (!statusElement) {
+        console.error('Status element not found');
+        return;
+    }
+    if (!revisedDueDateGroup) {
+        console.error('revisedDueDateGroup element not found');
+        return;
+    }
+    if (!challengeGroup) {
+        console.error('challengeGroup element not found');
+        return;
+    }
+
+    const status = statusElement.value;
+    console.log('Current status:', status);
+
+    // Hide both fields by default
+    console.log('Hiding fields by default');
+    revisedDueDateGroup.style.display = 'none';
+    challengeGroup.style.display = 'none';
+
+    // Clear required attributes
+    if (revisedDueDateInput) revisedDueDateInput.removeAttribute('required');
+    if (challengeInput) challengeInput.removeAttribute('required');
+
+    if (status === 'danger') {
+        console.log('=== SHOWING FIELDS FOR DANGER STATUS ===');
+        // Show both Revised Due Date and Challenge for Danger
+        revisedDueDateGroup.style.display = 'block';
+        challengeGroup.style.display = 'block';
+        console.log('Set revisedDueDateGroup display to block');
+        console.log('Set challengeGroup display to block');
+        if (revisedDueDateInput) revisedDueDateInput.setAttribute('required', 'required');
+        if (challengeInput) challengeInput.setAttribute('required', 'required');
+    } else if (status === 'at_risk') {
+        console.log('=== SHOWING CHALLENGE FIELD FOR AT_RISK STATUS ===');
+        // Show only Challenge for At Risk
+        challengeGroup.style.display = 'block';
+        console.log('Set challengeGroup display to block');
+        if (challengeInput) challengeInput.setAttribute('required', 'required');
+    } else {
+        console.log('Status is not at_risk or danger, fields remain hidden');
+    }
+
+    console.log('Final states:');
+    console.log('- revisedDueDateGroup display:', revisedDueDateGroup.style.display);
+    console.log('- challengeGroup display:', challengeGroup.style.display);
+    console.log('=== End toggleProjectFields ===');
+}
+
+// Initialize the project form - moved to dashboard for global access
+function initializeProjectForm() {
+    console.log('Initializing project form');
+
+    // Add event listener to status dropdown
+    const statusSelect = document.getElementById('editProjectStatus');
+    if (statusSelect) {
+        statusSelect.addEventListener('change', toggleProjectFields);
+        console.log('Added change listener to status select');
+    }
+
+    // Set initial visibility based on current status
+    toggleProjectFields();
+
+    // Handle form submission
+    const form = document.getElementById('editProjectForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Close modal and refresh the page or update UI
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editProjectModal'));
+                    modal.hide();
+                    location.reload(); // Refresh to show updated data
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error occurred'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while saving the project');
+            });
+        });
+        console.log('Added form submit listener');
+    } else {
+        console.error('Form not found');
+    }
+}
+
+// Action Modal Functions
+function toggleActionFields() {
+    console.log('=== toggleActionFields called ===');
+
+    const statusElement = document.getElementById('editActionStatus');
+    const revisedDueDateGroup = document.getElementById('revisedDueDateGroup');
+    const challengeGroup = document.getElementById('challengeGroup');
+
+    console.log('Elements found:');
+    console.log('- statusElement:', statusElement);
+    console.log('- revisedDueDateGroup:', revisedDueDateGroup);
+    console.log('- challengeGroup:', challengeGroup);
+
+    if (!statusElement) {
+        console.error('Action status element not found');
+        return;
+    }
+    if (!revisedDueDateGroup) {
+        console.error('Revised due date group not found');
+        return;
+    }
+    if (!challengeGroup) {
+        console.error('Challenge group not found');
+        return;
+    }
+
+    const status = statusElement.value;
+    console.log('Current status:', status);
+
+    // Hide all conditional fields first
+    revisedDueDateGroup.style.display = 'none';
+    challengeGroup.style.display = 'none';
+
+    // Show fields based on status (based on PRD specifications)
+    if (status === 'danger') {
+        console.log('Status is danger - showing both revised due date and challenge');
+        revisedDueDateGroup.style.display = 'block';
+        challengeGroup.style.display = 'block';
+    } else if (status === 'at_risk') {
+        console.log('Status is at_risk - showing challenge only');
+        challengeGroup.style.display = 'block';
+    } else {
+        console.log('Status is in_progress or other - hiding all conditional fields');
+    }
+}
+
+function initializeActionForm() {
+    console.log('Initializing action form');
+
+    // Add event listener to status dropdown
+    const statusSelect = document.getElementById('editActionStatus');
+    if (statusSelect) {
+        statusSelect.addEventListener('change', toggleActionFields);
+        console.log('Added change listener to action status select');
+    }
+
+    // Set initial visibility based on current status
+    toggleActionFields();
+
+    // Handle form submission
+    const form = document.getElementById('editActionForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Action updated successfully!');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editActionModal'));
+                    modal.hide();
+                    location.reload(); // Refresh to show updated data
+                } else {
+                    alert('Error updating action: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating action: ' + error.message);
+            });
+        });
+        console.log('Added action form submit listener');
+    } else {
+        console.error('Action form not found');
+    }
+}
+
 // Project Actions
 function createProject() {
     window.location.href = '{% url "implement:project_create" %}';
 }
 
+
 function editProject(projectId) {
-    window.location.href = `/implement/project/${projectId}/edit/`;
+    // Load the project edit modal content via AJAX
+    fetch(`/implement/project/${projectId}/edit/`, {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.text())
+    .then(html => {
+        // Insert the modal HTML into the container
+        document.getElementById('editProjectModalContainer').innerHTML = html;
+
+        // Initialize the form after DOM is ready
+        setTimeout(() => {
+            console.log('Checking for initializeProjectForm function...');
+            if (typeof initializeProjectForm === 'function') {
+                console.log('Calling initializeProjectForm');
+                initializeProjectForm();
+            } else {
+                console.error('initializeProjectForm function not found');
+            }
+
+            // Also try to directly attach the event listener as backup
+            const statusSelect = document.getElementById('editProjectStatus');
+            if (statusSelect) {
+                console.log('Found status select, adding direct listener');
+                statusSelect.addEventListener('change', function() {
+                    console.log('Status changed to:', this.value);
+                    toggleProjectFields();
+                });
+                // Call once to set initial state
+                toggleProjectFields();
+            } else {
+                console.error('Status select element not found');
+            }
+        }, 200);
+
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('editProjectModal'));
+        modal.show();
+    })
+    .catch(error => {
+        console.error('Error loading project edit modal:', error);
+        alert('Error loading project edit form');
+    });
 }
 
 function reassignProject(projectId) {
@@ -468,13 +1053,312 @@ function viewProjectHistory(projectId) {
     window.location.href = `/implement/project/${projectId}/history/`;
 }
 
+function toggleProjectDetails(projectId) {
+    const detailsRow = document.getElementById(`project-details-${projectId}`);
+    const expandBtn = document.getElementById(`expand-btn-${projectId}`);
+    const icon = expandBtn.querySelector('i');
+
+    if (detailsRow.style.display === 'none') {
+        detailsRow.style.display = 'table-row';
+        icon.className = 'fas fa-minus text-primary';
+        expandBtn.title = 'Collapse Project Details';
+    } else {
+        detailsRow.style.display = 'none';
+        icon.className = 'fas fa-plus text-primary';
+        expandBtn.title = 'Expand Project Details';
+    }
+}
+
+function markProjectComplete(projectId) {
+    // AJAX call to mark project as complete using existing toggle endpoint
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+
+    fetch(`{% url "implement:project_toggle_complete" pk=0 %}`.replace('0', projectId), {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while marking project as complete');
+    });
+}
+
+function reassignTask(taskId) {
+    // Set the task details in hidden fields
+    document.getElementById('reassignParamId').value = taskId;
+    document.getElementById('reassignParamType').value = 'task';
+    document.getElementById('reassignEntityType').value = 'task';
+
+    // Reset the form
+    document.getElementById('reassignTeam').value = '';
+    document.getElementById('reassignMember').value = '';
+    document.getElementById('reassignMember').innerHTML = '<option value="">Select</option>';
+
+    // Update modal title
+    document.getElementById('reassignModalLabel').textContent = 'Reassign Task';
+
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('reassignModal'));
+    modal.show();
+}
+
+function viewTaskHistory(taskId) {
+    console.log('viewTaskHistory called with taskId:', taskId);
+
+    // Fetch task history data via AJAX
+    const url = `/implement/task/${taskId}/history/`;
+    console.log('Fetching URL:', url);
+
+    fetch(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        console.log('Response received:', response);
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Data received:', data);
+
+        // Check if modal elements exist
+        const modalLabel = document.getElementById('taskHistoryModalLabel');
+        const taskDescription = document.getElementById('taskHistoryTaskDescription');
+        const projectName = document.getElementById('taskHistoryProjectName');
+        const assignedTo = document.getElementById('taskHistoryAssignedTo');
+        const taskStatus = document.getElementById('taskHistoryStatusBadge');
+
+        console.log('Modal element check:');
+        console.log('modalLabel:', modalLabel);
+        console.log('taskDescription:', taskDescription);
+        console.log('projectName:', projectName);
+        console.log('assignedTo:', assignedTo);
+        console.log('taskStatus:', taskStatus);
+
+        if (!modalLabel) {
+            console.error('taskHistoryModalLabel element not found');
+            alert('Modal elements not found. Please refresh the page.');
+            return;
+        }
+
+        if (!taskDescription) {
+            console.error('taskHistoryTaskDescription element not found');
+            alert('taskHistoryTaskDescription element not found. Please refresh the page.');
+            return;
+        }
+
+        if (!projectName) {
+            console.error('taskHistoryProjectName element not found');
+            alert('taskHistoryProjectName element not found. Please refresh the page.');
+            return;
+        }
+
+        if (!assignedTo) {
+            console.error('taskHistoryAssignedTo element not found');
+            alert('taskHistoryAssignedTo element not found. Please refresh the page.');
+            return;
+        }
+
+        if (!taskStatus) {
+            console.error('taskHistoryStatusBadge element not found');
+            alert('taskHistoryStatusBadge element not found. Please refresh the page.');
+            return;
+        }
+
+        // Populate the modal with task data
+        modalLabel.textContent = `Task History - Week ${data.task.week_number}`;
+        taskDescription.textContent = data.task.description;
+        projectName.textContent = data.task.project_name;
+        assignedTo.textContent = data.task.assigned_to;
+        taskStatus.textContent = data.task.is_completed ? 'Completed' : 'In Progress';
+
+        // Update status badge
+        const statusBadge = document.getElementById('taskHistoryStatusBadge');
+        statusBadge.className = `badge ${data.task.is_completed ? 'bg-success' : 'bg-warning'}`;
+        statusBadge.textContent = data.task.is_completed ? 'Completed' : 'In Progress';
+
+        // Populate history timeline
+        const historyContainer = document.getElementById('taskHistoryTimeline');
+        historyContainer.innerHTML = '';
+
+        if (data.history.length > 0) {
+            data.history.forEach(entry => {
+                const timelineItem = document.createElement('div');
+                timelineItem.className = 'timeline-item mb-4';
+
+                if (entry.type === 'status_update') {
+                    timelineItem.innerHTML = `
+                        <div class="row">
+                            <div class="col-md-2 text-end">
+                                <small class="text-muted">
+                                    ${entry.date}<br>
+                                    ${entry.time}
+                                </small>
+                            </div>
+                            <div class="col-md-1 text-center">
+                                <div class="timeline-marker">
+                                    <i class="fas fa-circle text-primary"></i>
+                                </div>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="card">
+                                    <div class="card-body p-3">
+                                        <h6 class="mb-1">Status Update</h6>
+                                        <p class="mb-2">
+                                            Status changed to: <span class="badge bg-primary">${entry.status_display}</span>
+                                        </p>
+                                        ${entry.revised_due_date ? `<p class="mb-2"><strong>Revised Due Date:</strong> ${entry.revised_due_date}</p>` : ''}
+                                        ${entry.challenge ? `<div class="mb-2"><strong>Challenges:</strong><p class="text-muted mb-0">${entry.challenge}</p></div>` : ''}
+                                        ${entry.comments ? `<div><strong>Comments:</strong><p class="text-muted mb-0">${entry.comments}</p></div>` : ''}
+                                        <small class="text-muted">by ${entry.updated_by}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (entry.type === 'sub_action_created') {
+                    timelineItem.innerHTML = `
+                        <div class="row">
+                            <div class="col-md-2 text-end">
+                                <small class="text-muted">
+                                    ${entry.date}<br>
+                                    ${entry.time}
+                                </small>
+                            </div>
+                            <div class="col-md-1 text-center">
+                                <div class="timeline-marker">
+                                    <i class="fas fa-circle text-success"></i>
+                                </div>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="card">
+                                    <div class="card-body p-3">
+                                        <h6 class="mb-1">Sub-Action Created</h6>
+                                        <p class="mb-2">${entry.sub_action_text}</p>
+                                        <small class="text-muted">created by ${entry.created_by}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                historyContainer.appendChild(timelineItem);
+            });
+        } else {
+            historyContainer.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-history fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No history available for this task.</p>
+                    <p class="text-muted">Updates will appear here as the task progresses.</p>
+                </div>
+            `;
+        }
+
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('taskHistoryModal'));
+        modal.show();
+    })
+    .catch(error => {
+        console.error('Detailed error:', error);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        alert('Error loading task history: ' + error.message);
+    });
+}
+
 // Action Functions
 function createAction() {
     window.location.href = '{% url "implement:action_create" %}';
 }
 
 function editAction(actionId) {
-    window.location.href = `/implement/action/${actionId}/edit/`;
+    // Validate actionId
+    if (!actionId || actionId <= 0) {
+        console.error('Invalid action ID:', actionId);
+        alert('Invalid action ID. Please refresh the page and try again.');
+        return;
+    }
+
+    // Load the action edit modal content via AJAX
+    fetch(`/implement/action/${actionId}/edit/`, {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Accept': 'text/html'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('Action not found');
+            } else if (response.status === 403) {
+                throw new Error('You do not have permission to edit this action');
+            } else if (response.status === 500) {
+                return response.text().then(text => {
+                    throw new Error(text || 'Server error occurred');
+                });
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        }
+        return response.text();
+    })
+    .then(html => {
+        // Insert the modal HTML into the container
+        document.getElementById('editActionModalContainer').innerHTML = html;
+
+        // Initialize the form after DOM is ready
+        setTimeout(() => {
+            console.log('Checking for initializeActionForm function...');
+            if (typeof initializeActionForm === 'function') {
+                console.log('Calling initializeActionForm');
+                initializeActionForm();
+            } else {
+                console.error('initializeActionForm function not found');
+            }
+
+            // Also try to directly attach the event listener as backup
+            const statusSelect = document.getElementById('editActionStatus');
+            if (statusSelect) {
+                console.log('Found action status select, adding direct listener');
+                statusSelect.addEventListener('change', function() {
+                    console.log('Action status changed to:', this.value);
+                    toggleActionFields();
+                });
+                // Call once to set initial state
+                toggleActionFields();
+            } else {
+                console.error('Action status select element not found');
+            }
+        }, 200);
+
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('editActionModal'));
+        modal.show();
+    })
+    .catch(error => {
+        console.error('Error loading action edit modal:', error);
+        alert('Error loading action edit form: ' + error.message);
+    });
 }
 
 function reassignAction(actionId) {
@@ -528,4 +1412,158 @@ function getCookie(name) {
     return cookieValue;
 }
 </script>
+
+<!-- Reassign Parameter Modal -->
+<div class="modal fade" id="reassignModal" tabindex="-1" aria-labelledby="reassignModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reassignModalLabel">Reassign</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="reassignForm">
+                    <div class="mb-3">
+                        <label for="reassignTeam" class="form-label">Reassign Team</label>
+                        <select class="form-select" id="reassignTeam" name="team">
+                            <option value="">Select</option>
+                            {% for team in user_teams %}
+                            <option value="{{ team.id }}">{{ team.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="reassignMember" class="form-label">Reassign Member</label>
+                        <select class="form-select" id="reassignMember" name="member">
+                            <option value="">Select</option>
+                        </select>
+                    </div>
+                    <input type="hidden" id="reassignParamId" name="param_id">
+                    <input type="hidden" id="reassignParamType" name="param_type">
+                    <input type="hidden" id="reassignEntityType" name="entity_type" value="parameter">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveReassignment()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Comments Modal -->
+<div class="modal fade" id="viewCommentsModal" tabindex="-1" aria-labelledby="viewCommentsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewCommentsModalLabel">View Comments</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="commentsContent">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Parameter:</label>
+                        <span id="commentParameterName"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Current Comments:</label>
+                        <div id="currentComments" class="p-3 bg-light rounded">
+                            <!-- Comments will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task History Modal -->
+<div class="modal fade" id="taskHistoryModal" tabindex="-1" aria-labelledby="taskHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="taskHistoryModalLabel">Task History</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Timeline</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="taskHistoryTimeline">
+                                    <!-- Timeline content will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Task Summary</h6>
+                            </div>
+                            <div class="card-body">
+                                <dl class="row">
+                                    <dt class="col-sm-5">Task:</dt>
+                                    <dd class="col-sm-7" id="taskHistoryTaskDescription"></dd>
+
+                                    <dt class="col-sm-5">Project:</dt>
+                                    <dd class="col-sm-7" id="taskHistoryProjectName"></dd>
+
+                                    <dt class="col-sm-5">Assigned To:</dt>
+                                    <dd class="col-sm-7" id="taskHistoryAssignedTo"></dd>
+
+                                    <dt class="col-sm-5">Status:</dt>
+                                    <dd class="col-sm-7">
+                                        <span id="taskHistoryStatusBadge" class="badge bg-warning">In Progress</span>
+                                    </dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.timeline-marker {
+    position: relative;
+}
+.timeline-marker::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 60px;
+    background-color: #dee2e6;
+    top: 20px;
+}
+.timeline-item:last-child .timeline-marker::before {
+    display: none;
+}
+</style>
+
+<!-- Edit Project Modal Container -->
+<div id="editProjectModalContainer"></div>
+
+<!-- Include the issue and action modals -->
+{% include 'includes/new_issue_modal.html' %}
+{% include 'includes/new_action_modal.html' %}
+
+<!-- Edit Action Modal Container -->
+<div id="editActionModalContainer"></div>
+
+<!-- Include the common issue and action modal JavaScript -->
+<script src="{% static 'js/issue_action_modals.js' %}"></script>
 {% endblock %}

@@ -95,6 +95,7 @@ class Action(models.Model):
     SOURCE_CHOICES = [
         ('manual', 'Manual'),
         ('ppi', 'PPI Task'),
+        ('improvement', 'Improvement Task'),
         ('review', 'Review Meeting'),
         ('issue', 'Issue Resolution'),
     ]
@@ -102,6 +103,7 @@ class Action(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='manual')
     ppi_task = models.OneToOneField('plans.PPITask', on_delete=models.CASCADE, null=True, blank=True)
+    improvement_task = models.OneToOneField('improve.ImprovementTask', on_delete=models.CASCADE, null=True, blank=True)
     parent_action = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='sub_actions')
     
     action = models.TextField()

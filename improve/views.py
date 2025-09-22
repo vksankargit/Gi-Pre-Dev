@@ -2,7 +2,8 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import TemplateView
 from django.contrib import messages
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
+from django.utils import timezone
 import openpyxl
 import os
 import datetime
@@ -14,25 +15,74 @@ from organizations.models import Team
 
 class ImproveDashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'improve/dashboard.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        
-        # Get teams where user is manager
-        managed_teams = Team.objects.filter(manager=user, is_active=True)
-        
+
+        # Get user's teams - only teams where user is manager
+        if user.role == 'general':
+            user_teams = Team.objects.filter(manager=user, is_active=True)
+        else:
+            user_teams = Team.objects.filter(is_active=True)
+
         # Get recent improvement uploads
         recent_uploads = ImprovementUpload.objects.filter(
-            team__in=managed_teams
+            team__in=user_teams
         ).select_related('team', 'financial_year', 'uploaded_by').order_by('-uploaded_at')[:10]
-        
+
+        # Statistics
+        total_uploads = ImprovementUpload.objects.filter(team__in=user_teams).count()
+        successful_uploads = ImprovementUpload.objects.filter(team__in=user_teams, upload_status='successful').count()
+
+        # For improve app, projects replace suggestions
+        total_projects = ImprovementProject.objects.filter(upload__team__in=user_teams).count()
+        completed_projects = ImprovementProject.objects.filter(upload__team__in=user_teams, status='completed').count()
+
+        # Get current quarter information
+        current_quarter = self._get_current_quarter()
+
         context.update({
-            'managed_teams': managed_teams,
             'recent_uploads': recent_uploads,
+            'total_uploads': total_uploads,
+            'successful_uploads': successful_uploads,
+            'total_suggestions': total_projects,  # Projects instead of suggestions
+            'implemented_suggestions': completed_projects,  # Completed instead of implemented
+            'user_teams': user_teams,
+            'financial_years': FinancialYear.objects.all().order_by('-start_date'),
+            'current_quarter': current_quarter,
         })
-        
+
         return context
+
+    def _get_current_quarter(self):
+        """
+        Get current financial year and quarter in FY XX-XX – QX format
+        """
+        current_date = timezone.now().date()
+
+        # Financial year starts April 1st
+        # Determine current financial year
+        if current_date.month >= 4:  # April to December = same year FY
+            fy_start_year = current_date.year
+        else:  # January to March = previous year FY
+            fy_start_year = current_date.year - 1
+
+        fy_end_year = fy_start_year + 1
+
+        # Determine current quarter
+        if current_date.month >= 4 and current_date.month <= 6:  # April to June
+            current_quarter = 1
+        elif current_date.month >= 7 and current_date.month <= 9:  # July to September
+            current_quarter = 2
+        elif current_date.month >= 10 and current_date.month <= 12:  # October to December
+            current_quarter = 3
+        else:  # January to March (next year)
+            current_quarter = 4
+
+        # Format as FY 25-26 – Q2
+        fy_str = f'FY {str(fy_start_year)[2:]}-{str(fy_end_year)[2:]}'
+        return f'{fy_str} – Q{current_quarter}'
 
 
 class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
@@ -61,17 +111,33 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
         quarter = request.POST.get('quarter')
         uploaded_file = request.FILES.get('file')
 
+        # Check if this is an AJAX request
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
         if not all([team_id, financial_year_id, quarter, uploaded_file]):
-            messages.error(request, 'Please fill all required fields.')
+            error_msg = 'Please fill all required fields.'
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_msg})
+            messages.error(request, error_msg)
             return self.get(request, *args, **kwargs)
 
         # Validate file type
-        if not uploaded_file.name.endswith('.xlsx'):
-            messages.error(request, 'Please upload an Excel (.xlsx) file.')
+        if not uploaded_file.name.endswith(('.xlsx', '.xls')):
+            error_msg = 'Please upload an Excel (.xlsx or .xls) file.'
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_msg})
+            messages.error(request, error_msg)
             return self.get(request, *args, **kwargs)
 
-        team = get_object_or_404(Team, id=team_id, manager=request.user)
-        financial_year = get_object_or_404(FinancialYear, id=financial_year_id)
+        try:
+            team = get_object_or_404(Team, id=team_id, manager=request.user)
+            financial_year = get_object_or_404(FinancialYear, id=financial_year_id)
+        except:
+            error_msg = 'Invalid team or financial year selection.'
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_msg})
+            messages.error(request, error_msg)
+            return self.get(request, *args, **kwargs)
 
         try:
             # Create or update improvement upload
@@ -111,32 +177,48 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
                         error_message += f' and {len(processing_errors) - 3} more errors.'
                 else:
                     error_message = f'File uploaded but processing failed. Total: {improvement_upload.total_records}, Processed: {improvement_upload.processed_records}, Errors: {improvement_upload.error_records}'
+
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error_message})
                 messages.error(request, error_message)
             else:
                 improvement_upload.upload_status = 'successful'
                 improvement_upload.save()
                 action = 'created' if created else 'updated'
-                messages.success(request, f'Improvement plan {action} and processed successfully. Total: {improvement_upload.total_records}, Processed: {improvement_upload.processed_records}, Errors: {improvement_upload.error_records}')
+                success_message = f'Improvement plan {action} and processed successfully. Total: {improvement_upload.total_records}, Processed: {improvement_upload.processed_records}, Errors: {improvement_upload.error_records}'
+
+                if is_ajax:
+                    return JsonResponse({'success': True, 'message': success_message})
+                messages.success(request, success_message)
 
         except Exception as e:
             # Log error and mark as failed
-            ImprovementUpload.objects.update_or_create(
-                team=team,
-                financial_year=financial_year,
-                quarter=quarter,
-                defaults={
-                    'file_name': uploaded_file.name,
-                    'file_path': uploaded_file,
-                    'upload_status': 'failed',
-                    'uploaded_by': request.user,
-                    'error_log': str(e),
-                    'total_records': 0,
-                    'processed_records': 0,
-                    'error_records': 1,
-                }
-            )
-            messages.error(request, f'Error uploading file: {str(e)}')
+            try:
+                ImprovementUpload.objects.update_or_create(
+                    team=team,
+                    financial_year=financial_year,
+                    quarter=quarter,
+                    defaults={
+                        'file_name': uploaded_file.name,
+                        'file_path': uploaded_file,
+                        'upload_status': 'failed',
+                        'uploaded_by': request.user,
+                        'error_log': str(e),
+                        'total_records': 0,
+                        'processed_records': 0,
+                        'error_records': 1,
+                    }
+                )
+            except:
+                pass
 
+            error_msg = f'Error uploading file: {str(e)}'
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_msg})
+            messages.error(request, error_msg)
+
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': 'Unknown error occurred'})
         return redirect('improve:upload')
 
     def _process_improvement_excel_file(self, improvement_upload, uploaded_file):
@@ -293,11 +375,30 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
                                     continue
 
                         # Create the improvement task
-                        ImprovementTask.objects.create(
+                        improvement_task = ImprovementTask.objects.create(
                             project=improvement_project,
                             task_description=task_text,
                             week_number=week_num,
                             assigned_to=assigned_user
+                        )
+
+                        # Calculate due date for this week
+                        # Assume quarter starts from project start_date
+                        week_due_date = improvement_project.start_date + datetime.timedelta(weeks=week_num-1, days=6)
+
+                        # Create corresponding Action
+                        from implement.models import Action
+                        Action.objects.create(
+                            team=improvement_project.upload.team,
+                            source='improvement',
+                            improvement_task=improvement_task,
+                            action=f"[Week {week_num}] {task_text}",
+                            priority='medium',
+                            assigned_to=assigned_user,
+                            original_due_date=week_due_date,
+                            status='not_started',
+                            created_by=assigned_user,
+                            comments=f"From Improvement project: {improvement_project.name}"
                         )
 
         except Exception as e:

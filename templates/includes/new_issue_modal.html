@@ -1,0 +1,67 @@
+<!-- New Issue Modal -->
+<div class="modal fade" id="newIssueModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2 text-warning"></i>New Issue
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newIssueForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Issue Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="issueTitle" name="title" required placeholder="Brief description of the issue">
+                        <div class="invalid-feedback" id="issueTitleError"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" id="issueDescription" name="description" rows="3" placeholder="Optional detailed description"></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Priority</label>
+                                <select class="form-control" id="issuePriority" name="priority">
+                                    <option value="">Select</option>
+                                    <option value="high">High</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="low">Low</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Required to be resolved by</label>
+                                <input type="date" class="form-control" id="issueRequiredBy" name="required_by">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Team for which the issue has to be added <span class="text-danger">*</span></label>
+                        <select class="form-control" id="issueTeam" name="team" required>
+                            <option value="">Select</option>
+                            <!-- Teams will be populated by JavaScript -->
+                        </select>
+                        <div class="invalid-feedback" id="issueTeamError"></div>
+                        <div class="form-text">Teams where you are a member or in charge</div>
+                    </div>
+                </form>
+
+                <div id="issueFormError" class="alert alert-danger d-none"></div>
+                <div id="issueFormSuccess" class="alert alert-success d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="saveIssueBtn">
+                    <i class="fas fa-save me-2"></i>Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

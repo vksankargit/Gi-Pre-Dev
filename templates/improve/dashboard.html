@@ -100,6 +100,7 @@
                             <label class="form-label">Plan Year and Quarter</label>
                             <input type="text" class="form-control" value="{{ current_quarter }}" readonly style="background-color: #f8f9fa;">
                             <input type="hidden" id="currentQuarter" value="{{ current_quarter }}">
+                            <input type="hidden" id="currentFinancialYear" value="{% if financial_years %}{{ financial_years.first.id }}{% endif %}">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -253,10 +254,12 @@ function uploadFile() {
     const fileInput = document.getElementById('improvementFile');
     const teamSelect = document.getElementById('teamSelect');
     const currentQuarter = document.getElementById('currentQuarter').value;
+    const currentFinancialYear = document.getElementById('currentFinancialYear').value;
 
     formData.append('file', fileInput.files[0]);
     formData.append('team', teamSelect.value);
     formData.append('quarter', currentQuarter);
+    formData.append('financial_year', currentFinancialYear);
 
     const statusDiv = document.getElementById('uploadStatus');
     statusDiv.className = 'alert alert-info';
@@ -267,7 +270,8 @@ function uploadFile() {
         method: 'POST',
         body: formData,
         headers: {
-            'X-CSRFToken': getCookie('csrftoken')
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
         }
     })
     .then(response => response.json())

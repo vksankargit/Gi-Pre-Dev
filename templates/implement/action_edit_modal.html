@@ -1,0 +1,153 @@
+<!-- Edit Action Modal -->
+<div class="modal fade" id="editActionModal" tabindex="-1" aria-labelledby="editActionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editActionModalLabel">Edit Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" id="editActionForm" action="{% url 'implement:action_edit' object.pk %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <!-- Read-only fields -->
+                            <div class="mb-3">
+                                <label class="form-label">Team</label>
+                                <input type="text" class="form-control" value="{{ object.team.name }}" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Source</label>
+                                <input type="text" class="form-control" value="{{ object.get_source_display }}" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Priority</label>
+                                <input type="text" class="form-control" value="{{ object.get_priority_display }}" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Assigned To</label>
+                                <input type="text" class="form-control" value="{{ object.assigned_to.get_full_name }}" readonly>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Original Due Date</label>
+                                <input type="text" class="form-control" value="{{ object.original_due_date|date:'d-m-Y' }}" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Last Updated Status</label>
+                                {% with object.history.first as latest_history %}
+                                <input type="text" class="form-control" value="{% if latest_history %}{{ latest_history.updated_at|date:'d-m-Y H:i' }}{% else %}{{ object.updated_at|date:'d-m-Y H:i' }}{% endif %}" readonly>
+                                {% endwith %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Last Revised Due Date</label>
+                                {% with object.history.first as latest_history %}
+                                <input type="text" class="form-control" value="{% if latest_history.revised_due_date %}{{ latest_history.revised_due_date|date:'d-m-Y' }}{% elif object.revised_due_date %}{{ object.revised_due_date|date:'d-m-Y' }}{% else %}Not set{% endif %}" readonly>
+                                {% endwith %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="editActionStatus" class="form-label">Status <span class="text-danger">*</span></label>
+                                <select class="form-select" id="editActionStatus" name="status" required>
+                                    <option value="">Select</option>
+                                    <option value="in_progress" {% if object.status == 'in_progress' %}selected{% endif %}>On Track</option>
+                                    <option value="at_risk" {% if object.status == 'at_risk' %}selected{% endif %}>At Risk</option>
+                                    <option value="danger" {% if object.status == 'danger' %}selected{% endif %}>Danger</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3" id="revisedDueDateGroup" style="display: none;">
+                                <label for="editActionRevisedDueDate" class="form-label">Revised Due Date</label>
+                                <input type="date" class="form-control" id="editActionRevisedDueDate" name="revised_due_date" value="{% if object.revised_due_date %}{{ object.revised_due_date|date:'Y-m-d' }}{% endif %}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Action</label>
+                        <textarea class="form-control" rows="3" readonly>{{ object.action }}</textarea>
+                    </div>
+
+                    <div class="mb-3" id="challengeGroup" style="display: none;">
+                        <label for="editActionChallenge" class="form-label">Challenge</label>
+                        <textarea class="form-control" id="editActionChallenge" name="challenge" rows="3" placeholder="Describe the challenges faced...">{{ object.challenge }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editActionComments" class="form-label">Comments</label>
+                        <textarea class="form-control" id="editActionComments" name="comments" rows="3" placeholder="Add your comments...">{{ object.comments }}</textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-info" onclick="viewActionHistory({{ object.pk }})">
+                        <i class="fas fa-history me-2"></i>View History
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Save
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="confirmActionCancel()">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+
+function confirmActionCancel() {
+    if (confirm('You will lose the data entered. Do you wish to continue – Yes / No')) {
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editActionModal'));
+        modal.hide();
+    }
+}
+
+function viewActionHistory(actionId) {
+    window.location.href = `/implement/action/${actionId}/history/`;
+}
+
+// Global functions for action modal (will be called from dashboard.html)
+function toggleActionFields() {
+    const statusElement = document.getElementById('editActionStatus');
+    const revisedDueDateGroup = document.getElementById('revisedDueDateGroup');
+    const challengeGroup = document.getElementById('challengeGroup');
+
+    if (!statusElement || !revisedDueDateGroup || !challengeGroup) return;
+
+    const status = statusElement.value;
+
+    // Hide all conditional fields first
+    revisedDueDateGroup.style.display = 'none';
+    challengeGroup.style.display = 'none';
+
+    // Show fields based on status
+    if (status === 'danger') {
+        revisedDueDateGroup.style.display = 'block';
+        challengeGroup.style.display = 'block';
+    } else if (status === 'at_risk') {
+        challengeGroup.style.display = 'block';
+    }
+}
+
+function initializeActionForm() {
+    const statusElement = document.getElementById('editActionStatus');
+    if (statusElement) {
+        // Set initial visibility based on current status
+        toggleActionFields();
+
+        // Add event listener for status changes
+        statusElement.addEventListener('change', toggleActionFields);
+    }
+}
+
+</script>

@@ -25,8 +25,8 @@ class TeamForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple(attrs={
             'class': 'form-check-input'
         }),
-        required=False,
-        help_text="Select team members"
+        required=True,
+        help_text="Select at least one team member (required)"
     )
 
     class Meta:
@@ -70,6 +70,22 @@ class TeamForm(forms.ModelForm):
         if self.instance and self.instance.pk:
             current_members = self.instance.members.filter(is_active=True).values_list('member_id', flat=True)
             self.fields['members'].initial = current_members
+
+    def clean_members(self):
+        members = self.cleaned_data.get('members')
+        if not members:
+            raise forms.ValidationError("At least one team member is required.")
+        return members
+
+    def clean(self):
+        cleaned_data = super().clean()
+        manager = cleaned_data.get('manager')
+        members = cleaned_data.get('members')
+
+        if manager and members and manager in members:
+            raise forms.ValidationError("The team manager cannot be included in the team members list.")
+
+        return cleaned_data
 
     def save(self, commit=True):
         team = super().save(commit=commit)

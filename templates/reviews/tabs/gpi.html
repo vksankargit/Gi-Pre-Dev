@@ -1,0 +1,400 @@
+<!-- GPI Tab Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">
+        <i class="fas fa-trophy me-2"></i>Goal Performance Indicators (GPI)
+    </h5>
+    <div class="btn-group">
+        <button class="btn btn-outline-primary btn-sm" onclick="showGPIDetails()">
+            <i class="fas fa-search-plus me-1"></i>Detailed View
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="refreshGPI()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Period Selection Radio Buttons -->
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center">
+            <label class="form-label mb-0 me-3">View Period:</label>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="gpiPeriod" id="weeklyGPI" value="weekly"
+                       {% if gpi_period == 'weekly' or not gpi_period %}checked{% endif %}
+                       onchange="loadGPIPeriod('weekly')">
+                <label class="form-check-label" for="weeklyGPI">Weekly</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="gpiPeriod" id="monthlyGPI" value="monthly"
+                       {% if gpi_period == 'monthly' %}checked{% endif %}
+                       onchange="loadGPIPeriod('monthly')">
+                <label class="form-check-label" for="monthlyGPI">Monthly</label>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="gpiPeriodContent">
+    {% if gpi_data %}
+        <!-- Goal Performance Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center border-{% if gpi_data.overall_achievement >= 80 %}success{% elif gpi_data.overall_achievement >= 60 %}warning{% else %}danger{% endif %}">
+                    <div class="card-body py-2">
+                        <h4 class="card-title mb-1 text-{% if gpi_data.overall_achievement >= 80 %}success{% elif gpi_data.overall_achievement >= 60 %}warning{% else %}danger{% endif %}">
+                            {{ gpi_data.overall_achievement|floatformat:1 }}%
+                        </h4>
+                        <small class="text-muted">Overall Achievement</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-success">
+                    <div class="card-body py-2">
+                        <h4 class="card-title mb-1 text-success">{{ gpi_data.goals_completed }}</h4>
+                        <small class="text-muted">Goals Completed</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-primary">
+                    <div class="card-body py-2">
+                        <h4 class="card-title mb-1 text-primary">{{ gpi_data.goals_in_progress }}</h4>
+                        <small class="text-muted">In Progress</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-danger">
+                    <div class="card-body py-2">
+                        <h4 class="card-title mb-1 text-danger">{{ gpi_data.goals_at_risk }}</h4>
+                        <small class="text-muted">At Risk</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Goal Performance Table -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-bullseye me-2"></i>{{ gpi_data.period_display }} Goal Performance
+                    <span class="badge bg-secondary ms-2">{{ gpi_data.period_start|date:"M d" }} - {{ gpi_data.period_end|date:"M d, Y" }}</span>
+                </h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 5%">S.No</th>
+                                <th style="width: 25%">Goal</th>
+                                <th style="width: 15%">Target</th>
+                                <th style="width: 15%">Achieved</th>
+                                <th style="width: 15%">Progress</th>
+                                <th style="width: 10%">Status</th>
+                                <th style="width: 15%">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for goal in gpi_data.goals %}
+                            <tr class="{% if goal.is_at_risk %}table-warning{% elif goal.is_completed %}table-success{% endif %}">
+                                <td>
+                                    <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                                </td>
+                                <td>
+                                    <div>
+                                        <strong>{{ goal.title|truncatechars:40 }}</strong>
+                                        {% if goal.title|length > 40 %}
+                                            <button class="btn btn-link btn-sm p-0 ms-1"
+                                                    data-bs-toggle="tooltip"
+                                                    data-bs-placement="top"
+                                                    title="{{ goal.title }}">
+                                                <i class="fas fa-info-circle"></i>
+                                            </button>
+                                        {% endif %}
+                                        <br>
+                                        <small class="text-muted">{{ goal.category }}</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <strong>{{ goal.target_value }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ goal.unit }}</small>
+                                </td>
+                                <td>
+                                    <strong class="text-{% if goal.achievement_percentage >= 100 %}success{% elif goal.achievement_percentage >= 80 %}warning{% else %}danger{% endif %}">
+                                        {{ goal.achieved_value }}
+                                    </strong>
+                                    <br>
+                                    <small class="text-muted">{{ goal.unit }}</small>
+                                </td>
+                                <td>
+                                    <div class="progress mb-1" style="height: 10px;">
+                                        <div class="progress-bar
+                                            {% if goal.achievement_percentage >= 100 %}bg-success
+                                            {% elif goal.achievement_percentage >= 80 %}bg-warning
+                                            {% elif goal.achievement_percentage >= 60 %}bg-info
+                                            {% else %}bg-danger
+                                            {% endif %}"
+                                            role="progressbar"
+                                            style="width: {{ goal.achievement_percentage|default:0 }}%">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">{{ goal.achievement_percentage|floatformat:1 }}%</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{% if goal.status == 'completed' %}success{% elif goal.status == 'in_progress' %}primary{% elif goal.status == 'at_risk' %}warning{% else %}danger{% endif %}">
+                                        {{ goal.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary"
+                                                onclick="viewGoalDetails({{ goal.id }})"
+                                                data-bs-toggle="tooltip"
+                                                title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary"
+                                                onclick="updateGoalProgress({{ goal.id }})"
+                                                data-bs-toggle="tooltip"
+                                                title="Update Progress">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Goal Category Performance Chart -->
+        {% if gpi_data.category_performance %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-chart-pie me-2"></i>Performance by Category
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for category in gpi_data.category_performance %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-{% if category.achievement >= 80 %}success{% elif category.achievement >= 60 %}warning{% else %}danger{% endif %}">
+                                    <div class="card-body text-center py-3">
+                                        <h6 class="card-title">{{ category.name }}</h6>
+                                        <h4 class="text-{% if category.achievement >= 80 %}success{% elif category.achievement >= 60 %}warning{% else %}danger{% endif %}">
+                                            {{ category.achievement|floatformat:1 }}%
+                                        </h4>
+                                        <div class="progress mt-2" style="height: 8px;">
+                                            <div class="progress-bar bg-{% if category.achievement >= 80 %}success{% elif category.achievement >= 60 %}warning{% else %}danger{% endif %}"
+                                                 style="width: {{ category.achievement }}%"></div>
+                                        </div>
+                                        <small class="text-muted mt-1">{{ category.completed }}/{{ category.total }} goals</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-trophy fa-4x text-muted mb-3"></i>
+            <h5 class="text-muted mb-3">No Goal Data Available</h5>
+            <p class="text-muted">
+                Goal performance data for this {{ gpi_period|default:"weekly" }} period is not available yet.
+                Please ensure goals have been set and progress has been updated.
+            </p>
+            <button class="btn btn-outline-primary" onclick="refreshGPI()">
+                <i class="fas fa-sync-alt me-2"></i>Check Again
+            </button>
+        </div>
+    {% endif %}
+</div>
+
+<!-- GPI Detailed View Modal -->
+<div class="modal fade" id="gpiDetailModal" tabindex="-1" aria-labelledby="gpiDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="gpiDetailModalLabel">
+                    <i class="fas fa-trophy me-2"></i>Detailed Goal Performance Analysis
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="gpiDetailContent">
+                <!-- Detailed content loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Goal Details Modal -->
+<div class="modal fade" id="goalDetailModal" tabindex="-1" aria-labelledby="goalDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="goalDetailModalLabel">
+                    <i class="fas fa-bullseye me-2"></i>Goal Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="goalDetailContent">
+                <!-- Goal details loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function loadGPIPeriod(period) {
+    const content = document.getElementById('gpiPeriodContent');
+
+    // Show loading
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading ${period} GPI data...</p>
+        </div>
+    `;
+
+    // Load period-specific data
+    fetch(`{% url "reviews:gpi" meeting.pk %}?period=${period}`)
+        .then(response => response.text())
+        .then(html => {
+            // Extract just the period content part
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const periodContent = doc.getElementById('gpiPeriodContent');
+            if (periodContent) {
+                content.innerHTML = periodContent.innerHTML;
+            } else {
+                content.innerHTML = html;
+            }
+
+            // Reinitialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading GPI period:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading ${period} GPI data</p>
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadGPIPeriod('${period}')">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+function refreshGPI() {
+    const selectedPeriod = document.querySelector('input[name="gpiPeriod"]:checked').value;
+    loadGPIPeriod(selectedPeriod);
+}
+
+function showGPIDetails() {
+    const modal = new bootstrap.Modal(document.getElementById('gpiDetailModal'));
+    const content = document.getElementById('gpiDetailContent');
+    const selectedPeriod = document.querySelector('input[name="gpiPeriod"]:checked').value;
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading detailed GPI analysis...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    // Load detailed GPI view
+    fetch(`{% url "reviews:gpi" meeting.pk %}?period=${selectedPeriod}&detailed=true`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading GPI details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading detailed GPI data</p>
+                </div>
+            `;
+        });
+}
+
+function viewGoalDetails(goalId) {
+    const modal = new bootstrap.Modal(document.getElementById('goalDetailModal'));
+    const content = document.getElementById('goalDetailContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading goal details...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    // Load goal details
+    fetch(`/api/goals/${goalId}/details/`)
+        .then(response => response.json())
+        .then(data => {
+            content.innerHTML = `
+                <div class="row">
+                    <div class="col-12">
+                        <h6>Goal Information</h6>
+                        <table class="table table-borderless">
+                            <tr><td><strong>Title:</strong></td><td>${data.title}</td></tr>
+                            <tr><td><strong>Category:</strong></td><td>${data.category}</td></tr>
+                            <tr><td><strong>Target:</strong></td><td>${data.target_value} ${data.unit}</td></tr>
+                            <tr><td><strong>Achieved:</strong></td><td>${data.achieved_value} ${data.unit}</td></tr>
+                            <tr><td><strong>Progress:</strong></td><td>${data.achievement_percentage}%</td></tr>
+                            <tr><td><strong>Status:</strong></td><td><span class="badge bg-primary">${data.status}</span></td></tr>
+                        </table>
+                        ${data.description ? `<h6>Description</h6><p>${data.description}</p>` : ''}
+                        ${data.notes ? `<h6>Recent Notes</h6><p>${data.notes}</p>` : ''}
+                    </div>
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading goal details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading goal details</p>
+                </div>
+            `;
+        });
+}
+
+function updateGoalProgress(goalId) {
+    // This would open a form to update goal progress
+    alert('Goal progress update functionality would be implemented here');
+}
+
+// Initialize tooltips when content loads
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>

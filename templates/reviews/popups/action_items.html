@@ -1,0 +1,487 @@
+<!-- Action Items Popup Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="mb-0">
+        <i class="fas fa-tasks me-2"></i>Action Items
+        <span class="badge bg-secondary ms-2">{{ action_items|length }} item{{ action_items|length|pluralize }}</span>
+    </h6>
+    <button class="btn btn-success btn-sm" onclick="addActionItem()">
+        <i class="fas fa-plus me-1"></i>Add Action
+    </button>
+</div>
+
+<!-- Action Items Summary Cards -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-primary">{{ action_summary.total }}</h6>
+                <small class="text-muted">Total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-danger">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-danger">{{ action_summary.high_priority }}</h6>
+                <small class="text-muted">High Priority</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-warning">{{ action_summary.due_today }}</h6>
+                <small class="text-muted">Due Today</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-success">{{ action_summary.completed }}</h6>
+                <small class="text-muted">Completed</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if action_items %}
+    <!-- Existing Action Items -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Current Action Items</h6>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="filterActions('all')">All</button>
+                    <button class="btn btn-outline-danger" onclick="filterActions('high')">High Priority</button>
+                    <button class="btn btn-outline-warning" onclick="filterActions('pending')">Pending</button>
+                    <button class="btn btn-outline-success" onclick="filterActions('completed')">Completed</button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 5%">S.No</th>
+                            <th style="width: 35%">Action</th>
+                            <th style="width: 12%">Priority</th>
+                            <th style="width: 18%">Assigned To</th>
+                            <th style="width: 15%">Due Date</th>
+                            <th style="width: 15%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="actionItemsTable">
+                        {% for action in action_items %}
+                        <tr class="action-item-row {% if action.priority == 'high' %}table-warning{% endif %}{% if action.is_overdue %}table-danger{% endif %}"
+                            data-priority="{{ action.priority }}"
+                            data-status="{{ action.status }}">
+                            <td>
+                                <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                            </td>
+                            <td>
+                                <div>
+                                    <strong>{{ action.action|truncatechars:50 }}</strong>
+                                    {% if action.action|length > 50 %}
+                                        <button class="btn btn-link btn-sm p-0 ms-1"
+                                                data-bs-toggle="tooltip"
+                                                data-bs-placement="top"
+                                                title="{{ action.action }}">
+                                            <i class="fas fa-info-circle"></i>
+                                        </button>
+                                    {% endif %}
+                                    {% if action.comments %}
+                                        <br>
+                                        <small class="text-muted">{{ action.comments|truncatechars:60 }}</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}info{% endif %}">
+                                    {{ action.get_priority_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user me-1"></i>
+                                    <small>{{ action.assigned_to.get_full_name|default:action.assigned_to.username }}</small>
+                                </div>
+                                {% if action.assigned_to_team %}
+                                    <br>
+                                    <small class="text-muted">Team: {{ action.assigned_to_team.name }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div>
+                                    {{ action.due_date|date:"M d, Y" }}
+                                    {% if action.is_overdue %}
+                                        <br><small class="text-danger">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>Overdue
+                                        </small>
+                                    {% elif action.due_date|date:'Y-m-d' == today %}
+                                        <br><small class="text-warning">
+                                            <i class="fas fa-clock me-1"></i>Due Today
+                                        </small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary"
+                                            onclick="viewActionDetails({{ action.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary"
+                                            onclick="editActionItem({{ action.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Edit Action">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger"
+                                            onclick="deleteActionItem({{ action.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Delete Action">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+    <div class="text-center py-4">
+        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+        <h6 class="text-muted mb-3">No Action Items</h6>
+        <p class="text-muted mb-3">
+            No action items have been created for this review meeting yet.
+        </p>
+        <button class="btn btn-outline-primary" onclick="addActionItem()">
+            <i class="fas fa-plus me-2"></i>Add First Action Item
+        </button>
+    </div>
+{% endif %}
+
+<!-- Add/Edit Action Item Form (Initially Hidden) -->
+<div class="mt-3" id="actionItemForm" style="display: none;">
+    <div class="card">
+        <div class="card-header">
+            <h6 class="mb-0" id="actionFormTitle">
+                <i class="fas fa-plus me-2"></i>Add New Action Item
+            </h6>
+        </div>
+        <div class="card-body">
+            <form onsubmit="saveActionItem(event)" id="actionForm">
+                <input type="hidden" id="actionItemId" name="action_item_id">
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label for="actionDescription" class="form-label">Action Required <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="actionDescription" name="action" rows="3"
+                                  placeholder="Describe what needs to be done..." required></textarea>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="actionPriority" class="form-label">Priority <span class="text-danger">*</span></label>
+                        <select class="form-select" id="actionPriority" name="priority" required>
+                            <option value="">Select Priority</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="actionDueDate" class="form-label">Due Date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="actionDueDate" name="due_date" required>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="actionAssignedTo" class="form-label">Assigned To <span class="text-danger">*</span></label>
+                        <select class="form-select" id="actionAssignedTo" name="assigned_to" required>
+                            <option value="">Select Person</option>
+                            {% for member in team_members %}
+                            <option value="{{ member.id }}">{{ member.get_full_name|default:member.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="actionAssignedToTeam" class="form-label">Assigned To Team</label>
+                        <select class="form-select" id="actionAssignedToTeam" name="assigned_to_team">
+                            <option value="">Select Team (Optional)</option>
+                            {% for team in available_teams %}
+                            <option value="{{ team.id }}">{{ team.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-12">
+                        <label for="actionComments" class="form-label">Comments/Notes</label>
+                        <textarea class="form-control" id="actionComments" name="comments" rows="2"
+                                  placeholder="Additional context, dependencies, or notes..."></textarea>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-3">
+                    <h6 class="alert-heading">
+                        <i class="fas fa-lightbulb me-2"></i>Action Item Guidelines
+                    </h6>
+                    <ul class="mb-0">
+                        <li>Be specific and actionable</li>
+                        <li>Include measurable outcomes when possible</li>
+                        <li>Set realistic deadlines</li>
+                        <li>Assign to specific individuals, not just teams</li>
+                    </ul>
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Save Action Item
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="cancelActionForm()">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+{% if action_items %}
+<div class="mt-3">
+    <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-outline-primary btn-sm" onclick="exportActionItems('pdf')">
+            <i class="fas fa-file-pdf me-1"></i>Export PDF
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="exportActionItems('excel')">
+            <i class="fas fa-file-excel me-1"></i>Export Excel
+        </button>
+        <button class="btn btn-outline-info btn-sm" onclick="emailActionItems()">
+            <i class="fas fa-envelope me-1"></i>Email Summary
+        </button>
+        <button class="btn btn-outline-success btn-sm" onclick="markAllCompleted()">
+            <i class="fas fa-check-double me-1"></i>Mark All Complete
+        </button>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function filterActions(filterType) {
+    const rows = document.querySelectorAll('.action-item-row');
+
+    // Update button states
+    document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    rows.forEach(row => {
+        let showRow = false;
+
+        switch(filterType) {
+            case 'all':
+                showRow = true;
+                break;
+            case 'high':
+                showRow = row.dataset.priority === 'high';
+                break;
+            case 'pending':
+                showRow = row.dataset.status !== 'completed';
+                break;
+            case 'completed':
+                showRow = row.dataset.status === 'completed';
+                break;
+        }
+
+        row.style.display = showRow ? '' : 'none';
+    });
+}
+
+function addActionItem() {
+    document.getElementById('actionFormTitle').innerHTML = '<i class="fas fa-plus me-2"></i>Add New Action Item';
+    document.getElementById('actionForm').reset();
+    document.getElementById('actionItemId').value = '';
+
+    // Set default due date to next week
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    document.getElementById('actionDueDate').value = nextWeek.toISOString().split('T')[0];
+
+    const form = document.getElementById('actionItemForm');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+
+    if (form.style.display === 'block') {
+        document.getElementById('actionDescription').focus();
+    }
+}
+
+function editActionItem(actionId) {
+    document.getElementById('actionFormTitle').innerHTML = '<i class="fas fa-edit me-2"></i>Edit Action Item';
+    document.getElementById('actionItemId').value = actionId;
+
+    // Load action item data for editing
+    fetch(`/api/review-actions/${actionId}/`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('actionDescription').value = data.action;
+            document.getElementById('actionPriority').value = data.priority;
+            document.getElementById('actionDueDate').value = data.due_date;
+            document.getElementById('actionAssignedTo').value = data.assigned_to;
+            document.getElementById('actionAssignedToTeam').value = data.assigned_to_team || '';
+            document.getElementById('actionComments').value = data.comments || '';
+
+            document.getElementById('actionItemForm').style.display = 'block';
+            document.getElementById('actionDescription').focus();
+        })
+        .catch(error => {
+            console.error('Error loading action item:', error);
+            alert('Error loading action item data');
+        });
+}
+
+function cancelActionForm() {
+    document.getElementById('actionItemForm').style.display = 'none';
+    document.getElementById('actionForm').reset();
+    document.getElementById('actionItemId').value = '';
+}
+
+function saveActionItem(event) {
+    event.preventDefault();
+
+    const formData = new FormData(event.target);
+    formData.append('meeting_id', {{ meeting.pk }});
+
+    const actionId = document.getElementById('actionItemId').value;
+    const url = '{% url "reviews:action_items" meeting.pk %}';
+    const method = actionId ? 'PUT' : 'POST';
+
+    if (actionId) {
+        formData.append('action_item_id', actionId);
+    }
+
+    fetch(url, {
+        method: method,
+        headers: {
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Reload the action items content
+            refreshActionItems();
+            cancelActionForm();
+        } else {
+            alert(data.error || 'Error saving action item');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving action item');
+    });
+}
+
+function viewActionDetails(actionId) {
+    // This would show a detailed view modal
+    alert('Action details view would be implemented here');
+}
+
+function deleteActionItem(actionId) {
+    if (confirm('Are you sure you want to delete this action item?')) {
+        fetch('{% url "reviews:action_items" meeting.pk %}', {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCsrfToken(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({action_item_id: actionId})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                refreshActionItems();
+            } else {
+                alert(data.error || 'Error deleting action item');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting action item');
+        });
+    }
+}
+
+function exportActionItems(format) {
+    const url = `{% url "reviews:action_items" meeting.pk %}?export=${format}`;
+    window.open(url, '_blank');
+}
+
+function emailActionItems() {
+    // This would trigger an email with action items summary
+    alert('Email functionality would be implemented here');
+}
+
+function markAllCompleted() {
+    if (confirm('Mark all action items as completed?')) {
+        fetch('{% url "reviews:action_items" meeting.pk %}', {
+            method: 'PATCH',
+            headers: {
+                'X-CSRFToken': getCsrfToken(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({action: 'mark_all_completed'})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                refreshActionItems();
+            } else {
+                alert(data.error || 'Error updating action items');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error updating action items');
+        });
+    }
+}
+
+function refreshActionItems() {
+    // Reload the entire action items modal content
+    fetch('{% url "reviews:action_items" meeting.pk %}')
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('actionItemsContent').innerHTML = html;
+
+            // Reinitialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        })
+        .catch(error => {
+            console.error('Error refreshing action items:', error);
+        });
+}
+
+function getCsrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>

@@ -1,0 +1,401 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Review Meeting - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3">
+                <i class="fas fa-calendar-alt me-2"></i>Review Meeting: {{ meeting.team.name }}
+            </h1>
+            <a href="{% url 'reviews:dashboard' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Reviews
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Meeting Info Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <h6 class="text-muted mb-1">Team</h6>
+                        <p class="mb-0"><strong>{{ meeting.team.name }}</strong></p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted mb-1">Review Type</h6>
+                        <span class="badge bg-{% if meeting.review_type == 'daily' %}info{% elif meeting.review_type == 'weekly' %}warning{% else %}success{% endif %} fs-6">
+                            {{ meeting.get_review_type_display }}
+                        </span>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted mb-1">Date & Time</h6>
+                        <p class="mb-0">{{ meeting.review_date|date:"M d, Y g:i A" }}</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted mb-1">Manager</h6>
+                        <p class="mb-0">{{ meeting.manager_name }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions Bar -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="openReviewNotes()">
+                <i class="fas fa-sticky-note me-1"></i>Review Notes
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openDecisions()">
+                <i class="fas fa-gavel me-1"></i>Decisions
+            </button>
+            <button type="button" class="btn btn-outline-info btn-sm" onclick="openActionItems()">
+                <i class="fas fa-tasks me-1"></i>Action Items
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Main Tabs Container -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="reviewMeetingTabs" role="tablist">
+                    <!-- Commitments Tab - Always visible -->
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="commitments-tab" data-bs-toggle="tab"
+                                data-bs-target="#commitments" type="button" role="tab">
+                            <i class="fas fa-handshake me-2"></i>Commitments
+                        </button>
+                    </li>
+
+                    <!-- FPI Tab - Visible for Monthly and Weekly -->
+                    {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="fpi-tab" data-bs-toggle="tab"
+                                data-bs-target="#fpi" type="button" role="tab">
+                            <i class="fas fa-chart-line me-2"></i>FPI
+                        </button>
+                    </li>
+                    {% endif %}
+
+                    <!-- GPI Tab - Visible for Monthly and Weekly -->
+                    {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="gpi-tab" data-bs-toggle="tab"
+                                data-bs-target="#gpi" type="button" role="tab">
+                            <i class="fas fa-trophy me-2"></i>GPI
+                        </button>
+                    </li>
+                    {% endif %}
+
+                    <!-- PPI Tab - Visible for Monthly and Weekly -->
+                    {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="ppi-tab" data-bs-toggle="tab"
+                                data-bs-target="#ppi" type="button" role="tab">
+                            <i class="fas fa-project-diagram me-2"></i>PPI
+                        </button>
+                    </li>
+                    {% endif %}
+
+                    <!-- Issues Tab - Always visible -->
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="issues-tab" data-bs-toggle="tab"
+                                data-bs-target="#issues" type="button" role="tab">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Issues
+                        </button>
+                    </li>
+
+                    <!-- Action Summary Tab - Always visible -->
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="action-summary-tab" data-bs-toggle="tab"
+                                data-bs-target="#action-summary" type="button" role="tab">
+                            <i class="fas fa-list-check me-2"></i>Action Summary
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="reviewMeetingTabContent">
+                    <!-- Commitments Tab Content -->
+                    <div class="tab-pane fade show active" id="commitments" role="tabpanel">
+                        <div id="commitments-content">
+                            <!-- This will be loaded via AJAX -->
+                            <div class="text-center py-4">
+                                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                                <p class="text-muted mt-2">Loading commitments...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FPI Tab Content -->
+                    {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
+                    <div class="tab-pane fade" id="fpi" role="tabpanel">
+                        <div id="fpi-content">
+                            <!-- This will be loaded via AJAX -->
+                            <div class="text-center py-4">
+                                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                                <p class="text-muted mt-2">Loading FPI data...</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- GPI Tab Content -->
+                    {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
+                    <div class="tab-pane fade" id="gpi" role="tabpanel">
+                        <div id="gpi-content">
+                            <!-- This will be loaded via AJAX -->
+                            <div class="text-center py-4">
+                                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                                <p class="text-muted mt-2">Loading GPI data...</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- PPI Tab Content -->
+                    {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
+                    <div class="tab-pane fade" id="ppi" role="tabpanel">
+                        <div id="ppi-content">
+                            <!-- This will be loaded via AJAX -->
+                            <div class="text-center py-4">
+                                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                                <p class="text-muted mt-2">Loading PPI data...</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Issues Tab Content -->
+                    <div class="tab-pane fade" id="issues" role="tabpanel">
+                        <div id="issues-content">
+                            <!-- This will be loaded via AJAX -->
+                            <div class="text-center py-4">
+                                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                                <p class="text-muted mt-2">Loading issues...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Summary Tab Content -->
+                    <div class="tab-pane fade" id="action-summary" role="tabpanel">
+                        <div id="action-summary-content">
+                            <!-- This will be loaded via AJAX -->
+                            <div class="text-center py-4">
+                                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                                <p class="text-muted mt-2">Loading action summary...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Review Notes Modal -->
+<div class="modal fade" id="reviewNotesModal" tabindex="-1" aria-labelledby="reviewNotesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reviewNotesModalLabel">
+                    <i class="fas fa-sticky-note me-2"></i>Review Notes
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="reviewNotesContent">
+                <!-- Content loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Decisions Modal -->
+<div class="modal fade" id="decisionsModal" tabindex="-1" aria-labelledby="decisionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="decisionsModalLabel">
+                    <i class="fas fa-gavel me-2"></i>Decisions
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="decisionsContent">
+                <!-- Content loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Items Modal -->
+<div class="modal fade" id="actionItemsModal" tabindex="-1" aria-labelledby="actionItemsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionItemsModalLabel">
+                    <i class="fas fa-tasks me-2"></i>Action Items
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="actionItemsContent">
+                <!-- Content loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const meetingId = {{ meeting.pk }};
+
+    // Load initial content for active tab
+    loadTabContent('commitments');
+
+    // Handle tab switching
+    document.querySelectorAll('#reviewMeetingTabs button[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function(event) {
+            const tabId = event.target.getAttribute('data-bs-target').substring(1); // Remove #
+            loadTabContent(tabId);
+        });
+    });
+
+    function loadTabContent(tabId) {
+        const contentDiv = document.getElementById(tabId + '-content');
+        if (!contentDiv) return;
+
+        // Check if content already loaded
+        if (contentDiv.dataset.loaded === 'true') return;
+
+        // Show loading spinner
+        contentDiv.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                <p class="text-muted mt-2">Loading ${tabId} data...</p>
+            </div>
+        `;
+
+        // Load content via AJAX
+        fetch(`{% url 'reviews:meeting' meeting.pk %}${tabId}/`)
+            .then(response => response.text())
+            .then(html => {
+                contentDiv.innerHTML = html;
+                contentDiv.dataset.loaded = 'true';
+            })
+            .catch(error => {
+                console.error('Error loading tab content:', error);
+                contentDiv.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                        <p class="text-danger mt-2">Error loading ${tabId} data</p>
+                        <button class="btn btn-sm btn-outline-primary" onclick="loadTabContent('${tabId}')">
+                            <i class="fas fa-redo me-1"></i>Retry
+                        </button>
+                    </div>
+                `;
+            });
+    }
+
+    // Global function for loading tab content (accessible from retry buttons)
+    window.loadTabContent = loadTabContent;
+});
+
+// Popup functions
+function openReviewNotes() {
+    const modal = new bootstrap.Modal(document.getElementById('reviewNotesModal'));
+    const content = document.getElementById('reviewNotesContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading review notes...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch('{% url "reviews:review_notes" meeting.pk %}')
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading review notes:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading review notes</p>
+                </div>
+            `;
+        });
+}
+
+function openDecisions() {
+    const modal = new bootstrap.Modal(document.getElementById('decisionsModal'));
+    const content = document.getElementById('decisionsContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading decisions...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch('{% url "reviews:decisions" meeting.pk %}')
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading decisions:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading decisions</p>
+                </div>
+            `;
+        });
+}
+
+function openActionItems() {
+    const modal = new bootstrap.Modal(document.getElementById('actionItemsModal'));
+    const content = document.getElementById('actionItemsContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action items...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch('{% url "reviews:action_items" meeting.pk %}')
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading action items:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action items</p>
+                </div>
+            `;
+        });
+}
+</script>
+{% endblock %}

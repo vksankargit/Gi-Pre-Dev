@@ -37,14 +37,21 @@
                     {% csrf_token %}
 
                     <div class="mb-3">
-                        <label for="responsible_user" class="form-label">Assign To <span class="text-danger">*</span></label>
-                        <select class="form-control" id="responsible_user" name="responsible_user" required>
-                            <option value="">Select User</option>
-                            {% for user in available_users %}
-                            <option value="{{ user.id }}" {% if user.id == project.responsible_user.id %}selected{% endif %}>
-                                {{ user.get_full_name }} ({{ user.email }})
+                        <label for="team" class="form-label">Reassign Team <span class="text-danger">*</span></label>
+                        <select class="form-control" id="team" name="team" required>
+                            <option value="">Select Team</option>
+                            {% for team in available_teams %}
+                            <option value="{{ team.id }}" {% if team.id == project.quarterly_plan.team.id %}selected{% endif %}>
+                                {{ team.name }}
                             </option>
                             {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="responsible_user" class="form-label">Assign To <span class="text-danger">*</span></label>
+                        <select class="form-control" id="responsible_user" name="responsible_user" required disabled>
+                            <option value="">Select Team First</option>
                         </select>
                     </div>
 
@@ -156,6 +163,77 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    const teamSelect = document.getElementById('team');
+    const userSelect = document.getElementById('responsible_user');
+
+    // Add event listener for team selection
+    teamSelect.addEventListener('change', function() {
+        loadTeamMembers();
+    });
+
+    // Load initial team members if a team is pre-selected
+    if (teamSelect.value) {
+        loadTeamMembers();
+    }
+});
+
+// Load team members based on selected team
+function loadTeamMembers() {
+    const teamSelect = document.getElementById('team');
+    const userSelect = document.getElementById('responsible_user');
+    const teamId = teamSelect.value;
+
+    // Reset user dropdown
+    userSelect.innerHTML = '<option value="">Select Member</option>';
+    userSelect.disabled = true;
+
+    if (!teamId) {
+        userSelect.innerHTML = '<option value="">Select Team First</option>';
+        return;
+    }
+
+    // Show loading state
+    userSelect.innerHTML = '<option value="">Loading...</option>';
+
+    fetch(`/implement/get-team-members/?team_id=${teamId}`, {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            userSelect.innerHTML = '<option value="">Select Member</option>';
+
+            data.members.forEach(member => {
+                const option = document.createElement('option');
+                option.value = member.id;
+                option.textContent = `${member.name} (${member.email})`;
+
+                // Pre-select current responsible user if in this team
+                {% if project.responsible_user %}
+                if (member.id === {{ project.responsible_user.id }}) {
+                    option.selected = true;
+                }
+                {% endif %}
+
+                userSelect.appendChild(option);
+            });
+
+            userSelect.disabled = false;
+        } else {
+            userSelect.innerHTML = '<option value="">Error loading members</option>';
+            console.error('Error loading team members:', data.error);
+        }
+    })
+    .catch(error => {
+        userSelect.innerHTML = '<option value="">Error loading members</option>';
+        console.error('Error:', error);
+    });
+}
+
 // Form submission
 document.getElementById('reassignProjectForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -169,14 +247,13 @@ document.getElementById('reassignProjectForm').addEventListener('submit', functi
             'X-CSRFToken': getCookie('csrftoken')
         }
     })
-    .then(response => {
-        if (response.ok) {
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
             alert('Project reassigned successfully!');
             window.location.href = '{% url "implement:my_projects" %}';
         } else {
-            return response.text().then(text => {
-                throw new Error(text);
-            });
+            alert('Error reassigning project: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {

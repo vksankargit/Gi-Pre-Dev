@@ -1,9 +1,27 @@
 {
   "permissions": {
     "allow": [
-      "Bash(\"C:\\Users\\hp\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\" manage.py shell -c \"\nfrom organizations.forms import TeamForm\nfrom accounts.models import User\n\n# Test creating a TeamForm to see if there are any issues\ncoordinator = User.objects.get(email=''coordinator@groupinfinite.com'')\nform = TeamForm(user=coordinator)\n\nprint(''=== TESTING TEAM FORM ==='')\nprint(f''Form name field: {form.fields[\"\"name\"\"]}'')\nprint(f''Form name widget: {form.fields[\"\"name\"\"].widget}'')\nprint(f''Form name required: {form.fields[\"\"name\"\"].required}'')\n\n# Check for any form errors\nprint(f''Form is bound: {form.is_bound}'')\nprint(f''Form errors: {form.errors}'')\n\")",
-      "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(python -m pip install:*)",
+      "Bash(python3 -m pip install:*)",
+      "Bash(where py)",
+      "Bash(py --version)",
+      "Bash(py -m pip install:*)",
+      "Bash(py manage.py:*)",
+      "Bash(curl:*)",
+      "Bash(git checkout:*)",
+      "Bash(py:*)",
+      "Bash(findstr:*)",
+      "Bash(ping:*)",
+      "Bash(sqlite3 db.sqlite3 \".tables\")",
+      "Bash(dir:*)",
+      "Bash(git add:*)",
+      "Bash(find:*)",
+      "Bash(tasklist)",
+      "Bash(wmic:*)",
+      "Bash(netstat:*)",
+      "Bash(tasklist:*)",
+      "Bash(taskkill:*)",
+      "Bash(del check_financial_years.py create_next_fy.py)"
     ],
     "deny": [],
     "ask": []
