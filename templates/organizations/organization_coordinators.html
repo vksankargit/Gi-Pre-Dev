@@ -20,11 +20,8 @@
 <div class="row">
     <div class="col-12">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header">
                 <h5 class="card-title mb-0">Assigned Coordinators</h5>
-                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addCoordinatorModal">
-                    <i class="fas fa-plus me-2"></i>Add Coordinator
-                </button>
             </div>
             <div class="card-body">
                 {% if coordinators %}
@@ -34,9 +31,9 @@
                             <tr>
                                 <th>Name</th>
                                 <th>Email</th>
+                                <th>Mobile Number</th>
                                 <th>Status</th>
-                                <th>Assigned Date</th>
-                                <th class="text-end">Actions</th>
+                                <th>Created Date</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -46,6 +43,7 @@
                                     <strong>{{ coordinator_rel.coordinator.get_full_name|default:coordinator_rel.coordinator.username }}</strong>
                                 </td>
                                 <td>{{ coordinator_rel.coordinator.email }}</td>
+                                <td>{{ coordinator_rel.coordinator.mobile_number|default:"-" }}</td>
                                 <td>
                                     {% if coordinator_rel.is_active %}
                                         <span class="badge bg-success">Active</span>
@@ -54,14 +52,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <small class="text-muted">{{ coordinator_rel.assigned_at|date:"M d, Y" }}</small>
-                                </td>
-                                <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            onclick="removeCoordinator({{ coordinator_rel.id }})"
-                                            data-bs-toggle="tooltip" data-bs-placement="top" title="Remove Coordinator">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    <small class="text-muted">{{ coordinator_rel.created_at|date:"M d, Y" }}</small>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -80,30 +71,5 @@
     </div>
 </div>
 
-<!-- Add Coordinator Modal -->
-<div class="modal fade" id="addCoordinatorModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Add Coordinator</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted">This feature will be implemented to allow assigning coordinators to organizations.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
 
-<script>
-function removeCoordinator(coordinatorId) {
-    if (confirm('Are you sure you want to remove this coordinator?')) {
-        // This functionality will be implemented
-        alert('This feature will be implemented to remove coordinators.');
-    }
-}
-</script>
 {% endblock %}

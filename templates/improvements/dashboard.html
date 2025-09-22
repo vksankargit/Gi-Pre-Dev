@@ -97,13 +97,9 @@
                     </div>
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label class="form-label">Financial Year</label>
-                            <select class="form-control" id="yearSelect">
-                                <option value="">All Years</option>
-                                {% for year in financial_years %}
-                                <option value="{{ year.id }}">{{ year.year }}</option>
-                                {% endfor %}
-                            </select>
+                            <label class="form-label">Plan Year and Quarter</label>
+                            <input type="text" class="form-control" value="{{ current_quarter }}" readonly style="background-color: #f8f9fa;">
+                            <input type="hidden" id="currentQuarter" value="{{ current_quarter }}">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -233,22 +229,19 @@
 document.getElementById('improvementFile').addEventListener('change', function() {
     const uploadBtn = document.getElementById('uploadBtn');
     const teamSelect = document.getElementById('teamSelect');
-    const yearSelect = document.getElementById('yearSelect');
 
-    uploadBtn.disabled = !(this.files.length && teamSelect.value && yearSelect.value);
+    uploadBtn.disabled = !(this.files.length && teamSelect.value);
 });
 
-// Enable upload button when team/year is selected
+// Enable upload button when team is selected
 document.getElementById('teamSelect').addEventListener('change', checkUploadReady);
-document.getElementById('yearSelect').addEventListener('change', checkUploadReady);
 
 function checkUploadReady() {
     const uploadBtn = document.getElementById('uploadBtn');
     const fileInput = document.getElementById('improvementFile');
     const teamSelect = document.getElementById('teamSelect');
-    const yearSelect = document.getElementById('yearSelect');
 
-    uploadBtn.disabled = !(fileInput.files.length && teamSelect.value && yearSelect.value);
+    uploadBtn.disabled = !(fileInput.files.length && teamSelect.value);
 }
 
 function downloadTemplate() {
@@ -259,11 +252,11 @@ function uploadFile() {
     const formData = new FormData();
     const fileInput = document.getElementById('improvementFile');
     const teamSelect = document.getElementById('teamSelect');
-    const yearSelect = document.getElementById('yearSelect');
+    const currentQuarter = document.getElementById('currentQuarter').value;
 
     formData.append('file', fileInput.files[0]);
     formData.append('team', teamSelect.value);
-    formData.append('financial_year', yearSelect.value);
+    formData.append('quarter', currentQuarter);
 
     const statusDiv = document.getElementById('uploadStatus');
     statusDiv.className = 'alert alert-info';
@@ -286,7 +279,6 @@ function uploadFile() {
             // Reset form and refresh page
             fileInput.value = '';
             teamSelect.value = '';
-            yearSelect.value = '';
             document.getElementById('uploadBtn').disabled = true;
 
             setTimeout(() => location.reload(), 2000);

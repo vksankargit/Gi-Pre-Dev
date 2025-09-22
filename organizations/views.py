@@ -30,6 +30,11 @@ class OrganizationListView(AdminRequiredMixin, ListView):
     context_object_name = 'organizations'
     ordering = ['name']
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['active_organizations_count'] = Organization.objects.filter(is_active=True).count()
+        return context
+
 
 class OrganizationCreateView(AdminRequiredMixin, CreateView):
     model = Organization
@@ -78,17 +83,51 @@ class UserListView(CoordinatorRequiredMixin, ListView):
     model = User
     template_name = 'organizations/user_list.html'
     context_object_name = 'users'
-    
+
     def get_queryset(self):
-        return User.objects.filter(role='general').order_by('username')
+        if self.request.user.role == 'coordinator':
+            # Show only users from organizations this coordinator manages
+            from .models import OrganizationCoordinator
+            coordinator_orgs = OrganizationCoordinator.objects.filter(
+                coordinator=self.request.user,
+                is_active=True
+            ).values_list('organization', flat=True)
+            return User.objects.filter(
+                role='general',
+                organization__in=coordinator_orgs
+            ).select_related('organization').order_by('organization__name', 'username')
+        else:
+            # Admins can see all general users
+            return User.objects.filter(role='general').select_related('organization').order_by('organization__name', 'username')
 
 
 class UserCreateView(CoordinatorRequiredMixin, CreateView):
     model = User
     template_name = 'organizations/user_form.html'
-    fields = ['username', 'email', 'first_name', 'last_name', 'mobile_number']
+    fields = ['username', 'email', 'first_name', 'last_name', 'mobile_number', 'organization']
     success_url = reverse_lazy('organizations:users')
-    
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        # Filter organizations based on user role
+        if self.request.user.role == 'coordinator':
+            # Show only organizations this coordinator manages
+            from .models import OrganizationCoordinator
+            coordinator_orgs = OrganizationCoordinator.objects.filter(
+                coordinator=self.request.user,
+                is_active=True
+            ).values_list('organization', flat=True)
+            form.fields['organization'].queryset = Organization.objects.filter(
+                id__in=coordinator_orgs,
+                is_active=True
+            )
+        else:
+            # Admins can see all active organizations
+            form.fields['organization'].queryset = Organization.objects.filter(is_active=True)
+
+        form.fields['organization'].required = True
+        return form
+
     def form_valid(self, form):
         form.instance.role = 'general'
         form.instance.set_password('changeme123')  # Default password
@@ -99,9 +138,42 @@ class UserCreateView(CoordinatorRequiredMixin, CreateView):
 class UserEditView(CoordinatorRequiredMixin, UpdateView):
     model = User
     template_name = 'organizations/user_form.html'
-    fields = ['username', 'email', 'first_name', 'last_name', 'mobile_number']
+    fields = ['username', 'email', 'first_name', 'last_name', 'mobile_number', 'organization']
     success_url = reverse_lazy('organizations:users')
-    
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        # Filter organizations based on user role
+        if self.request.user.role == 'coordinator':
+            # Show only organizations this coordinator manages
+            from .models import OrganizationCoordinator
+            coordinator_orgs = OrganizationCoordinator.objects.filter(
+                coordinator=self.request.user,
+                is_active=True
+            ).values_list('organization', flat=True)
+            form.fields['organization'].queryset = Organization.objects.filter(
+                id__in=coordinator_orgs,
+                is_active=True
+            )
+        else:
+            # Admins can see all active organizations
+            form.fields['organization'].queryset = Organization.objects.filter(is_active=True)
+
+        form.fields['organization'].required = True
+        return form
+
+    def get_queryset(self):
+        # Users can only edit users from their managed organizations (for coordinators)
+        if self.request.user.role == 'coordinator':
+            from .models import OrganizationCoordinator
+            coordinator_orgs = OrganizationCoordinator.objects.filter(
+                coordinator=self.request.user,
+                is_active=True
+            ).values_list('organization', flat=True)
+            return User.objects.filter(role='general', organization__in=coordinator_orgs)
+        else:
+            return User.objects.filter(role='general')
+
     def form_valid(self, form):
         messages.success(self.request, 'User updated successfully.')
         return super().form_valid(form)
@@ -184,50 +256,90 @@ class AddCoordinatorView(AdminRequiredMixin, View):
         try:
             data = json.loads(request.body)
             organization_id = data.get('organization_id')
-            name = data.get('name', '').strip()
-            mobile = data.get('mobile', '').strip()
-            email = data.get('email', '').strip()
+            coordinator_type = data.get('type', 'new')  # 'existing' or 'new'
 
-            if not all([organization_id, name, email]):
+            if not organization_id:
                 return JsonResponse({
                     'success': False,
-                    'error': 'Organization ID, name, and email are required.'
-                })
-
-            # Check if email already exists
-            if User.objects.filter(email=email).exists():
-                return JsonResponse({
-                    'success': False,
-                    'error': 'A user with this email already exists.'
+                    'error': 'Organization ID is required.'
                 })
 
             # Get organization
             organization = get_object_or_404(Organization, id=organization_id)
 
-            # Create coordinator user
-            first_name, last_name = (name.split(' ', 1) + [''])[:2]
-            coordinator = User.objects.create_user(
-                username=email,
-                email=email,
-                first_name=first_name,
-                last_name=last_name,
-                mobile_number=mobile,
-                role='coordinator',
-                password='changeme123'  # Default password
-            )
+            if coordinator_type == 'existing':
+                # Handle existing coordinator assignment
+                coordinator_id = data.get('coordinator_id')
+                if not coordinator_id:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Coordinator ID is required for existing coordinator.'
+                    })
 
-            # Create organization coordinator relationship
-            org_coordinator = OrganizationCoordinator.objects.create(
-                organization=organization,
-                coordinator=coordinator
-            )
+                # Get the existing coordinator
+                coordinator = get_object_or_404(User, id=coordinator_id, role='coordinator')
 
-            # Send welcome email
-            email_sent = CoordinatorEmailService.send_welcome_email(
-                coordinator=coordinator,
-                organization=organization,
-                request=request
-            )
+                # Check if already assigned to this organization
+                if OrganizationCoordinator.objects.filter(
+                    organization=organization,
+                    coordinator=coordinator
+                ).exists():
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'This coordinator is already assigned to this organization.'
+                    })
+
+                # Create organization coordinator relationship
+                org_coordinator = OrganizationCoordinator.objects.create(
+                    organization=organization,
+                    coordinator=coordinator
+                )
+
+                email_sent = False  # No welcome email for existing coordinators
+
+            else:
+                # Handle new coordinator creation
+                name = data.get('name', '').strip()
+                mobile = data.get('mobile', '').strip()
+                email = data.get('email', '').strip()
+
+                if not all([name, email]):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Name and email are required for new coordinator.'
+                    })
+
+                # Check if email already exists
+                if User.objects.filter(email=email).exists():
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'A user with this email already exists.'
+                    })
+
+                # Create coordinator user
+                first_name, last_name = (name.split(' ', 1) + [''])[:2]
+                coordinator = User.objects.create_user(
+                    username=email,
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    mobile_number=mobile,
+                    role='coordinator',
+                    password='changeme123'  # Default password
+                )
+
+                # Create organization coordinator relationship
+                org_coordinator = OrganizationCoordinator.objects.create(
+                    organization=organization,
+                    coordinator=coordinator
+                )
+
+                # Send welcome email for new coordinators
+                email_sent = CoordinatorEmailService.send_welcome_email(
+                    coordinator=coordinator,
+                    organization=organization,
+                    request=request
+                )
 
             return JsonResponse({
                 'success': True,
@@ -238,7 +350,8 @@ class AddCoordinatorView(AdminRequiredMixin, View):
                     'mobile': coordinator.mobile_number or '-',
                     'is_active': org_coordinator.is_active
                 },
-                'email_sent': email_sent
+                'email_sent': email_sent,
+                'type': coordinator_type
             })
 
         except json.JSONDecodeError:
@@ -350,9 +463,12 @@ class GetUsersView(CoordinatorRequiredMixin, View):
         try:
             organization = get_object_or_404(Organization, id=organization_id)
 
-            # Get general users - for now we'll return all general users
-            # In a full implementation, you'd filter by organization membership
-            users = User.objects.filter(role='general', is_active=True)
+            # Filter users by the selected organization
+            users = User.objects.filter(
+                role='general',
+                is_active=True,
+                organization=organization
+            )
 
             users_data = [
                 {
@@ -394,3 +510,103 @@ class ToggleCoordinatorView(AdminRequiredMixin, View):
                 'success': False,
                 'error': str(e)
             })
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class RemoveCoordinatorView(AdminRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        try:
+            org_coordinator = get_object_or_404(OrganizationCoordinator, id=pk)
+            coordinator_name = org_coordinator.coordinator.get_full_name() or org_coordinator.coordinator.username
+            organization_name = org_coordinator.organization.name
+
+            # Delete the coordinator relationship
+            org_coordinator.delete()
+
+            return JsonResponse({
+                'success': True,
+                'message': f'{coordinator_name} has been removed from {organization_name}.'
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            })
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class GetAvailableCoordinatorsView(AdminRequiredMixin, View):
+    def get(self, request, organization_id, *args, **kwargs):
+        try:
+            organization = get_object_or_404(Organization, id=organization_id)
+
+            # Get all coordinators who are not already assigned to this organization
+            assigned_coordinator_ids = OrganizationCoordinator.objects.filter(
+                organization=organization
+            ).values_list('coordinator_id', flat=True)
+
+            available_coordinators = User.objects.filter(
+                role='coordinator',
+                is_active=True
+            ).exclude(id__in=assigned_coordinator_ids)
+
+            coordinators_data = [
+                {
+                    'id': coord.id,
+                    'name': coord.get_full_name() or coord.username,
+                    'email': coord.email,
+                    'mobile': coord.mobile_number or ''
+                }
+                for coord in available_coordinators
+            ]
+
+            return JsonResponse({
+                'success': True,
+                'coordinators': coordinators_data
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            })
+
+@method_decorator(csrf_exempt, name='dispatch')
+class GetTeamMembersView(View):
+    """AJAX view to get team members for reassignment dropdown"""
+
+    def get(self, request, team_id, *args, **kwargs):
+        try:
+            # Verify the user has access to this team (must be manager)
+            team = get_object_or_404(Team, id=team_id, manager=request.user)
+
+            # Get team members including the manager
+            members_data = []
+
+            # Add team manager
+            members_data.append({
+                'id': team.manager.id,
+                'name': team.manager.get_full_name() or team.manager.username,
+                'is_manager': True
+            })
+
+            # Add team members
+            for team_member in team.members.filter(is_active=True):
+                members_data.append({
+                    'id': team_member.member.id,
+                    'name': team_member.member.get_full_name() or team_member.member.username,
+                    'is_manager': False
+                })
+
+            return JsonResponse({
+                'success': True,
+                'members': members_data
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            })
+

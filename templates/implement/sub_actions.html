@@ -221,6 +221,23 @@
                         <textarea class="form-control" id="subActionText" name="action" rows="3" required></textarea>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="subActionTeam" class="form-label">Team <span class="text-danger">*</span></label>
+                        <select class="form-control" id="subActionTeam" name="team" required>
+                            <option value="">Select Team</option>
+                            {% for team in available_teams %}
+                            <option value="{{ team.id }}" {% if team.id == parent_action.team.id %}selected{% endif %}>{{ team.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="subActionAssignedTo" class="form-label">Assigned To <span class="text-danger">*</span></label>
+                        <select class="form-control" id="subActionAssignedTo" name="assigned_to" required disabled>
+                            <option value="">Select Team First</option>
+                        </select>
+                    </div>
+
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -238,16 +255,6 @@
                                 <input type="date" class="form-control" id="subActionDueDate" name="original_due_date" required>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="subActionAssignedTo" class="form-label">Assigned To</label>
-                        <select class="form-control" id="subActionAssignedTo" name="assigned_to">
-                            <option value="{{ parent_action.assigned_to.id }}" selected>{{ parent_action.assigned_to.get_full_name }} (Same as parent)</option>
-                            {% for user in available_users %}
-                            <option value="{{ user.id }}">{{ user.get_full_name }} ({{ user.email }})</option>
-                            {% endfor %}
-                        </select>
                     </div>
 
                     <div class="mb-3">
@@ -269,6 +276,12 @@ function createSubAction() {
     document.getElementById('subActionModalTitle').textContent = 'Create Sub Action';
     document.getElementById('subActionForm').reset();
     document.getElementById('subActionId').value = '';
+
+    // Reset the member dropdown
+    const memberSelect = document.getElementById('subActionAssignedTo');
+    memberSelect.innerHTML = '<option value="">Select Team First</option>';
+    memberSelect.disabled = true;
+
     const modal = new bootstrap.Modal(document.getElementById('subActionModal'));
     modal.show();
 }
@@ -283,8 +296,19 @@ function editSubAction(subActionId) {
             document.getElementById('subActionText').value = data.action;
             document.getElementById('subActionPriority').value = data.priority;
             document.getElementById('subActionDueDate').value = data.original_due_date;
-            document.getElementById('subActionAssignedTo').value = data.assigned_to;
             document.getElementById('subActionComments').value = data.comments;
+
+            // Set team and then load members
+            const teamSelect = document.getElementById('subActionTeam');
+            if (data.team) {
+                teamSelect.value = data.team;
+                loadSubActionTeamMembers();
+
+                // Wait a bit for the members to load, then set the assigned user
+                setTimeout(() => {
+                    document.getElementById('subActionAssignedTo').value = data.assigned_to;
+                }, 500);
+            }
 
             const modal = new bootstrap.Modal(document.getElementById('subActionModal'));
             modal.show();
@@ -310,16 +334,17 @@ function saveSubAction() {
             'X-CSRFToken': getCookie('csrftoken')
         }
     })
-    .then(response => {
-        if (response.ok) {
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
             location.reload();
         } else {
-            alert('Error saving sub action');
+            alert('Error saving sub action: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {
         console.error('Error saving sub action:', error);
-        alert('Error saving sub action');
+        alert('Error saving sub action: ' + error.message);
     });
 }
 
@@ -330,12 +355,17 @@ function toggleSubActionComplete(subActionId) {
             'X-CSRFToken': getCookie('csrftoken')
         }
     })
-    .then(response => {
-        if (response.ok) {
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
             location.reload();
         } else {
-            alert('Error updating sub action status');
+            alert('Error updating sub action status: ' + (data.error || 'Unknown error'));
         }
+    })
+    .catch(error => {
+        console.error('Error updating sub action status:', error);
+        alert('Error updating sub action status: ' + error.message);
     });
 }
 
@@ -347,14 +377,83 @@ function deleteSubAction(subActionId) {
                 'X-CSRFToken': getCookie('csrftoken')
             }
         })
-        .then(response => {
-            if (response.ok) {
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
                 location.reload();
             } else {
-                alert('Error deleting sub action');
+                alert('Error deleting sub action: ' + (data.error || 'Unknown error'));
             }
+        })
+        .catch(error => {
+            console.error('Error deleting sub action:', error);
+            alert('Error deleting sub action: ' + error.message);
         });
     }
+}
+
+// Team selection and member loading functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const teamSelect = document.getElementById('subActionTeam');
+    const memberSelect = document.getElementById('subActionAssignedTo');
+
+    // Add event listener for team selection
+    teamSelect.addEventListener('change', function() {
+        loadSubActionTeamMembers();
+    });
+
+    // Load initial team members if a team is pre-selected
+    if (teamSelect.value) {
+        loadSubActionTeamMembers();
+    }
+});
+
+// Load team members based on selected team
+function loadSubActionTeamMembers() {
+    const teamSelect = document.getElementById('subActionTeam');
+    const memberSelect = document.getElementById('subActionAssignedTo');
+    const teamId = teamSelect.value;
+
+    // Reset member dropdown
+    memberSelect.innerHTML = '<option value="">Select Member</option>';
+    memberSelect.disabled = true;
+
+    if (!teamId) {
+        memberSelect.innerHTML = '<option value="">Select Team First</option>';
+        return;
+    }
+
+    // Show loading state
+    memberSelect.innerHTML = '<option value="">Loading...</option>';
+
+    fetch(`/implement/get-team-members/?team_id=${teamId}`, {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            memberSelect.innerHTML = '<option value="">Select Member</option>';
+
+            data.members.forEach(member => {
+                const option = document.createElement('option');
+                option.value = member.id;
+                option.textContent = `${member.name} (${member.email})`;
+                memberSelect.appendChild(option);
+            });
+
+            memberSelect.disabled = false;
+        } else {
+            memberSelect.innerHTML = '<option value="">Error loading members</option>';
+            console.error('Error loading team members:', data.error);
+        }
+    })
+    .catch(error => {
+        memberSelect.innerHTML = '<option value="">Error loading members</option>';
+        console.error('Error:', error);
+    });
 }
 
 // CSRF token helper

@@ -38,3 +38,11 @@ OperationalError at /review/
 no such column: review_meetings.status on Review click
 
 logout does not work
+
+Can you change all action buttons in the grids to icons with tool tips?
+
+In the PRD, I had mentioned that the menu options should be shown in a collapsible side bar
+
+In Manage Teams, after selecting the manager, one should be able to add one or more team members
+
+Make support@groupinfinite.com as the admin user; create a coordinator@groupinfinite.com as coordinator for ABC; convert sankar.v@groupinfinite.com & ravi@groupinfinite.com as general users for ABC

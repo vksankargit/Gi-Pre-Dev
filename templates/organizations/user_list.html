@@ -33,6 +33,7 @@
                                 <th>User Name</th>
                                 <th>Mobile Number</th>
                                 <th>Email ID</th>
+                                <th>Organization</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
@@ -43,6 +44,7 @@
                                 <td>{{ user.get_full_name|default:user.username }}</td>
                                 <td>{{ user.mobile_number|default:"-" }}</td>
                                 <td>{{ user.email }}</td>
+                                <td>{{ user.organization.name|default:"-" }}</td>
                                 <td>
                                     {% if user.is_active %}
                                         <span class="badge bg-success">Active</span>

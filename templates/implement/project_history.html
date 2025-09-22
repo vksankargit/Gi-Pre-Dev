@@ -171,7 +171,7 @@
                 {% if project.tasks.exists %}
                     <div class="mb-2">
                         <small class="text-muted">
-                            {{ project.tasks.filter.is_completed=True.count }} of {{ project.tasks.count }} tasks completed
+                            {{ completed_tasks_count }} of {{ total_tasks_count }} tasks completed
                         </small>
                     </div>
                     {% for task in project.tasks.all|slice:":5" %}

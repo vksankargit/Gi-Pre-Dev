@@ -9,8 +9,16 @@ class User(AbstractUser):
         ('coordinator', 'Coordinator'),
         ('general', 'General'),
     ]
-    
+
     role = models.CharField(max_length=20, choices=USER_ROLES, default='general')
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='users',
+        help_text='Organization this user belongs to (required for general users)'
+    )
     mobile_number = models.CharField(
         max_length=15,
         validators=[RegexValidator(regex=r'^\+?1?\d{9,15}$', message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed.")],
