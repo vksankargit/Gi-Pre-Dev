@@ -1,0 +1,451 @@
+<!-- PPI Tab Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">
+        <i class="fas fa-project-diagram me-2"></i>Project Performance Indicators (PPI)
+    </h5>
+    <div class="btn-group">
+        <button class="btn btn-outline-primary btn-sm" onclick="showPPIDetails()">
+            <i class="fas fa-search-plus me-1"></i>Detailed View
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="refreshPPI()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
+</div>
+
+{% if ppi_data %}
+    <!-- Project Performance Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center border-{% if ppi_data.overall_health == 'green' %}success{% elif ppi_data.overall_health == 'yellow' %}warning{% else %}danger{% endif %}">
+                <div class="card-body py-2">
+                    <h4 class="card-title mb-1 text-{% if ppi_data.overall_health == 'green' %}success{% elif ppi_data.overall_health == 'yellow' %}warning{% else %}danger{% endif %}">
+                        {{ ppi_data.completion_percentage|floatformat:1 }}%
+                    </h4>
+                    <small class="text-muted">Overall Completion</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-success">
+                <div class="card-body py-2">
+                    <h4 class="card-title mb-1 text-success">{{ ppi_data.projects_on_track }}</h4>
+                    <small class="text-muted">On Track</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-warning">
+                <div class="card-body py-2">
+                    <h4 class="card-title mb-1 text-warning">{{ ppi_data.projects_at_risk }}</h4>
+                    <small class="text-muted">At Risk</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-danger">
+                <div class="card-body py-2">
+                    <h4 class="card-title mb-1 text-danger">{{ ppi_data.projects_delayed }}</h4>
+                    <small class="text-muted">Delayed</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Performance Table -->
+    <div class="card">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-clipboard-list me-2"></i>Project Performance Details
+                <span class="badge bg-secondary ms-2">{{ ppi_data.period_start|date:"M d" }} - {{ ppi_data.period_end|date:"M d, Y" }}</span>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 5%">S.No</th>
+                            <th style="width: 25%">Project</th>
+                            <th style="width: 15%">Progress</th>
+                            <th style="width: 15%">Schedule</th>
+                            <th style="width: 15%">Budget</th>
+                            <th style="width: 10%">Health</th>
+                            <th style="width: 15%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for project in ppi_data.projects %}
+                        <tr class="{% if project.health == 'red' %}table-danger{% elif project.health == 'yellow' %}table-warning{% endif %}">
+                            <td>
+                                <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                            </td>
+                            <td>
+                                <div>
+                                    <strong>{{ project.name|truncatechars:35 }}</strong>
+                                    {% if project.name|length > 35 %}
+                                        <button class="btn btn-link btn-sm p-0 ms-1"
+                                                data-bs-toggle="tooltip"
+                                                data-bs-placement="top"
+                                                title="{{ project.name }}">
+                                            <i class="fas fa-info-circle"></i>
+                                        </button>
+                                    {% endif %}
+                                    <br>
+                                    <small class="text-muted">
+                                        <i class="fas fa-user me-1"></i>{{ project.manager.get_full_name|default:project.manager.username }}
+                                    </small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="progress mb-1" style="height: 10px;">
+                                    <div class="progress-bar
+                                        {% if project.completion_percentage >= 75 %}bg-success
+                                        {% elif project.completion_percentage >= 50 %}bg-info
+                                        {% elif project.completion_percentage >= 25 %}bg-warning
+                                        {% else %}bg-danger
+                                        {% endif %}"
+                                        role="progressbar"
+                                        style="width: {{ project.completion_percentage }}%">
+                                    </div>
+                                </div>
+                                <small class="text-muted">{{ project.completion_percentage|floatformat:1 }}% Complete</small>
+                            </td>
+                            <td>
+                                <div>
+                                    <strong class="text-{% if project.schedule_variance >= 0 %}success{% else %}danger{% endif %}">
+                                        {% if project.schedule_variance >= 0 %}+{% endif %}{{ project.schedule_variance }} days
+                                    </strong>
+                                    <br>
+                                    <small class="text-muted">
+                                        Due: {{ project.end_date|date:"M d, Y" }}
+                                    </small>
+                                </div>
+                            </td>
+                            <td>
+                                <div>
+                                    <strong class="text-{% if project.budget_variance >= 0 %}success{% else %}danger{% endif %}">
+                                        {% if project.budget_variance >= 0 %}+{% endif %}{{ project.budget_variance|floatformat:1 }}%
+                                    </strong>
+                                    <br>
+                                    <small class="text-muted">
+                                        ₹{{ project.budget_utilized|floatformat:0 }}/{{ project.total_budget|floatformat:0 }}
+                                    </small>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge fs-6 bg-{% if project.health == 'green' %}success{% elif project.health == 'yellow' %}warning{% else %}danger{% endif %}">
+                                    {% if project.health == 'green' %}
+                                        <i class="fas fa-check-circle me-1"></i>Good
+                                    {% elif project.health == 'yellow' %}
+                                        <i class="fas fa-exclamation-triangle me-1"></i>Risk
+                                    {% else %}
+                                        <i class="fas fa-times-circle me-1"></i>Issue
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary"
+                                            onclick="viewProjectDetails({{ project.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary"
+                                            onclick="updateProjectStatus({{ project.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Update Status">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Health Distribution -->
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-donut me-2"></i>Project Health Distribution
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="text-success">
+                                <i class="fas fa-check-circle fa-2x"></i>
+                                <h4 class="mt-2">{{ ppi_data.projects_on_track }}</h4>
+                                <small>On Track</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-warning">
+                                <i class="fas fa-exclamation-triangle fa-2x"></i>
+                                <h4 class="mt-2">{{ ppi_data.projects_at_risk }}</h4>
+                                <small>At Risk</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-danger">
+                                <i class="fas fa-times-circle fa-2x"></i>
+                                <h4 class="mt-2">{{ ppi_data.projects_delayed }}</h4>
+                                <small>Issues</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-calendar-check me-2"></i>Milestones This Month
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if ppi_data.upcoming_milestones %}
+                        <div class="list-group list-group-flush">
+                            {% for milestone in ppi_data.upcoming_milestones %}
+                            <div class="list-group-item px-0 py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <small class="text-muted">{{ milestone.project_name }}</small>
+                                        <br>
+                                        <strong>{{ milestone.name|truncatechars:25 }}</strong>
+                                    </div>
+                                    <small class="text-{% if milestone.is_overdue %}danger{% elif milestone.is_due_soon %}warning{% else %}muted{% endif %}">
+                                        {{ milestone.due_date|date:"M d" }}
+                                    </small>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted text-center">No milestones this month</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Issues and Risks -->
+    {% if ppi_data.key_issues %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Key Issues and Risks
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for issue in ppi_data.key_issues %}
+                        <div class="col-md-6 mb-3">
+                            <div class="alert alert-{% if issue.severity == 'high' %}danger{% elif issue.severity == 'medium' %}warning{% else %}info{% endif %} mb-0">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <strong>{{ issue.project_name }}</strong>
+                                        <p class="mb-1">{{ issue.description|truncatechars:80 }}</p>
+                                        <small>Impact: {{ issue.get_severity_display }}</small>
+                                    </div>
+                                    <span class="badge bg-{% if issue.severity == 'high' %}danger{% elif issue.severity == 'medium' %}warning{% else %}info{% endif %}">
+                                        {{ issue.get_severity_display }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+{% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-project-diagram fa-4x text-muted mb-3"></i>
+        <h5 class="text-muted mb-3">No Project Data Available</h5>
+        <p class="text-muted">
+            Project performance data for this review period is not available yet.
+            Please ensure project information has been updated in the system.
+        </p>
+        <button class="btn btn-outline-primary" onclick="refreshPPI()">
+            <i class="fas fa-sync-alt me-2"></i>Check Again
+        </button>
+    </div>
+{% endif %}
+
+<!-- PPI Detailed View Modal -->
+<div class="modal fade" id="ppiDetailModal" tabindex="-1" aria-labelledby="ppiDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ppiDetailModalLabel">
+                    <i class="fas fa-project-diagram me-2"></i>Detailed Project Performance Analysis
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="ppiDetailContent">
+                <!-- Detailed content loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Project Details Modal -->
+<div class="modal fade" id="projectDetailModal" tabindex="-1" aria-labelledby="projectDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="projectDetailModalLabel">
+                    <i class="fas fa-clipboard-list me-2"></i>Project Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="projectDetailContent">
+                <!-- Project details loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function refreshPPI() {
+    const ppiContent = document.getElementById('ppi-content');
+
+    // Show loading
+    ppiContent.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Refreshing PPI data...</p>
+        </div>
+    `;
+
+    // Reload PPI data
+    fetch('{% url "reviews:ppi" meeting.pk %}')
+        .then(response => response.text())
+        .then(html => {
+            ppiContent.innerHTML = html;
+
+            // Reinitialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        })
+        .catch(error => {
+            console.error('Error refreshing PPI:', error);
+            ppiContent.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error refreshing PPI data</p>
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshPPI()">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+function showPPIDetails() {
+    const modal = new bootstrap.Modal(document.getElementById('ppiDetailModal'));
+    const content = document.getElementById('ppiDetailContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading detailed PPI analysis...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    // Load detailed PPI view
+    fetch('{% url "reviews:ppi" meeting.pk %}?detailed=true')
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading PPI details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading detailed PPI data</p>
+                </div>
+            `;
+        });
+}
+
+function viewProjectDetails(projectId) {
+    const modal = new bootstrap.Modal(document.getElementById('projectDetailModal'));
+    const content = document.getElementById('projectDetailContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading project details...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    // Load project details
+    fetch(`/api/projects/${projectId}/details/`)
+        .then(response => response.json())
+        .then(data => {
+            content.innerHTML = `
+                <div class="row">
+                    <div class="col-12">
+                        <h6>Project Information</h6>
+                        <table class="table table-borderless">
+                            <tr><td><strong>Name:</strong></td><td>${data.name}</td></tr>
+                            <tr><td><strong>Manager:</strong></td><td>${data.manager_name}</td></tr>
+                            <tr><td><strong>Status:</strong></td><td><span class="badge bg-primary">${data.status}</span></td></tr>
+                            <tr><td><strong>Progress:</strong></td><td>${data.completion_percentage}%</td></tr>
+                            <tr><td><strong>Start Date:</strong></td><td>${data.start_date}</td></tr>
+                            <tr><td><strong>End Date:</strong></td><td>${data.end_date}</td></tr>
+                            <tr><td><strong>Budget:</strong></td><td>₹${data.total_budget} (${data.budget_utilized} utilized)</td></tr>
+                            <tr><td><strong>Health:</strong></td><td><span class="badge bg-${data.health === 'green' ? 'success' : data.health === 'yellow' ? 'warning' : 'danger'}">${data.health}</span></td></tr>
+                        </table>
+                        ${data.description ? `<h6>Description</h6><p>${data.description}</p>` : ''}
+                        ${data.recent_updates ? `<h6>Recent Updates</h6><p>${data.recent_updates}</p>` : ''}
+                    </div>
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading project details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading project details</p>
+                </div>
+            `;
+        });
+}
+
+function updateProjectStatus(projectId) {
+    // This would open a form to update project status
+    alert('Project status update functionality would be implemented here');
+}
+
+// Initialize tooltips when content loads
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>

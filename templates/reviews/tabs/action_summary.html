@@ -1,0 +1,609 @@
+<!-- Action Summary Tab Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">
+        <i class="fas fa-list-check me-2"></i>Action Summary
+    </h5>
+    <div class="btn-group">
+        <button class="btn btn-success btn-sm" onclick="addActionItem()">
+            <i class="fas fa-plus me-1"></i>Add Action
+        </button>
+        <button class="btn btn-outline-primary btn-sm" onclick="exportActionSummary()">
+            <i class="fas fa-download me-1"></i>Export
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="refreshActionSummary()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Action Summary Overview Cards -->
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="card text-center border-primary">
+            <div class="card-body py-2">
+                <h4 class="card-title mb-1 text-primary">{{ action_summary.total }}</h4>
+                <small class="text-muted">Total Actions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center border-success">
+            <div class="card-body py-2">
+                <h4 class="card-title mb-1 text-success">{{ action_summary.completed }}</h4>
+                <small class="text-muted">Completed</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center border-info">
+            <div class="card-body py-2">
+                <h4 class="card-title mb-1 text-info">{{ action_summary.in_progress }}</h4>
+                <small class="text-muted">In Progress</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center border-warning">
+            <div class="card-body py-2">
+                <h4 class="card-title mb-1 text-warning">{{ action_summary.pending }}</h4>
+                <small class="text-muted">Pending</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center border-danger">
+            <div class="card-body py-2">
+                <h4 class="card-title mb-1 text-danger">{{ action_summary.overdue }}</h4>
+                <small class="text-muted">Overdue</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center border-secondary">
+            <div class="card-body py-2">
+                <h4 class="card-title mb-1 text-secondary">{{ action_summary.completion_rate|floatformat:0 }}%</h4>
+                <small class="text-muted">Completion</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Categories -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-pie me-2"></i>Actions by Category
+                    </h6>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary active" onclick="showAllCategories()">All</button>
+                        <button class="btn btn-outline-primary" onclick="filterCategory('commitments')">Commitments</button>
+                        <button class="btn btn-outline-info" onclick="filterCategory('review_items')">Review Items</button>
+                        <button class="btn btn-outline-warning" onclick="filterCategory('issues')">Issues</button>
+                        <button class="btn btn-outline-success" onclick="filterCategory('improvements')">Improvements</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <i class="fas fa-handshake fa-2x text-primary mb-2"></i>
+                            <h5>{{ action_summary.by_category.commitments }}</h5>
+                            <small class="text-muted">Commitments</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <i class="fas fa-clipboard-list fa-2x text-info mb-2"></i>
+                            <h5>{{ action_summary.by_category.review_items }}</h5>
+                            <small class="text-muted">Review Items</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <i class="fas fa-exclamation-triangle fa-2x text-warning mb-2"></i>
+                            <h5>{{ action_summary.by_category.issues }}</h5>
+                            <small class="text-muted">Issues</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <i class="fas fa-lightbulb fa-2x text-success mb-2"></i>
+                            <h5>{{ action_summary.by_category.improvements }}</h5>
+                            <small class="text-muted">Improvements</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Items Table -->
+{% if action_items %}
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-tasks me-2"></i>Action Items Details
+                    <span class="badge bg-secondary ms-2">{{ action_items|length }} item{{ action_items|length|pluralize }}</span>
+                </h6>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="toggleView('table')">
+                        <i class="fas fa-table"></i> Table
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="toggleView('cards')">
+                        <i class="fas fa-th-large"></i> Cards
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <!-- Table View -->
+            <div id="tableView" class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 5%">S.No</th>
+                            <th style="width: 25%">Action</th>
+                            <th style="width: 12%">Category</th>
+                            <th style="width: 12%">Priority</th>
+                            <th style="width: 12%">Assigned To</th>
+                            <th style="width: 12%">Due Date</th>
+                            <th style="width: 12%">Status</th>
+                            <th style="width: 10%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for action in action_items %}
+                        <tr class="action-row {% if action.is_overdue %}table-danger{% elif action.due_date|date:'Y-m-d' == today %}table-warning{% endif %}"
+                            data-category="{{ action.category }}">
+                            <td>
+                                <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                            </td>
+                            <td>
+                                <div>
+                                    <strong>{{ action.action|truncatechars:50 }}</strong>
+                                    {% if action.action|length > 50 %}
+                                        <button class="btn btn-link btn-sm p-0 ms-1"
+                                                data-bs-toggle="tooltip"
+                                                data-bs-placement="top"
+                                                title="{{ action.action }}">
+                                            <i class="fas fa-info-circle"></i>
+                                        </button>
+                                    {% endif %}
+                                    <br>
+                                    <small class="text-muted">
+                                        Created: {{ action.created_at|date:"M d, Y" }}
+                                    </small>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if action.category == 'commitments' %}primary{% elif action.category == 'review_items' %}info{% elif action.category == 'issues' %}warning{% else %}success{% endif %}">
+                                    {{ action.get_category_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}info{% endif %}">
+                                    {{ action.get_priority_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if action.assigned_to %}
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-user me-1"></i>
+                                        <small>{{ action.assigned_to.get_full_name|default:action.assigned_to.username }}</small>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">Unassigned</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div>
+                                    {{ action.due_date|date:"M d, Y" }}
+                                    {% if action.is_overdue %}
+                                        <br><small class="text-danger">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>Overdue
+                                        </small>
+                                    {% elif action.due_date|date:'Y-m-d' == today %}
+                                        <br><small class="text-warning">
+                                            <i class="fas fa-clock me-1"></i>Due Today
+                                        </small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% else %}secondary{% endif %}">
+                                    {{ action.get_status_display }}
+                                </span>
+                                {% if action.status != 'completed' %}
+                                    <br>
+                                    <div class="progress mt-1" style="height: 6px;">
+                                        <div class="progress-bar bg-primary"
+                                             style="width: {{ action.completion_percentage|default:0 }}%"></div>
+                                    </div>
+                                    <small class="text-muted">{{ action.completion_percentage|default:0 }}%</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary"
+                                            onclick="viewActionDetails({{ action.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary"
+                                            onclick="editActionItem({{ action.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Edit Action">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    {% if action.status != 'completed' %}
+                                    <button class="btn btn-outline-success"
+                                            onclick="markCompleted({{ action.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Mark Complete">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Cards View (Hidden by default) -->
+            <div id="cardsView" class="p-3" style="display: none;">
+                <div class="row">
+                    {% for action in action_items %}
+                    <div class="col-md-6 mb-3 action-card" data-category="{{ action.category }}">
+                        <div class="card h-100 {% if action.is_overdue %}border-danger{% elif action.due_date|date:'Y-m-d' == today %}border-warning{% endif %}">
+                            <div class="card-header py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="badge bg-{% if action.category == 'commitments' %}primary{% elif action.category == 'review_items' %}info{% elif action.category == 'issues' %}warning{% else %}success{% endif %}">
+                                        {{ action.get_category_display }}
+                                    </span>
+                                    <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}info{% endif %}">
+                                        {{ action.get_priority_display }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <h6 class="card-title">{{ action.action|truncatechars:60 }}</h6>
+                                <div class="row text-center mb-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">Assigned To</small>
+                                        <br>
+                                        <strong>{{ action.assigned_to.get_full_name|default:action.assigned_to.username|default:"Unassigned" }}</strong>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Due Date</small>
+                                        <br>
+                                        <strong>{{ action.due_date|date:"M d, Y" }}</strong>
+                                    </div>
+                                </div>
+                                {% if action.status != 'completed' %}
+                                <div class="progress mb-2" style="height: 8px;">
+                                    <div class="progress-bar bg-primary"
+                                         style="width: {{ action.completion_percentage|default:0 }}%"></div>
+                                </div>
+                                <div class="text-center">
+                                    <small class="text-muted">{{ action.completion_percentage|default:0 }}% Complete</small>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="card-footer py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% else %}secondary{% endif %}">
+                                        {{ action.get_status_display }}
+                                    </span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" onclick="viewActionDetails({{ action.id }})">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="editActionItem({{ action.id }})">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        {% if action.status != 'completed' %}
+                                        <button class="btn btn-outline-success" onclick="markCompleted({{ action.id }})">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-clipboard-check fa-4x text-muted mb-3"></i>
+        <h5 class="text-muted mb-3">No Action Items Found</h5>
+        <p class="text-muted">
+            No action items have been created for this review meeting yet.
+        </p>
+        <button class="btn btn-outline-primary" onclick="addActionItem()">
+            <i class="fas fa-plus me-2"></i>Add First Action Item
+        </button>
+    </div>
+{% endif %}
+
+<!-- Action Item Modal -->
+<div class="modal fade" id="actionItemModal" tabindex="-1" aria-labelledby="actionItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionItemModalLabel">
+                    <i class="fas fa-plus me-2"></i>Add Action Item
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="actionItemContent">
+                <!-- Action item form loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Details Modal -->
+<div class="modal fade" id="actionDetailModal" tabindex="-1" aria-labelledby="actionDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionDetailModalLabel">
+                    <i class="fas fa-clipboard-list me-2"></i>Action Item Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="actionDetailContent">
+                <!-- Action details loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function filterCategory(category) {
+    const rows = document.querySelectorAll('.action-row');
+    const cards = document.querySelectorAll('.action-card');
+
+    // Update button states
+    document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // Filter table rows
+    rows.forEach(row => {
+        if (category === 'all' || row.dataset.category === category) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    // Filter cards
+    cards.forEach(card => {
+        if (category === 'all' || card.dataset.category === category) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function showAllCategories() {
+    document.querySelectorAll('.action-row').forEach(row => row.style.display = '');
+    document.querySelectorAll('.action-card').forEach(card => card.style.display = '');
+
+    document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+}
+
+function toggleView(viewType) {
+    const tableView = document.getElementById('tableView');
+    const cardsView = document.getElementById('cardsView');
+
+    if (viewType === 'table') {
+        tableView.style.display = '';
+        cardsView.style.display = 'none';
+    } else {
+        tableView.style.display = 'none';
+        cardsView.style.display = '';
+    }
+
+    // Update button states
+    document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+}
+
+function addActionItem() {
+    const modal = new bootstrap.Modal(document.getElementById('actionItemModal'));
+    const content = document.getElementById('actionItemContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action item form...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch('{% url "reviews:action_items" meeting.pk %}?action=new')
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading action item form:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading form</p>
+                </div>
+            `;
+        });
+}
+
+function editActionItem(actionId) {
+    const modal = new bootstrap.Modal(document.getElementById('actionItemModal'));
+    const content = document.getElementById('actionItemContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action item...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch(`{% url "reviews:action_items" meeting.pk %}?action=edit&id=${actionId}`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading action item:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action item</p>
+                </div>
+            `;
+        });
+}
+
+function viewActionDetails(actionId) {
+    const modal = new bootstrap.Modal(document.getElementById('actionDetailModal'));
+    const content = document.getElementById('actionDetailContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action details...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch(`/api/actions/${actionId}/details/`)
+        .then(response => response.json())
+        .then(data => {
+            content.innerHTML = `
+                <div class="row">
+                    <div class="col-12">
+                        <h6>Action Information</h6>
+                        <table class="table table-borderless">
+                            <tr><td><strong>Action:</strong></td><td>${data.action}</td></tr>
+                            <tr><td><strong>Category:</strong></td><td><span class="badge bg-primary">${data.category}</span></td></tr>
+                            <tr><td><strong>Priority:</strong></td><td><span class="badge bg-warning">${data.priority}</span></td></tr>
+                            <tr><td><strong>Status:</strong></td><td><span class="badge bg-primary">${data.status}</span></td></tr>
+                            <tr><td><strong>Assigned To:</strong></td><td>${data.assigned_to || 'Unassigned'}</td></tr>
+                            <tr><td><strong>Due Date:</strong></td><td>${data.due_date}</td></tr>
+                            <tr><td><strong>Completion:</strong></td><td>${data.completion_percentage}%</td></tr>
+                        </table>
+                        ${data.comments ? `<h6>Comments</h6><p>${data.comments}</p>` : ''}
+                    </div>
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading action details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action details</p>
+                </div>
+            `;
+        });
+}
+
+function markCompleted(actionId) {
+    if (confirm('Mark this action item as completed?')) {
+        fetch(`/api/actions/${actionId}/complete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken(),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                refreshActionSummary();
+            } else {
+                alert('Error marking action as completed');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error marking action as completed');
+        });
+    }
+}
+
+function exportActionSummary() {
+    const url = `{% url "reviews:action_summary" meeting.pk %}?export=true`;
+    window.open(url, '_blank');
+}
+
+function refreshActionSummary() {
+    const actionSummaryContent = document.getElementById('action-summary-content');
+
+    // Show loading
+    actionSummaryContent.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Refreshing action summary...</p>
+        </div>
+    `;
+
+    // Reload action summary data
+    fetch('{% url "reviews:action_summary" meeting.pk %}')
+        .then(response => response.text())
+        .then(html => {
+            actionSummaryContent.innerHTML = html;
+
+            // Reinitialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        })
+        .catch(error => {
+            console.error('Error refreshing action summary:', error);
+            actionSummaryContent.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error refreshing action summary</p>
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshActionSummary()">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+function getCsrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+// Initialize tooltips when content loads
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>

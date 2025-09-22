@@ -1,0 +1,182 @@
+<!-- Commitments Tab Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">
+        <i class="fas fa-handshake me-2"></i>Commitments from Previous Reviews
+    </h5>
+    <button class="btn btn-primary btn-sm" onclick="refreshCommitments()">
+        <i class="fas fa-sync-alt me-1"></i>Refresh
+    </button>
+</div>
+
+{% if commitments %}
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th style="width: 10%">S.No</th>
+                    <th style="width: 30%">Action</th>
+                    <th style="width: 15%">Priority</th>
+                    <th style="width: 15%">Due Date</th>
+                    <th style="width: 15%">Status</th>
+                    <th style="width: 15%">Progress</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for commitment in commitments %}
+                <tr class="{% if commitment.action.is_overdue %}table-danger{% elif commitment.action.due_date|date:'Y-m-d' == today %}table-warning{% endif %}">
+                    <td>
+                        <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                    </td>
+                    <td>
+                        <div>
+                            <strong>{{ commitment.action.action_required|truncatechars:50 }}</strong>
+                            {% if commitment.action.action_required|length > 50 %}
+                                <button class="btn btn-link btn-sm p-0 ms-1"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-placement="top"
+                                        title="{{ commitment.action.action_required }}">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            {% endif %}
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-user me-1"></i>{{ commitment.action.assigned_to.get_full_name|default:commitment.action.assigned_to.username }}
+                            </small>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge bg-{% if commitment.action.priority == 'high' %}danger{% elif commitment.action.priority == 'medium' %}warning{% else %}info{% endif %}">
+                            {{ commitment.action.get_priority_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <div>
+                            {{ commitment.action.due_date|date:"M d, Y" }}
+                            {% if commitment.action.is_overdue %}
+                                <br><small class="text-danger">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Overdue
+                                </small>
+                            {% elif commitment.action.due_date|date:'Y-m-d' == today %}
+                                <br><small class="text-warning">
+                                    <i class="fas fa-clock me-1"></i>Due Today
+                                </small>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge bg-{% if commitment.action.status == 'completed' %}success{% elif commitment.action.status == 'in_progress' %}primary{% elif commitment.action.status == 'on_hold' %}warning{% else %}secondary{% endif %}">
+                            {{ commitment.action.get_status_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="progress mb-1" style="height: 8px;">
+                            <div class="progress-bar
+                                {% if commitment.action.completion_percentage >= 75 %}bg-success
+                                {% elif commitment.action.completion_percentage >= 50 %}bg-info
+                                {% elif commitment.action.completion_percentage >= 25 %}bg-warning
+                                {% else %}bg-danger
+                                {% endif %}"
+                                role="progressbar"
+                                style="width: {{ commitment.action.completion_percentage }}%">
+                            </div>
+                        </div>
+                        <small class="text-muted">{{ commitment.action.completion_percentage }}%</small>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="card text-center border-success">
+                <div class="card-body py-2">
+                    <h5 class="card-title text-success mb-1">{{ summary.completed }}</h5>
+                    <small class="text-muted">Completed</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-primary">
+                <div class="card-body py-2">
+                    <h5 class="card-title text-primary mb-1">{{ summary.in_progress }}</h5>
+                    <small class="text-muted">In Progress</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-warning">
+                <div class="card-body py-2">
+                    <h5 class="card-title text-warning mb-1">{{ summary.due_today }}</h5>
+                    <small class="text-muted">Due Today</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-danger">
+                <div class="card-body py-2">
+                    <h5 class="card-title text-danger mb-1">{{ summary.overdue }}</h5>
+                    <small class="text-muted">Overdue</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-handshake fa-4x text-muted mb-3"></i>
+        <h5 class="text-muted mb-3">No Commitments Found</h5>
+        <p class="text-muted">
+            No previous commitments found for this team. Commitments from previous review meetings will appear here.
+        </p>
+    </div>
+{% endif %}
+
+<script>
+function refreshCommitments() {
+    const commitmentsContent = document.getElementById('commitments-content');
+
+    // Show loading
+    commitmentsContent.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Refreshing commitments...</p>
+        </div>
+    `;
+
+    // Reload commitments
+    fetch('{% url "reviews:commitments" meeting.pk %}')
+        .then(response => response.text())
+        .then(html => {
+            commitmentsContent.innerHTML = html;
+
+            // Reinitialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        })
+        .catch(error => {
+            console.error('Error refreshing commitments:', error);
+            commitmentsContent.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error refreshing commitments</p>
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshCommitments()">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+// Initialize tooltips when content loads
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>

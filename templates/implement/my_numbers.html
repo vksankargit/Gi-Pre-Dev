@@ -1,0 +1,299 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Numbers{% endblock %}
+
+{% block extra_css %}
+<style>
+.editable-cell {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 8px;
+    cursor: text;
+    min-height: 32px;
+    width: 100px;
+}
+
+.editable-cell:hover {
+    background-color: #e9ecef;
+}
+
+.editable-cell:focus {
+    background-color: white;
+    outline: 2px solid #007bff;
+    border-color: #007bff;
+}
+
+.saving {
+    background-color: #fff3cd !important;
+    border-color: #ffeaa7 !important;
+}
+
+.saved {
+    background-color: #d4edda !important;
+    border-color: #c3e6cb !important;
+}
+
+.error {
+    background-color: #f8d7da !important;
+    border-color: #f5c6cb !important;
+}
+
+.numbers-table {
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.numbers-table th,
+.numbers-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.numbers-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.tab-content {
+    margin-top: 20px;
+}
+
+.nav-tabs .nav-link.active {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2>My Numbers - TEMPLATE FIXED</h2>
+
+            <!-- Navigation Tabs -->
+            <ul class="nav nav-tabs" id="numbersTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="weekly-tab" data-bs-toggle="tab" data-bs-target="#weekly" type="button" role="tab">
+                        Weekly Numbers
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="monthly-tab" data-bs-toggle="tab" data-bs-target="#monthly" type="button" role="tab">
+                        Monthly Numbers
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Tab Content -->
+            <div class="tab-content" id="numbersTabContent">
+                <!-- Weekly Numbers Tab -->
+                <div class="tab-pane fade show active" id="weekly" role="tabpanel">
+                    <h4>Weekly Numbers</h4>
+
+                    {% if weekly_numbers %}
+                    <table class="numbers-table table">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Team</th>
+                                <th>Last Week Budget</th>
+                                <th>Last Week Actual</th>
+                                <th>Current Week Budget</th>
+                                <th>Current Week Plan</th>
+                                <th>Quarter Goal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for gpi in weekly_numbers %}
+                            <tr>
+                                <td>{{ gpi.name }}
+                                    <br><small class="text-muted">DEBUG: ID={{ gpi.id }}, last_week_actual={{ gpi.last_week_actual }}, current_week_plan={{ gpi.current_week_plan }}</small>
+                                </td>
+                                <td>{{ gpi.quarterly_plan.team.name }}</td>
+                                <td>{{ gpi.last_week_budget|default:"0" }}</td>
+                                <td>
+                                    <div class="editable-cell"
+                                         contenteditable="true"
+                                         data-type="{% if gpi.model_type %}{{ gpi.model_type }}{% else %}gpi{% endif %}"
+                                         data-id="{{ gpi.id }}"
+                                         data-field="last_week_actual"
+                                         data-original-value="{{ gpi.last_week_actual|default:'' }}">
+                                        {{ gpi.last_week_actual|default:"" }}
+                                    </div>
+                                </td>
+                                <td>{{ gpi.current_week_budget|default:"0" }}</td>
+                                <td>
+                                    <div class="editable-cell"
+                                         contenteditable="true"
+                                         data-type="{% if gpi.model_type %}{{ gpi.model_type }}{% else %}gpi{% endif %}"
+                                         data-id="{{ gpi.id }}"
+                                         data-field="current_week_plan"
+                                         data-original-value="{{ gpi.current_week_plan|default:'' }}">
+                                        {{ gpi.current_week_plan|default:"" }}
+                                    </div>
+                                </td>
+                                <td>{{ gpi.quarter_goal }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="text-muted">No weekly numbers found.</p>
+                    {% endif %}
+                </div>
+
+                <!-- Monthly Numbers Tab -->
+                <div class="tab-pane fade" id="monthly" role="tabpanel">
+                    <h4>Monthly Numbers</h4>
+
+                    {% if monthly_numbers %}
+                    <table class="numbers-table table">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Team</th>
+                                <th>Last Month Budget</th>
+                                <th>Last Month Actual</th>
+                                <th>Current Month Budget</th>
+                                <th>Current Month Plan</th>
+                                <th>Quarter Goal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for param in monthly_numbers %}
+                            <tr>
+                                <td>
+                                    {% if param.sub_head %}
+                                        {{ param.sub_head }}
+                                    {% else %}
+                                        {{ param.name }}
+                                    {% endif %}
+                                    <br><small class="text-muted">DEBUG: ID={{ param.id }}, Type={{ param.model_type }}, last_month_actual={{ param.last_month_actual }}, current_month_plan={{ param.current_month_plan }}</small>
+                                </td>
+                                <td>{{ param.quarterly_plan.team.name }}</td>
+                                <td>{{ param.last_month_budget|default:"0" }}</td>
+                                <td>
+                                    <div class="editable-cell"
+                                         contenteditable="true"
+                                         data-type="{% if param.model_type %}{{ param.model_type }}{% elif param.sub_head %}fpi{% else %}gpi{% endif %}"
+                                         data-id="{{ param.id }}"
+                                         data-field="last_month_actual"
+                                         data-original-value="{{ param.last_month_actual|default:'' }}">
+                                        {{ param.last_month_actual|default:"" }}
+                                    </div>
+                                </td>
+                                <td>{{ param.current_month_budget|default:"0" }}</td>
+                                <td>
+                                    <div class="editable-cell"
+                                         contenteditable="true"
+                                         data-type="{% if param.model_type %}{{ param.model_type }}{% elif param.sub_head %}fpi{% else %}gpi{% endif %}"
+                                         data-id="{{ param.id }}"
+                                         data-field="current_month_plan"
+                                         data-original-value="{{ param.current_month_plan|default:'' }}">
+                                        {{ param.current_month_plan|default:"" }}
+                                    </div>
+                                </td>
+                                <td>{{ param.quarter_goal }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="text-muted">No monthly numbers found.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const editableCells = document.querySelectorAll('.editable-cell');
+
+    editableCells.forEach(cell => {
+        // Store original value when cell gets focus
+        cell.addEventListener('focus', function() {
+            this.dataset.originalValue = this.textContent.trim();
+        });
+
+        // Auto-save when cell loses focus (tab out)
+        cell.addEventListener('blur', function() {
+            const newValue = this.textContent.trim();
+            const originalValue = this.dataset.originalValue || '';
+
+            // Only save if value changed
+            if (newValue !== originalValue) {
+                saveCell(this, newValue);
+            }
+        });
+
+        // Save on Enter key
+        cell.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.blur(); // Trigger blur event to save
+            }
+        });
+    });
+
+    function saveCell(cell, value) {
+        const type = cell.dataset.type;
+        const id = cell.dataset.id;
+        const field = cell.dataset.field;
+
+        // Visual feedback
+        cell.classList.add('saving');
+        cell.classList.remove('saved', 'error');
+
+        // Prepare data
+        const data = {
+            type: type,
+            id: id,
+            field: field,
+            value: value,
+            csrfmiddlewaretoken: document.querySelector('[name=csrfmiddlewaretoken]').value
+        };
+
+        // AJAX save
+        fetch('{% url "implement:save_number" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': data.csrfmiddlewaretoken
+            },
+            body: new URLSearchParams(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            cell.classList.remove('saving');
+            if (data.success) {
+                cell.classList.add('saved');
+                cell.dataset.originalValue = value; // Update original value
+                console.log('Save success:', data.debug || 'Data saved successfully');
+                setTimeout(() => cell.classList.remove('saved'), 2000);
+            } else {
+                cell.classList.add('error');
+                console.error('Save error:', data.error);
+                setTimeout(() => cell.classList.remove('error'), 3000);
+            }
+        })
+        .catch(error => {
+            cell.classList.remove('saving');
+            cell.classList.add('error');
+            console.error('Network error:', error);
+            setTimeout(() => cell.classList.remove('error'), 3000);
+        });
+    }
+});
+</script>
+
+<!-- CSRF Token -->
+{% csrf_token %}
+{% endblock %}
