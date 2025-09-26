@@ -13,86 +13,54 @@
     </div>
 </div>
 
-{% if fpi_data %}
+{% if fpi_by_head %}
     <!-- P&L Format Display -->
     <div class="row">
         <div class="col-12">
             <div class="card">
                 <div class="card-header bg-primary text-white">
-                    <h6 class="mb-0">Profit & Loss Statement - {{ meeting.team.name }}</h6>
-                    <small>Period: {{ fpi_data.period_start|date:"M d, Y" }} to {{ fpi_data.period_end|date:"M d, Y" }}</small>
+                    <h6 class="mb-0">Financial Performance Indicators - {{ meeting.team.name }}</h6>
+                    <small>Period: {{ previous_month|date:"M Y" }}</small>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-sm mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th style="width: 50%">Item</th>
-                                    <th style="width: 20%" class="text-end">Amount (₹)</th>
-                                    <th style="width: 15%" class="text-end">% of Revenue</th>
-                                    <th style="width: 15%" class="text-end">Variance</th>
+                                    <th style="width: 30%">Parameter</th>
+                                    <th style="width: 15%">Sub Head</th>
+                                    <th style="width: 15%" class="text-end">Last Month Budget</th>
+                                    <th style="width: 15%" class="text-end">Last Month Actual</th>
+                                    <th style="width: 15%" class="text-end">Next Month Plan</th>
+                                    <th style="width: 10%">Responsible</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <!-- Revenue Section -->
-                                <tr class="table-primary">
-                                    <td><strong>REVENUE</strong></td>
-                                    <td class="text-end"><strong>{{ fpi_data.total_revenue|floatformat:0 }}</strong></td>
-                                    <td class="text-end"><strong>100.0%</strong></td>
-                                    <td class="text-end">
-                                        <span class="badge bg-{% if fpi_data.revenue_variance >= 0 %}success{% else %}danger{% endif %}">
-                                            {{ fpi_data.revenue_variance|floatformat:1 }}%
-                                        </span>
-                                    </td>
-                                </tr>
-                                {% for revenue_item in fpi_data.revenue_items %}
-                                <tr>
-                                    <td class="ps-4">{{ revenue_item.name }}</td>
-                                    <td class="text-end">{{ revenue_item.amount|floatformat:0 }}</td>
-                                    <td class="text-end">{{ revenue_item.percentage|floatformat:1 }}%</td>
-                                    <td class="text-end">
-                                        <span class="badge bg-{% if revenue_item.variance >= 0 %}success{% else %}danger{% endif %}">
-                                            {{ revenue_item.variance|floatformat:1 }}%
-                                        </span>
-                                    </td>
-                                </tr>
+                                {% for main_head, parameters in fpi_by_head.items %}
+                                    <!-- Main Head Section -->
+                                    <tr class="table-primary">
+                                        <td colspan="6"><strong>{{ main_head }}</strong></td>
+                                    </tr>
+                                    {% for param_data in parameters %}
+                                    <tr>
+                                        <td class="ps-4">{{ param_data.parameter.parameter_name }}</td>
+                                        <td>{{ param_data.sub_head }}</td>
+                                        <td class="text-end">₹{{ param_data.last_month_budget|floatformat:0 }}</td>
+                                        <td class="text-end">₹{{ param_data.last_month_actual|floatformat:0 }}</td>
+                                        <td class="text-end">₹{{ param_data.next_month_plan|floatformat:0 }}</td>
+                                        <td>
+                                            <small>{{ param_data.responsible_user.get_full_name|default:param_data.responsible_user.username|default:"Unassigned" }}</small>
+                                        </td>
+                                    </tr>
+                                    {% if param_data.explanation %}
+                                    <tr>
+                                        <td colspan="6" class="ps-5 text-muted">
+                                            <small><em>{{ param_data.explanation }}</em></small>
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                    {% endfor %}
                                 {% endfor %}
-
-                                <!-- Expenses Section -->
-                                <tr class="table-warning">
-                                    <td><strong>EXPENSES</strong></td>
-                                    <td class="text-end"><strong>{{ fpi_data.total_expenses|floatformat:0 }}</strong></td>
-                                    <td class="text-end"><strong>{{ fpi_data.total_expenses_percentage|floatformat:1 }}%</strong></td>
-                                    <td class="text-end">
-                                        <span class="badge bg-{% if fpi_data.expenses_variance <= 0 %}success{% else %}danger{% endif %}">
-                                            {{ fpi_data.expenses_variance|floatformat:1 }}%
-                                        </span>
-                                    </td>
-                                </tr>
-                                {% for expense_item in fpi_data.expense_items %}
-                                <tr>
-                                    <td class="ps-4">{{ expense_item.name }}</td>
-                                    <td class="text-end">{{ expense_item.amount|floatformat:0 }}</td>
-                                    <td class="text-end">{{ expense_item.percentage|floatformat:1 }}%</td>
-                                    <td class="text-end">
-                                        <span class="badge bg-{% if expense_item.variance <= 0 %}success{% else %}danger{% endif %}">
-                                            {{ expense_item.variance|floatformat:1 }}%
-                                        </span>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-
-                                <!-- Net Profit Section -->
-                                <tr class="table-{% if fpi_data.net_profit >= 0 %}success{% else %}danger{% endif %}">
-                                    <td><strong>NET PROFIT</strong></td>
-                                    <td class="text-end"><strong>{{ fpi_data.net_profit|floatformat:0 }}</strong></td>
-                                    <td class="text-end"><strong>{{ fpi_data.net_profit_percentage|floatformat:1 }}%</strong></td>
-                                    <td class="text-end">
-                                        <span class="badge bg-{% if fpi_data.net_profit_variance >= 0 %}success{% else %}danger{% endif %}">
-                                            {{ fpi_data.net_profit_variance|floatformat:1 }}%
-                                        </span>
-                                    </td>
-                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -101,83 +69,37 @@
         </div>
     </div>
 
-    <!-- Key Metrics Cards -->
-    <div class="row mt-4">
-        <div class="col-md-3">
-            <div class="card text-center border-{% if fpi_data.revenue_variance >= 0 %}success{% else %}danger{% endif %}">
-                <div class="card-body py-2">
-                    <h5 class="card-title mb-1 text-{% if fpi_data.revenue_variance >= 0 %}success{% else %}danger{% endif %}">
-                        ₹{{ fpi_data.total_revenue|floatformat:0 }}
-                    </h5>
-                    <small class="text-muted">Total Revenue</small>
-                    <br>
-                    <small class="text-{% if fpi_data.revenue_variance >= 0 %}success{% else %}danger{% endif %}">
-                        {{ fpi_data.revenue_variance|floatformat:1 }}% vs Target
-                    </small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center border-{% if fpi_data.expenses_variance <= 0 %}success{% else %}danger{% endif %}">
-                <div class="card-body py-2">
-                    <h5 class="card-title mb-1 text-{% if fpi_data.expenses_variance <= 0 %}success{% else %}danger{% endif %}">
-                        ₹{{ fpi_data.total_expenses|floatformat:0 }}
-                    </h5>
-                    <small class="text-muted">Total Expenses</small>
-                    <br>
-                    <small class="text-{% if fpi_data.expenses_variance <= 0 %}success{% else %}danger{% endif %}">
-                        {{ fpi_data.expenses_variance|floatformat:1 }}% vs Budget
-                    </small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center border-{% if fpi_data.net_profit >= 0 %}success{% else %}danger{% endif %}">
-                <div class="card-body py-2">
-                    <h5 class="card-title mb-1 text-{% if fpi_data.net_profit >= 0 %}success{% else %}danger{% endif %}">
-                        ₹{{ fpi_data.net_profit|floatformat:0 }}
-                    </h5>
-                    <small class="text-muted">Net Profit</small>
-                    <br>
-                    <small class="text-{% if fpi_data.net_profit_variance >= 0 %}success{% else %}danger{% endif %}">
-                        {{ fpi_data.net_profit_percentage|floatformat:1 }}% Margin
-                    </small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center border-info">
-                <div class="card-body py-2">
-                    <h5 class="card-title mb-1 text-info">
-                        {{ fpi_data.gross_margin|floatformat:1 }}%
-                    </h5>
-                    <small class="text-muted">Gross Margin</small>
-                    <br>
-                    <small class="text-info">
-                        {{ fpi_data.gross_margin_variance|floatformat:1 }}% vs Target
-                    </small>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Comments/Notes Section -->
-    {% if fpi_data.comments %}
+    <!-- Summary Section -->
     <div class="row mt-4">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h6 class="mb-0">
-                        <i class="fas fa-comment-dots me-2"></i>Financial Analysis Comments
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <p class="mb-0">{{ fpi_data.comments|linebreaks }}</p>
+            <div class="card bg-light">
+                <div class="card-body py-3">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <h6 class="mb-1">
+                                <i class="fas fa-chart-line me-2"></i>Total Parameters
+                            </h6>
+                            <h4 class="text-primary">
+                                {% widthratio fpi_by_head.values|length 1 1 %}
+                            </h4>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="mb-1">
+                                <i class="fas fa-sitemap me-2"></i>Main Heads
+                            </h6>
+                            <h4 class="text-info">{{ fpi_by_head.keys|length }}</h4>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="mb-1">
+                                <i class="fas fa-calendar me-2"></i>Review Period
+                            </h6>
+                            <h4 class="text-success">{{ previous_month|date:"M Y" }}</h4>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-    {% endif %}
 
 {% else %}
     <div class="text-center py-5">

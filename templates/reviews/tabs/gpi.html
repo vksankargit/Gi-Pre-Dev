@@ -39,36 +39,36 @@
         <!-- Goal Performance Summary Cards -->
         <div class="row mb-4">
             <div class="col-md-3">
-                <div class="card text-center border-{% if gpi_data.overall_achievement >= 80 %}success{% elif gpi_data.overall_achievement >= 60 %}warning{% else %}danger{% endif %}">
+                <div class="card text-center border-info">
                     <div class="card-body py-2">
-                        <h4 class="card-title mb-1 text-{% if gpi_data.overall_achievement >= 80 %}success{% elif gpi_data.overall_achievement >= 60 %}warning{% else %}danger{% endif %}">
-                            {{ gpi_data.overall_achievement|floatformat:1 }}%
+                        <h4 class="card-title mb-1 text-info">
+                            {{ gpi_data|length }}
                         </h4>
-                        <small class="text-muted">Overall Achievement</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center border-success">
-                    <div class="card-body py-2">
-                        <h4 class="card-title mb-1 text-success">{{ gpi_data.goals_completed }}</h4>
-                        <small class="text-muted">Goals Completed</small>
+                        <small class="text-muted">Total Parameters</small>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card text-center border-primary">
                     <div class="card-body py-2">
-                        <h4 class="card-title mb-1 text-primary">{{ gpi_data.goals_in_progress }}</h4>
-                        <small class="text-muted">In Progress</small>
+                        <h4 class="card-title mb-1 text-primary">{{ view_type|title }}</h4>
+                        <small class="text-muted">Tracking Type</small>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card text-center border-danger">
+                <div class="card text-center border-success">
                     <div class="card-body py-2">
-                        <h4 class="card-title mb-1 text-danger">{{ gpi_data.goals_at_risk }}</h4>
-                        <small class="text-muted">At Risk</small>
+                        <h4 class="card-title mb-1 text-success">{{ current_period }}</h4>
+                        <small class="text-muted">Current Period</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-warning">
+                    <div class="card-body py-2">
+                        <h4 class="card-title mb-1 text-warning">Q{{ quarter|default:"?" }}</h4>
+                        <small class="text-muted">Quarter</small>
                     </div>
                 </div>
             </div>
@@ -78,8 +78,8 @@
         <div class="card">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <i class="fas fa-bullseye me-2"></i>{{ gpi_data.period_display }} Goal Performance
-                    <span class="badge bg-secondary ms-2">{{ gpi_data.period_start|date:"M d" }} - {{ gpi_data.period_end|date:"M d, Y" }}</span>
+                    <i class="fas fa-bullseye me-2"></i>{{ view_type|title }} Goal Performance - Quarter {{ quarter|default:"?" }}
+                    <span class="badge bg-secondary ms-2">Period {{ current_period }}</span>
                 </h6>
             </div>
             <div class="card-body p-0">
@@ -88,81 +88,68 @@
                         <thead class="table-light">
                             <tr>
                                 <th style="width: 5%">S.No</th>
-                                <th style="width: 25%">Goal</th>
-                                <th style="width: 15%">Target</th>
-                                <th style="width: 15%">Achieved</th>
-                                <th style="width: 15%">Progress</th>
-                                <th style="width: 10%">Status</th>
-                                <th style="width: 15%">Actions</th>
+                                <th style="width: 30%">Parameter</th>
+                                <th style="width: 15%">Cumulative Budget</th>
+                                <th style="width: 15%">Cumulative Plan</th>
+                                <th style="width: 15%">Cumulative Actual</th>
+                                <th style="width: 10%">Achievement</th>
+                                <th style="width: 10%">Responsible</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for goal in gpi_data.goals %}
-                            <tr class="{% if goal.is_at_risk %}table-warning{% elif goal.is_completed %}table-success{% endif %}">
+                            {% for param_data in gpi_data %}
+                            <tr class="{% if param_data.achievement_percentage >= 90 %}table-success{% elif param_data.achievement_percentage >= 70 %}table-warning{% elif param_data.achievement_percentage < 50 %}table-danger{% endif %}">
                                 <td>
                                     <span class="badge bg-secondary">{{ forloop.counter }}</span>
                                 </td>
                                 <td>
                                     <div>
-                                        <strong>{{ goal.title|truncatechars:40 }}</strong>
-                                        {% if goal.title|length > 40 %}
+                                        <strong>{{ param_data.parameter.parameter_name|truncatechars:35 }}</strong>
+                                        {% if param_data.parameter.parameter_name|length > 35 %}
                                             <button class="btn btn-link btn-sm p-0 ms-1"
                                                     data-bs-toggle="tooltip"
                                                     data-bs-placement="top"
-                                                    title="{{ goal.title }}">
+                                                    title="{{ param_data.parameter.parameter_name }}">
                                                 <i class="fas fa-info-circle"></i>
                                             </button>
                                         {% endif %}
                                         <br>
-                                        <small class="text-muted">{{ goal.category }}</small>
+                                        <small class="text-muted">{{ param_data.parameter.unit|default:"Units" }}</small>
                                     </div>
                                 </td>
-                                <td>
-                                    <strong>{{ goal.target_value }}</strong>
+                                <td class="text-end">
+                                    <strong>{{ param_data.cumulative_budget|floatformat:0 }}</strong>
                                     <br>
-                                    <small class="text-muted">{{ goal.unit }}</small>
+                                    <small class="text-muted">{{ param_data.parameter.unit|default:"Units" }}</small>
                                 </td>
-                                <td>
-                                    <strong class="text-{% if goal.achievement_percentage >= 100 %}success{% elif goal.achievement_percentage >= 80 %}warning{% else %}danger{% endif %}">
-                                        {{ goal.achieved_value }}
+                                <td class="text-end">
+                                    <strong>{{ param_data.cumulative_plan|floatformat:0 }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ param_data.parameter.unit|default:"Units" }}</small>
+                                </td>
+                                <td class="text-end">
+                                    <strong class="text-{% if param_data.achievement_percentage >= 90 %}success{% elif param_data.achievement_percentage >= 70 %}warning{% else %}danger{% endif %}">
+                                        {{ param_data.cumulative_actual|floatformat:0 }}
                                     </strong>
                                     <br>
-                                    <small class="text-muted">{{ goal.unit }}</small>
+                                    <small class="text-muted">{{ param_data.parameter.unit|default:"Units" }}</small>
                                 </td>
                                 <td>
                                     <div class="progress mb-1" style="height: 10px;">
                                         <div class="progress-bar
-                                            {% if goal.achievement_percentage >= 100 %}bg-success
-                                            {% elif goal.achievement_percentage >= 80 %}bg-warning
-                                            {% elif goal.achievement_percentage >= 60 %}bg-info
+                                            {% if param_data.achievement_percentage >= 90 %}bg-success
+                                            {% elif param_data.achievement_percentage >= 70 %}bg-warning
+                                            {% elif param_data.achievement_percentage >= 50 %}bg-info
                                             {% else %}bg-danger
                                             {% endif %}"
                                             role="progressbar"
-                                            style="width: {{ goal.achievement_percentage|default:0 }}%">
+                                            style="width: {{ param_data.achievement_percentage }}%">
                                         </div>
                                     </div>
-                                    <small class="text-muted">{{ goal.achievement_percentage|floatformat:1 }}%</small>
+                                    <small class="text-muted">{{ param_data.achievement_percentage }}%</small>
                                 </td>
                                 <td>
-                                    <span class="badge bg-{% if goal.status == 'completed' %}success{% elif goal.status == 'in_progress' %}primary{% elif goal.status == 'at_risk' %}warning{% else %}danger{% endif %}">
-                                        {{ goal.get_status_display }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary"
-                                                onclick="viewGoalDetails({{ goal.id }})"
-                                                data-bs-toggle="tooltip"
-                                                title="View Details">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="btn btn-outline-secondary"
-                                                onclick="updateGoalProgress({{ goal.id }})"
-                                                data-bs-toggle="tooltip"
-                                                title="Update Progress">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                    </div>
+                                    <small>{{ param_data.parameter.responsible_user.get_full_name|default:param_data.parameter.responsible_user.username|default:"Unassigned" }}</small>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -172,35 +159,44 @@
             </div>
         </div>
 
-        <!-- Goal Category Performance Chart -->
-        {% if gpi_data.category_performance %}
+        <!-- Milestone Breakdown -->
+        {% if gpi_data %}
         <div class="row mt-4">
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
                         <h6 class="mb-0">
-                            <i class="fas fa-chart-pie me-2"></i>Performance by Category
+                            <i class="fas fa-chart-pie me-2"></i>Period-wise Breakdown
                         </h6>
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            {% for category in gpi_data.category_performance %}
-                            <div class="col-md-4 mb-3">
-                                <div class="card border-{% if category.achievement >= 80 %}success{% elif category.achievement >= 60 %}warning{% else %}danger{% endif %}">
-                                    <div class="card-body text-center py-3">
-                                        <h6 class="card-title">{{ category.name }}</h6>
-                                        <h4 class="text-{% if category.achievement >= 80 %}success{% elif category.achievement >= 60 %}warning{% else %}danger{% endif %}">
-                                            {{ category.achievement|floatformat:1 }}%
-                                        </h4>
-                                        <div class="progress mt-2" style="height: 8px;">
-                                            <div class="progress-bar bg-{% if category.achievement >= 80 %}success{% elif category.achievement >= 60 %}warning{% else %}danger{% endif %}"
-                                                 style="width: {{ category.achievement }}%"></div>
-                                        </div>
-                                        <small class="text-muted mt-1">{{ category.completed }}/{{ category.total }} goals</small>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        {% for period in "123456789101112"|make_list %}
+                                        <th class="text-center">P{{ period }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for param_data in gpi_data %}
+                                    <tr>
+                                        <td><strong>{{ param_data.parameter.parameter_name|truncatechars:20 }}</strong></td>
+                                        {% for period in "123456789101112"|make_list %}
+                                        <td class="text-center">
+                                            {% with milestone_value=param_data.milestones|default_if_none:0 %}
+                                            <span class="badge bg-{% if forloop.counter0 < current_period %}secondary{% else %}light text-dark{% endif %}">
+                                                {{ milestone_value|floatformat:0|default:"-" }}
+                                            </span>
+                                            {% endwith %}
+                                        </td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>

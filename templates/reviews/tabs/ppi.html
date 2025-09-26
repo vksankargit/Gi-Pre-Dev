@@ -58,7 +58,7 @@
         <div class="card-header">
             <h6 class="mb-0">
                 <i class="fas fa-clipboard-list me-2"></i>Project Performance Details
-                <span class="badge bg-secondary ms-2">{{ ppi_data.period_start|date:"M d" }} - {{ ppi_data.period_end|date:"M d, Y" }}</span>
+                <span class="badge bg-secondary ms-2">Quarter {{ quarter|default:"?" }} - Week {{ current_week }}</span>
             </h6>
         </div>
         <div class="card-body p-0">
@@ -76,69 +76,69 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for project in ppi_data.projects %}
+                        {% for project_data in ppi_project_details %}
                         <tr class="{% if project.health == 'red' %}table-danger{% elif project.health == 'yellow' %}table-warning{% endif %}">
                             <td>
                                 <span class="badge bg-secondary">{{ forloop.counter }}</span>
                             </td>
                             <td>
                                 <div>
-                                    <strong>{{ project.name|truncatechars:35 }}</strong>
-                                    {% if project.name|length > 35 %}
+                                    <strong>{{ project_data.project.project_name|truncatechars:35 }}</strong>
+                                    {% if project_data.project.project_name|length > 35 %}
                                         <button class="btn btn-link btn-sm p-0 ms-1"
                                                 data-bs-toggle="tooltip"
                                                 data-bs-placement="top"
-                                                title="{{ project.name }}">
+                                                title="{{ project_data.project.project_name }}">
                                             <i class="fas fa-info-circle"></i>
                                         </button>
                                     {% endif %}
                                     <br>
                                     <small class="text-muted">
-                                        <i class="fas fa-user me-1"></i>{{ project.manager.get_full_name|default:project.manager.username }}
+                                        <i class="fas fa-user me-1"></i>{{ project_data.project.responsible_user.get_full_name|default:project_data.project.responsible_user.username|default:"Unassigned" }}
                                     </small>
                                 </div>
                             </td>
                             <td>
                                 <div class="progress mb-1" style="height: 10px;">
                                     <div class="progress-bar
-                                        {% if project.completion_percentage >= 75 %}bg-success
-                                        {% elif project.completion_percentage >= 50 %}bg-info
-                                        {% elif project.completion_percentage >= 25 %}bg-warning
+                                        {% if project_data.completion_percentage >= 75 %}bg-success
+                                        {% elif project_data.completion_percentage >= 50 %}bg-info
+                                        {% elif project_data.completion_percentage >= 25 %}bg-warning
                                         {% else %}bg-danger
                                         {% endif %}"
                                         role="progressbar"
-                                        style="width: {{ project.completion_percentage }}%">
+                                        style="width: {{ project_data.completion_percentage }}%">
                                     </div>
                                 </div>
-                                <small class="text-muted">{{ project.completion_percentage|floatformat:1 }}% Complete</small>
+                                <small class="text-muted">{{ project_data.completion_percentage|floatformat:1 }}% Complete</small>
                             </td>
                             <td>
                                 <div>
-                                    <strong class="text-{% if project.schedule_variance >= 0 %}success{% else %}danger{% endif %}">
-                                        {% if project.schedule_variance >= 0 %}+{% endif %}{{ project.schedule_variance }} days
+                                    <strong class="text-success">
+                                        {{ project_data.completed_tasks }}/{{ project_data.total_tasks }}
                                     </strong>
                                     <br>
                                     <small class="text-muted">
-                                        Due: {{ project.end_date|date:"M d, Y" }}
+                                        Tasks Complete
                                     </small>
                                 </div>
                             </td>
                             <td>
                                 <div>
-                                    <strong class="text-{% if project.budget_variance >= 0 %}success{% else %}danger{% endif %}">
-                                        {% if project.budget_variance >= 0 %}+{% endif %}{{ project.budget_variance|floatformat:1 }}%
+                                    <strong class="text-info">
+                                        {{ project_data.tasks_due_by_now }}
                                     </strong>
                                     <br>
                                     <small class="text-muted">
-                                        ₹{{ project.budget_utilized|floatformat:0 }}/{{ project.total_budget|floatformat:0 }}
+                                        Due by Week {{ current_week }}
                                     </small>
                                 </div>
                             </td>
                             <td>
-                                <span class="badge fs-6 bg-{% if project.health == 'green' %}success{% elif project.health == 'yellow' %}warning{% else %}danger{% endif %}">
-                                    {% if project.health == 'green' %}
+                                <span class="badge fs-6 bg-{% if project_data.health == 'green' %}success{% elif project_data.health == 'yellow' %}warning{% else %}danger{% endif %}">
+                                    {% if project_data.health == 'green' %}
                                         <i class="fas fa-check-circle me-1"></i>Good
-                                    {% elif project.health == 'yellow' %}
+                                    {% elif project_data.health == 'yellow' %}
                                         <i class="fas fa-exclamation-triangle me-1"></i>Risk
                                     {% else %}
                                         <i class="fas fa-times-circle me-1"></i>Issue
@@ -148,13 +148,13 @@
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-primary"
-                                            onclick="viewProjectDetails({{ project.id|unlocalize }})"
+                                            onclick="viewProjectDetails({{ project_data.project.id|unlocalize }})"
                                             data-bs-toggle="tooltip"
                                             title="View Details">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     <button class="btn btn-outline-secondary"
-                                            onclick="updateProjectStatus({{ project.id|unlocalize }})"
+                                            onclick="updateProjectStatus({{ project_data.project.id|unlocalize }})"
                                             data-bs-toggle="tooltip"
                                             title="Update Status">
                                         <i class="fas fa-edit"></i>
@@ -213,54 +213,54 @@
                     </h6>
                 </div>
                 <div class="card-body">
-                    {% if ppi_data.upcoming_milestones %}
+                    {% if ppi_project_details %}
                         <div class="list-group list-group-flush">
-                            {% for milestone in ppi_data.upcoming_milestones %}
+                            {% for project_data in ppi_project_details|slice:":5" %}
                             <div class="list-group-item px-0 py-2">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <small class="text-muted">{{ milestone.project_name }}</small>
+                                        <small class="text-muted">{{ project_data.project.project_name|truncatechars:15 }}</small>
                                         <br>
-                                        <strong>{{ milestone.name|truncatechars:25 }}</strong>
+                                        <strong>{{ project_data.status|title }}</strong>
                                     </div>
-                                    <small class="text-{% if milestone.is_overdue %}danger{% elif milestone.is_due_soon %}warning{% else %}muted{% endif %}">
-                                        {{ milestone.due_date|date:"M d" }}
+                                    <small class="text-{% if project_data.health == 'red' %}danger{% elif project_data.health == 'yellow' %}warning{% else %}success{% endif %}">
+                                        {{ project_data.completion_percentage|floatformat:0 }}%
                                     </small>
                                 </div>
                             </div>
                             {% endfor %}
                         </div>
                     {% else %}
-                        <p class="text-muted text-center">No milestones this month</p>
+                        <p class="text-muted text-center">No projects this quarter</p>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Key Issues and Risks -->
-    {% if ppi_data.key_issues %}
+    <!-- Project Status Summary -->
+    {% if ppi_project_details %}
     <div class="row mt-4">
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
                     <h6 class="mb-0">
-                        <i class="fas fa-exclamation-triangle me-2"></i>Key Issues and Risks
+                        <i class="fas fa-tasks me-2"></i>Weekly Task Summary (Week {{ current_week }})
                     </h6>
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        {% for issue in ppi_data.key_issues %}
+                        {% for project_data in ppi_project_details %}
                         <div class="col-md-6 mb-3">
-                            <div class="alert alert-{% if issue.severity == 'high' %}danger{% elif issue.severity == 'medium' %}warning{% else %}info{% endif %} mb-0">
+                            <div class="alert alert-{% if project_data.health == 'red' %}danger{% elif project_data.health == 'yellow' %}warning{% else %}success{% endif %} mb-0">
                                 <div class="d-flex justify-content-between">
                                     <div>
-                                        <strong>{{ issue.project_name }}</strong>
-                                        <p class="mb-1">{{ issue.description|truncatechars:80 }}</p>
-                                        <small>Impact: {{ issue.get_severity_display }}</small>
+                                        <strong>{{ project_data.project.project_name|truncatechars:30 }}</strong>
+                                        <p class="mb-1">{{ project_data.completed_by_now }}/{{ project_data.tasks_due_by_now }} tasks completed by current week</p>
+                                        <small>Status: {{ project_data.status|title }}</small>
                                     </div>
-                                    <span class="badge bg-{% if issue.severity == 'high' %}danger{% elif issue.severity == 'medium' %}warning{% else %}info{% endif %}">
-                                        {{ issue.get_severity_display }}
+                                    <span class="badge bg-{% if project_data.health == 'red' %}danger{% elif project_data.health == 'yellow' %}warning{% else %}success{% endif %}">
+                                        {{ project_data.completion_percentage|floatformat:0 }}%
                                     </span>
                                 </div>
                             </div>
