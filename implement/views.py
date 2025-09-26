@@ -77,12 +77,7 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             assigned_to=user
         ).select_related('team', 'created_by').order_by('original_due_date', '-created_at')
 
-        # Debug: Log the actions being sent to template
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"ImplementDashboardView for user {user}: Found {actions.count()} actions")
-        for action in actions[:10]:  # Log first 10 actions
-            logger.info(f"  Action {action.id}: {action.action[:50]}")
+        # Actions are filtered and ready to be passed to template
 
         # Enhance weekly numbers with budget data
         enhanced_weekly_numbers = []
@@ -223,12 +218,14 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             class ProjectWrapper:
                 def __init__(self, improvement_project):
                     self.id = improvement_project.id
+                    self.pk = improvement_project.pk  # Add pk for template compatibility
                     self.name = improvement_project.name
                     self.completion_criteria = improvement_project.completion_criteria
                     self.responsible_user = improvement_project.responsible_user
                     self.start_date = improvement_project.start_date
                     self.end_date = improvement_project.end_date
                     self.steps = improvement_project.steps
+                    self.status = improvement_project.status  # Copy the current status
                     self.project_type = 'Improvement'
 
                     # Create a quarterly_plan-like object for template compatibility
@@ -288,6 +285,11 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                         self.completion_percentage = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
                     else:
                         self.completion_percentage = 0
+
+                def get_status_display(self):
+                    """Method to provide human-readable status like Django models"""
+                    status_dict = dict(ImprovementProject.STATUS_CHOICES)
+                    return status_dict.get(self.status, self.status)
 
             enhanced_projects.append(ProjectWrapper(imp_project))
 
@@ -555,12 +557,7 @@ class MyTodoView(LoginRequiredMixin, TemplateView):
             assigned_to=user
         ).select_related('team', 'created_by').order_by('original_due_date', '-created_at')
 
-        # Debug: Log the actions being sent to template
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"MyTodoView for user {user}: Found {actions.count()} actions")
-        for action in actions[:10]:  # Log first 10 actions
-            logger.info(f"  Action {action.id}: {action.action[:50]}")
+        # Actions are filtered and ready for My To Do template
 
         context.update({
             'actions': actions,
@@ -695,32 +692,91 @@ class ActionEditView(LoginRequiredMixin, View):
 
 class ActionReassignView(LoginRequiredMixin, TemplateView):
     template_name = 'implement/action_reassign.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         action = get_object_or_404(Action, pk=kwargs['pk'])
-        
-        # Get available teams and members
-        teams = Team.objects.filter(is_active=True)
-        
+
+        # Get teams where the logged-in user is the manager
+        teams = Team.objects.filter(manager=self.request.user, is_active=True)
+
         context.update({
             'action': action,
             'teams': teams,
         })
-        
+
         return context
+
+    def post(self, request, pk):
+        """Handle action reassignment"""
+        action = get_object_or_404(Action, pk=pk)
+
+        team_id = request.POST.get('team')
+        assigned_to_id = request.POST.get('assigned_to')
+        reassignment_reason = request.POST.get('reassignment_reason', '')
+        notify_assignee = request.POST.get('notify_assignee') == 'on'
+
+        # Validate required fields
+        if not team_id or not assigned_to_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Team and assignee are required'
+            })
+
+        try:
+            from organizations.models import Team
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+
+            new_team = get_object_or_404(Team, pk=team_id)
+            new_assignee = get_object_or_404(User, pk=assigned_to_id)
+
+            # Update the action
+            action.team = new_team
+            action.assigned_to = new_assignee
+            action.save()
+
+            # Create history entry for reassignment
+            from .models import ActionHistory
+            ActionHistory.objects.create(
+                action=action,
+                status=action.status,  # Keep current status
+                comments=f"Reassigned to {new_assignee.get_full_name()} in {new_team.name}. {reassignment_reason}".strip(),
+                updated_by=request.user
+            )
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Action reassigned successfully'
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            })
 
 
 class ActionToggleCompleteView(LoginRequiredMixin, TemplateView):
     def post(self, request, pk):
         action = get_object_or_404(Action, pk=pk)
-        
+
         if action.status == 'completed':
             action.status = 'in_progress'  # or previous status
         else:
             action.status = 'completed'
-        
+
         action.save()
+
+        # Return JSON for AJAX requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+            return JsonResponse({
+                'success': True,
+                'message': 'Action status updated.',
+                'new_status': action.status
+            })
+
+        # Regular form submission - redirect with message
         messages.success(request, 'Action status updated.')
         return redirect('implement:my_todo')
 
@@ -737,11 +793,20 @@ class ActionRejectView(LoginRequiredMixin, TemplateView):
     def post(self, request, pk):
         action = get_object_or_404(Action, pk=pk)
         rejection_reason = request.POST.get('rejection_reason', '')
-        
+
         action.status = 'rejected'
         action.rejection_reason = rejection_reason
         action.save()
-        
+
+        # Return JSON for AJAX requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+            return JsonResponse({
+                'success': True,
+                'message': 'Action rejected.',
+                'rejection_reason': rejection_reason
+            })
+
+        # Regular form submission - redirect with message
         messages.success(request, 'Action rejected.')
         return redirect('implement:my_todo')
 
@@ -979,6 +1044,67 @@ class ProjectCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
+class ImprovementProjectEditView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        """Render the improvement project edit modal form (this will be called via AJAX)"""
+        project = get_object_or_404(ImprovementProject, pk=pk)
+
+        # Check if user has permission to edit this project
+        if project.responsible_user != request.user:
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("You don't have permission to edit this project.")
+
+        context = {
+            'object': project,
+            'status_choices': ImprovementProject.STATUS_CHOICES,
+        }
+
+        return render(request, 'implement/improvement_project_form.html', context)
+
+    def post(self, request, pk):
+        """Handle the modal form submission for improvement project"""
+        project = get_object_or_404(ImprovementProject, pk=pk)
+
+        # Check if user has permission to edit this project
+        if project.responsible_user != request.user:
+            return JsonResponse({
+                'success': False,
+                'error': "You don't have permission to edit this project."
+            })
+
+        status = request.POST.get('status')
+        revised_due_date = request.POST.get('revised_due_date')
+        challenge = request.POST.get('challenge', '')
+        comments = request.POST.get('comments', '')
+
+        # Validate required fields based on status
+        if status == 'at_risk' and not challenge:
+            return JsonResponse({
+                'success': False,
+                'error': 'Challenge field is required for At Risk status.'
+            })
+        elif status == 'danger' and (not challenge or not revised_due_date):
+            return JsonResponse({
+                'success': False,
+                'error': 'Challenge and Revised Due Date are required for Danger status.'
+            })
+
+        try:
+            # Update project status directly (no separate status history table for improvements)
+            project.status = status
+            project.save()
+
+            # Log the status update (similar to how PPI projects work)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f'Improvement project {project.pk} status updated to {status} by user {request.user.pk}')
+
+            return JsonResponse({'success': True, 'message': 'Improvement project updated successfully.'})
+
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+
 class ProjectEditView(LoginRequiredMixin, View):
     def get(self, request, pk):
         """Render the project edit modal form (this will be called via AJAX)"""
@@ -1006,11 +1132,15 @@ class ProjectEditView(LoginRequiredMixin, View):
 
         # Validate required fields based on status
         if status == 'at_risk' and not challenge:
-            messages.error(request, 'Challenge field is required for At Risk status.')
-            return redirect('implement:project_edit', pk=pk)
+            return JsonResponse({
+                'success': False,
+                'error': 'Challenge field is required for At Risk status.'
+            })
         elif status == 'danger' and (not challenge or not revised_due_date):
-            messages.error(request, 'Challenge and Revised Due Date are required for Danger status.')
-            return redirect('implement:project_edit', pk=pk)
+            return JsonResponse({
+                'success': False,
+                'error': 'Challenge and Revised Due Date are required for Danger status.'
+            })
 
         # Create new status history entry
         try:
@@ -1064,8 +1194,10 @@ class ProjectReassignView(LoginRequiredMixin, View):
         transfer_tasks = request.POST.get('transfer_tasks') == 'on'
 
         if not new_responsible_user_id:
-            messages.error(request, 'Please select a user to reassign the project to.')
-            return redirect('implement:project_reassign', pk=pk)
+            return JsonResponse({
+                'success': False,
+                'error': 'Please select a user to reassign the project to.'
+            })
 
         from django.contrib.auth import get_user_model
         User = get_user_model()

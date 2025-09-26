@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}My To Do - PRE System{% endblock %}
 
@@ -92,9 +93,8 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        <!-- Debug: Action ID = {{ action.id }} -->
                                         {% if action.id and action.id > 0 %}
-                                        <button class="btn btn-outline-primary" onclick="editAction({{ action.id }})" title="Edit (ID: {{ action.id }})">
+                                        <button class="btn btn-outline-primary" onclick="editAction({{ action.id|unlocalize }})" title="Edit (ID: {{ action.id }})">
                                             <i class="fas fa-edit"></i>
                                         </button>
                                         {% else %}
@@ -102,19 +102,19 @@
                                             <i class="fas fa-edit"></i>
                                         </button>
                                         {% endif %}
-                                        <button class="btn btn-outline-warning" onclick="reassignAction({{ action.id }})" title="Reassign">
+                                        <button class="btn btn-outline-warning" onclick="reassignAction({{ action.id|unlocalize }})" title="Reassign">
                                             <i class="fas fa-user-edit"></i>
                                         </button>
-                                        <button class="btn btn-outline-success" onclick="toggleActionComplete({{ action.id }})" title="Toggle Complete">
+                                        <button class="btn btn-outline-success" onclick="toggleActionComplete({{ action.id|unlocalize }})" title="Toggle Complete">
                                             <i class="fas fa-check"></i>
                                         </button>
-                                        <button class="btn btn-outline-danger" onclick="rejectAction({{ action.id }})" title="Reject">
+                                        <button class="btn btn-outline-danger" onclick="rejectAction({{ action.id|unlocalize }})" title="Reject">
                                             <i class="fas fa-times"></i>
                                         </button>
-                                        <button class="btn btn-outline-info" onclick="viewActionHistory({{ action.id }})" title="History">
+                                        <button class="btn btn-outline-info" onclick="viewActionHistory({{ action.id|unlocalize }})" title="History">
                                             <i class="fas fa-history"></i>
                                         </button>
-                                        <button class="btn btn-outline-secondary" onclick="viewSubActions({{ action.id }})" title="Sub Actions">
+                                        <button class="btn btn-outline-secondary" onclick="viewSubActions({{ action.id|unlocalize }})" title="Sub Actions">
                                             <i class="fas fa-list"></i>
                                         </button>
                                     </div>
@@ -227,7 +227,9 @@ function toggleActionComplete(actionId) {
         fetch(`/implement/action/${actionId}/toggle-complete/`, {
             method: 'POST',
             headers: {
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
             }
         })
         .then(response => response.json())
@@ -250,7 +252,9 @@ function rejectAction(actionId) {
         fetch(`/implement/action/${actionId}/reject/`, {
             method: 'POST',
             headers: {
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
             }
         })
         .then(response => response.json())
@@ -347,16 +351,20 @@ function initializeActionForm() {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Action updated successfully!');
+                    // Close modal and refresh to show updated values
                     const modal = bootstrap.Modal.getInstance(document.getElementById('editActionModal'));
                     modal.hide();
-                    location.reload(); // Refresh to show updated data
+
+                    // Show success message and refresh page to show updated data
+                    alert('Action updated successfully!');
+                    location.reload();
                 } else {
                     alert('Error updating action: ' + (data.error || 'Unknown error'));
                 }

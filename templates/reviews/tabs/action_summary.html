@@ -1,3 +1,4 @@
+{% load l10n %}
 <!-- Action Summary Tab Content -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">
@@ -231,20 +232,20 @@
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-primary"
-                                            onclick="viewActionDetails({{ action.id }})"
+                                            onclick="viewActionDetails({{ action.id|unlocalize }})"
                                             data-bs-toggle="tooltip"
                                             title="View Details">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     <button class="btn btn-outline-secondary"
-                                            onclick="editActionItem({{ action.id }})"
+                                            onclick="editActionItem({{ action.id|unlocalize }})"
                                             data-bs-toggle="tooltip"
                                             title="Edit Action">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     {% if action.status != 'completed' %}
                                     <button class="btn btn-outline-success"
-                                            onclick="markCompleted({{ action.id }})"
+                                            onclick="markCompleted({{ action.id|unlocalize }})"
                                             data-bs-toggle="tooltip"
                                             title="Mark Complete">
                                         <i class="fas fa-check"></i>
@@ -304,14 +305,14 @@
                                         {{ action.get_status_display }}
                                     </span>
                                     <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary" onclick="viewActionDetails({{ action.id }})">
+                                        <button class="btn btn-outline-primary" onclick="viewActionDetails({{ action.id|unlocalize }})">
                                             <i class="fas fa-eye"></i>
                                         </button>
-                                        <button class="btn btn-outline-secondary" onclick="editActionItem({{ action.id }})">
+                                        <button class="btn btn-outline-secondary" onclick="editActionItem({{ action.id|unlocalize }})">
                                             <i class="fas fa-edit"></i>
                                         </button>
                                         {% if action.status != 'completed' %}
-                                        <button class="btn btn-outline-success" onclick="markCompleted({{ action.id }})">
+                                        <button class="btn btn-outline-success" onclick="markCompleted({{ action.id|unlocalize }})">
                                             <i class="fas fa-check"></i>
                                         </button>
                                         {% endif %}

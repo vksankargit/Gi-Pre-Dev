@@ -93,9 +93,15 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
         user = self.request.user
         
         # Get teams and financial years
-        managed_teams = Team.objects.filter(manager=user, is_active=True)
+        if user.role == 'general':
+            managed_teams = Team.objects.filter(manager=user, is_active=True)
+        else:
+            # For coordinators and admins, show all teams
+            managed_teams = Team.objects.filter(is_active=True)
+
         financial_years = FinancialYear.objects.all().order_by('-start_date')
         quarters = [('Q1', 'Q1'), ('Q2', 'Q2'), ('Q3', 'Q3'), ('Q4', 'Q4')]
+
         
         context.update({
             'managed_teams': managed_teams,
@@ -130,7 +136,13 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         try:
-            team = get_object_or_404(Team, id=team_id, manager=request.user)
+            # Allow team access based on user role
+            if request.user.role == 'general':
+                team = get_object_or_404(Team, id=team_id, manager=request.user, is_active=True)
+            else:
+                # For coordinators and admins, allow access to any active team
+                team = get_object_or_404(Team, id=team_id, is_active=True)
+
             financial_year = get_object_or_404(FinancialYear, id=financial_year_id)
         except:
             error_msg = 'Invalid team or financial year selection.'
@@ -558,3 +570,24 @@ class ImprovementProjectErrorLogView(LoginRequiredMixin, TemplateView):
         
         messages.error(request, 'No error log available.')
         return redirect('improve:history')
+
+
+class IndividualImprovementProjectHistoryView(LoginRequiredMixin, TemplateView):
+    template_name = 'improve/project_history.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        project = get_object_or_404(ImprovementProject, pk=kwargs['pk'])
+
+        # Calculate completed tasks count
+        completed_tasks_count = project.tasks.filter(is_completed=True).count() if hasattr(project, 'tasks') and project.tasks.exists() else 0
+        total_tasks_count = project.tasks.count() if hasattr(project, 'tasks') else 0
+
+        context.update({
+            'project': project,
+            'history': [],  # ImprovementProject doesn't have status history yet, but we maintain consistency
+            'completed_tasks_count': completed_tasks_count,
+            'total_tasks_count': total_tasks_count,
+        })
+
+        return context

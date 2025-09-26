@@ -193,7 +193,7 @@ function saveIssue() {
             showSuccessMessage('Issue created successfully!', 'issue');
             setTimeout(() => {
                 currentModal.hide();
-                // Refresh the page or update the relevant section
+                // Refresh page to show new issue in lists
                 location.reload();
             }, 1500);
         } else {
@@ -259,7 +259,7 @@ function saveAction() {
             showSuccessMessage('Action created successfully!', 'action');
             setTimeout(() => {
                 currentModal.hide();
-                // Refresh the page or update the relevant section
+                // Refresh page to show new action in lists
                 location.reload();
             }, 1500);
         } else {
@@ -350,26 +350,64 @@ function showSuccessMessage(message, formType) {
  * Setup cancel confirmation
  */
 function setupCancelConfirmation() {
-    // Add confirmation for cancel buttons
-    const modals = ['newIssueModal', 'newActionModal'];
+    console.log('🔧 Setting up cancel confirmation - removing data-bs-dismiss attributes');
+    // Add confirmation for cancel buttons - expanded to cover all form modals
+    const modals = [
+        'newIssueModal',
+        'newActionModal',
+        'subActionModal',
+        'addCoordinatorModal',
+        'editCoordinatorModal',
+        'editActionModal',
+        'editProjectModal'
+    ];
 
     modals.forEach(modalId => {
         const modal = document.getElementById(modalId);
         if (modal) {
-            const cancelBtn = modal.querySelector('[data-bs-dismiss="modal"]');
-            if (cancelBtn) {
-                cancelBtn.addEventListener('click', function(e) {
+            // Find all buttons that would normally dismiss the modal
+            const dismissButtons = modal.querySelectorAll('[data-bs-dismiss="modal"], .btn-close');
+            console.log(`🔧 Found ${dismissButtons.length} dismiss buttons in ${modalId}`);
+
+            dismissButtons.forEach((btn, index) => {
+                // Skip if button already has onclick handlers (avoid conflicts)
+                if (btn.hasAttribute('onclick')) {
+                    console.log(`🔧 Skipping button ${index + 1} - already has onclick handler`);
+                    return;
+                }
+
+                // Remove the data-bs-dismiss attribute to prevent automatic closing
+                btn.removeAttribute('data-bs-dismiss');
+                console.log(`🔧 Removed data-bs-dismiss from button ${index + 1}`);
+
+                btn.addEventListener('click', function(e) {
+                    console.log('🔍 Manual close handler triggered');
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+
                     const formId = modalId.replace('Modal', 'Form');
                     const form = document.getElementById(formId);
 
                     if (form && isFormDirty(form)) {
-                        e.preventDefault();
-                        if (confirm('You will lose the data entered. Do you wish to continue?')) {
-                            currentModal.hide();
+                        console.log('🔍 Form is dirty, showing confirm dialog');
+                        const userWantsToClose = confirm('You will lose the data entered. Do you wish to continue?');
+                        console.log('🔍 User wants to close:', userWantsToClose);
+
+                        if (userWantsToClose) {
+                            console.log('🔍 User confirmed - closing modal manually');
+                            const modalInstance = bootstrap.Modal.getInstance(modal) || new bootstrap.Modal(modal);
+                            modalInstance.hide();
+                        } else {
+                            console.log('🔍 User cancelled - modal should stay open');
+                            return false;
                         }
+                    } else {
+                        console.log('🔍 Form not dirty - closing modal normally');
+                        const modalInstance = bootstrap.Modal.getInstance(modal) || new bootstrap.Modal(modal);
+                        modalInstance.hide();
                     }
                 });
-            }
+            });
         }
     });
 }
@@ -380,7 +418,8 @@ function setupCancelConfirmation() {
 function isFormDirty(form) {
     const inputs = form.querySelectorAll('input, textarea, select');
     for (let input of inputs) {
-        if (input.value && input.value.trim() !== '') {
+        const value = input.value ? input.value.trim() : '';
+        if (value !== '' && input.name !== 'csrfmiddlewaretoken') {
             return true;
         }
     }

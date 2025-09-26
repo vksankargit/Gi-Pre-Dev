@@ -22,6 +22,7 @@ urlpatterns = [
     path('issue/create/', views.IssueCreateView.as_view(), name='issue_create'),
     path('project/create/', views.ProjectCreateView.as_view(), name='project_create'),
     path('project/<int:pk>/edit/', views.ProjectEditView.as_view(), name='project_edit'),
+    path('improvement-project/<int:pk>/edit/', views.ImprovementProjectEditView.as_view(), name='improvement_project_edit'),
     path('project/<int:pk>/reassign/', views.ProjectReassignView.as_view(), name='project_reassign'),
     path('project/<int:pk>/toggle-complete/', views.ProjectToggleCompleteView.as_view(), name='project_toggle_complete'),
     path('project/<int:pk>/history/', views.ProjectHistoryView.as_view(), name='project_history'),

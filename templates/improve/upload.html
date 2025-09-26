@@ -38,6 +38,12 @@
                                     <option value="{{ team.id }}">{{ team.name }}</option>
                                     {% endfor %}
                                 </select>
+                                {% if not managed_teams %}
+                                <div class="form-text text-warning">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    No teams available. You need to be a team manager or contact an administrator.
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -49,6 +55,12 @@
                                     <option value="{{ fy.id }}">{{ fy.year }}</option>
                                     {% endfor %}
                                 </select>
+                                {% if not financial_years %}
+                                <div class="form-text text-warning">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    No financial years available. Contact an administrator to set up financial years.
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -75,7 +87,7 @@
                     </div>
 
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="uploadBtn" {% if not managed_teams or not financial_years %}disabled{% endif %}>
                             <i class="fas fa-upload me-2"></i>Upload & Process
                         </button>
                         <a href="{% url 'improve:download_template' %}" class="btn btn-outline-secondary">
@@ -84,6 +96,14 @@
                         <a href="{% url 'improve:dashboard' %}" class="btn btn-outline-primary">
                             <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
                         </a>
+                    </div>
+
+                    <!-- Upload Progress -->
+                    <div id="uploadProgress" class="mt-3" style="display: none;">
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <small class="text-muted mt-1 d-block">Uploading and processing file...</small>
                     </div>
                 </form>
             </div>
@@ -120,4 +140,108 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const fileInput = document.getElementById('file');
+
+    // File validation
+    fileInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            // Check file size (50MB limit)
+            const maxSize = 50 * 1024 * 1024; // 50MB in bytes
+            if (file.size > maxSize) {
+                alert('File size must be less than 50MB. Please choose a smaller file.');
+                this.value = '';
+                return;
+            }
+
+            // Check file type
+            const allowedTypes = ['.xlsx', '.xls'];
+            const fileName = file.name.toLowerCase();
+            const isValidType = allowedTypes.some(type => fileName.endsWith(type));
+
+            if (!isValidType) {
+                alert('Please select an Excel file (.xlsx or .xls).');
+                this.value = '';
+                return;
+            }
+
+            // Show file info
+            const fileInfo = document.createElement('small');
+            fileInfo.className = 'text-muted mt-1 d-block';
+            fileInfo.textContent = `Selected: ${file.name} (${formatFileSize(file.size)})`;
+
+            // Remove existing file info
+            const existingInfo = this.parentElement.querySelector('.file-info');
+            if (existingInfo) {
+                existingInfo.remove();
+            }
+
+            fileInfo.className += ' file-info';
+            this.parentElement.appendChild(fileInfo);
+        }
+    });
+
+    // Form submission handling
+    form.addEventListener('submit', function(e) {
+        // Check if button is disabled
+        if (uploadBtn.disabled && uploadBtn.textContent.includes('Upload & Process')) {
+            e.preventDefault();
+            alert('Upload is not available. Please ensure you have teams and financial years configured.');
+            return;
+        }
+
+        // Validate form fields
+        const team = document.getElementById('team').value;
+        const financialYear = document.getElementById('financial_year').value;
+        const quarter = document.getElementById('quarter').value;
+        const file = fileInput.files[0];
+
+        if (!team || !financialYear || !quarter || !file) {
+            e.preventDefault();
+            alert('Please fill in all required fields and select a file.');
+            return;
+        }
+
+        // Show upload progress
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+        uploadProgress.style.display = 'block';
+
+        // Simulate progress (since we can't track actual file upload progress easily with form submission)
+        let progress = 0;
+        const progressBar = uploadProgress.querySelector('.progress-bar');
+
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 15;
+            if (progress > 90) {
+                progress = 90;
+                clearInterval(progressInterval);
+            }
+            progressBar.style.width = progress + '%';
+        }, 200);
+
+        // Note: The form will submit normally after this, so the progress will be interrupted
+        // In a real implementation, you'd want to use AJAX for better UX
+    });
+
+    // Helper function to format file size
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+});
+</script>
 {% endblock %}

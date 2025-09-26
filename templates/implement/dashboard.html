@@ -317,24 +317,38 @@
                                             </div>
                                         </td>
                                         <td>
-                                            {% with project.status_history.first as latest_status %}
-                                            {% if latest_status %}
-                                                <span class="badge bg-{% if latest_status.status == 'completed' %}success{% elif latest_status.status == 'on_track' %}primary{% elif latest_status.status == 'at_risk' %}warning{% else %}danger{% endif %}">
-                                                    {{ latest_status.get_status_display }}
+                                            {% if project.project_type == 'Improvement' %}
+                                                {# Improvement projects store status directly #}
+                                                <span class="badge bg-{% if project.status == 'completed' %}success{% elif project.status == 'on_track' %}primary{% elif project.status == 'at_risk' %}warning{% elif project.status == 'danger' %}danger{% else %}secondary{% endif %}">
+                                                    {{ project.get_status_display }}
                                                 </span>
                                             {% else %}
-                                                <span class="badge bg-secondary">Not Set</span>
+                                                {# PPI projects use status_history #}
+                                                {% with project.status_history.first as latest_status %}
+                                                {% if latest_status %}
+                                                    <span class="badge bg-{% if latest_status.status == 'completed' %}success{% elif latest_status.status == 'on_track' %}primary{% elif latest_status.status == 'at_risk' %}warning{% else %}danger{% endif %}">
+                                                        {{ latest_status.get_status_display }}
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Not Set</span>
+                                                {% endif %}
+                                                {% endwith %}
                                             {% endif %}
-                                            {% endwith %}
                                         </td>
                                         <td>
-                                            {% with project.status_history.first as latest_status %}
-                                            {% if latest_status and latest_status.revised_due_date %}
-                                                {{ latest_status.revised_due_date|date:"M d, Y" }}
+                                            {% if project.project_type == 'Improvement' %}
+                                                {# Improvement projects don't have revised due dates yet #}
+                                                <span class="text-muted">-</span>
                                             {% else %}
-                                                -
+                                                {# PPI projects use status_history for revised due dates #}
+                                                {% with project.status_history.first as latest_status %}
+                                                {% if latest_status and latest_status.revised_due_date %}
+                                                    {{ latest_status.revised_due_date|date:"M d, Y" }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                                {% endwith %}
                                             {% endif %}
-                                            {% endwith %}
                                         </td>
                                         <td>
                                             {% if project.responsible_user == user %}
@@ -345,7 +359,7 @@
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
-                                                <button class="btn btn-outline-primary" onclick="editProject({{ project.id }})"
+                                                <button class="btn btn-outline-primary" onclick="editProject({{ project.id }}, '{{ project.project_type }}')"
                                                         data-bs-toggle="tooltip" title="Edit">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
@@ -361,7 +375,7 @@
                                                 </button>
                                                 {% endif %}
                                                 {% endif %}
-                                                <button class="btn btn-outline-info" onclick="viewProjectHistory({{ project.id }})"
+                                                <button class="btn btn-outline-info" onclick="viewProjectHistory({{ project.id }}, '{{ project.project_type }}')"
                                                         data-bs-toggle="tooltip" title="View History">
                                                     <i class="fas fa-history"></i>
                                                 </button>
@@ -516,9 +530,8 @@
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
-                                                <!-- Debug: Action ID = {{ action.id }} -->
                                                 {% if action.id and action.id > 0 %}
-                                                <button class="btn btn-outline-primary" onclick="editAction({{ action.id }})" title="Edit (ID: {{ action.id }})">
+                                                <button class="btn btn-outline-primary" onclick="editAction({{ action.id|unlocalize }})" title="Edit (ID: {{ action.id }})">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 {% else %}
@@ -526,19 +539,19 @@
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 {% endif %}
-                                                <button class="btn btn-outline-warning" onclick="reassignAction({{ action.id }})" title="Reassign">
+                                                <button class="btn btn-outline-warning" onclick="reassignAction({{ action.id|unlocalize }})" title="Reassign">
                                                     <i class="fas fa-user-edit"></i>
                                                 </button>
-                                                <button class="btn btn-outline-success" onclick="toggleActionComplete({{ action.id }})" title="Toggle Complete">
+                                                <button class="btn btn-outline-success" onclick="toggleActionComplete({{ action.id|unlocalize }})" title="Toggle Complete">
                                                     <i class="fas fa-check"></i>
                                                 </button>
-                                                <button class="btn btn-outline-danger" onclick="rejectAction({{ action.id }})" title="Reject">
+                                                <button class="btn btn-outline-danger" onclick="rejectAction({{ action.id|unlocalize }})" title="Reject">
                                                     <i class="fas fa-times"></i>
                                                 </button>
-                                                <button class="btn btn-outline-info" onclick="viewActionHistory({{ action.id }})" title="History">
+                                                <button class="btn btn-outline-info" onclick="viewActionHistory({{ action.id|unlocalize }})" title="History">
                                                     <i class="fas fa-history"></i>
                                                 </button>
-                                                <button class="btn btn-outline-secondary" onclick="viewSubActions({{ action.id }})" title="Sub Actions">
+                                                <button class="btn btn-outline-secondary" onclick="viewSubActions({{ action.id|unlocalize }})" title="Sub Actions">
                                                     <i class="fas fa-list"></i>
                                                 </button>
                                             </div>
@@ -639,6 +652,25 @@ function reassignParameter(paramId, paramType = 'gpi') {
 
 // Handle team selection to populate members
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔵 Dashboard DOMContentLoaded - Current URL:', window.location.href);
+    console.log('🔵 Page title:', document.title);
+
+    // Restore previously active tab if it exists
+    const savedActiveTab = localStorage.getItem('activeImplementTab');
+    if (savedActiveTab) {
+        console.log('🔵 Restoring saved active tab:', savedActiveTab);
+        // Clear the stored value
+        localStorage.removeItem('activeImplementTab');
+
+        // Activate the saved tab
+        const tabButton = document.getElementById(savedActiveTab);
+        if (tabButton) {
+            console.log('🔵 Found saved tab button, activating');
+            tabButton.click();
+        } else {
+            console.log('🔵 Saved tab button not found');
+        }
+    }
     const teamSelect = document.getElementById('reassignTeam');
     const memberSelect = document.getElementById('reassignMember');
 
@@ -826,7 +858,8 @@ function toggleProjectFields() {
 
 // Initialize the project form - moved to dashboard for global access
 function initializeProjectForm() {
-    console.log('Initializing project form');
+    console.log('🟠 Initializing project form - START');
+    console.log('🟠 Looking for form with ID: editProjectForm');
 
     // Add event listener to status dropdown
     const statusSelect = document.getElementById('editProjectStatus');
@@ -840,11 +873,24 @@ function initializeProjectForm() {
 
     // Handle form submission
     const form = document.getElementById('editProjectForm');
+    console.log('🟠 Form element found:', form);
     if (form) {
+        console.log('🟠 Adding submit event listener to form');
+
+        // Test if any other event listeners exist
+        console.log('🟠 Form onsubmit attribute:', form.onsubmit);
+        console.log('🟠 Form action:', form.action);
+        console.log('🟠 Form method:', form.method);
+
+        // Add multiple event listeners to catch any submission
         form.addEventListener('submit', function(e) {
+            console.log('🔴 SUBMIT EVENT FIRED - Form submission started');
             e.preventDefault();
+            e.stopImmediatePropagation();
+            console.log('🔴 Default prevented and propagation stopped');
 
             const formData = new FormData(this);
+            console.log('🔴 FormData created, action URL:', this.action);
 
             fetch(this.action, {
                 method: 'POST',
@@ -853,26 +899,173 @@ function initializeProjectForm() {
                     'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
                 }
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('🔴 Response received:', response.status, response.url);
+                return response.json();
+            })
             .then(data => {
+                console.log('🔴 Response data:', data);
                 if (data.success) {
-                    // Close modal and refresh the page or update UI
+                    // Close modal and refresh current page to show updated values
                     const modal = bootstrap.Modal.getInstance(document.getElementById('editProjectModal'));
                     modal.hide();
-                    location.reload(); // Refresh to show updated data
+                    console.log('🔴 Modal hidden');
+
+                    // Show success message and refresh to show updated project data
+                    alert('Project updated successfully!');
+                    console.log('🔴 About to reload page. Current URL:', window.location.href);
+
+                    // Store current active tab before reload
+                    const activeTab = document.querySelector('#implementTabs .nav-link.active');
+                    if (activeTab) {
+                        localStorage.setItem('activeImplementTab', activeTab.id);
+                        console.log('🔴 Stored active tab:', activeTab.id);
+                    }
+
+                    location.reload();
                 } else {
+                    console.log('🔴 Error in response:', data.error);
                     alert('Error: ' + (data.error || 'Unknown error occurred'));
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
+                console.error('🔴 Fetch error:', error);
                 alert('An error occurred while saving the project');
             });
-        });
-        console.log('Added form submit listener');
+        }, true); // Use capture phase
+
+        // Also add click listener to submit button for debugging
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (submitButton) {
+            console.log('🟠 Found submit button, adding click listener');
+            submitButton.addEventListener('click', function(e) {
+                console.log('🟢 SUBMIT BUTTON CLICKED');
+            });
+        } else {
+            console.log('🟠 No submit button found');
+        }
+
+        console.log('🟠 Added form submit listener successfully');
     } else {
-        console.error('Form not found');
+        console.error('🟠 ERROR: Form not found - editProjectForm element is null');
     }
+}
+
+// Initialize the improvement project form
+function initializeImprovementProjectForm() {
+    console.log('🟠 Initializing improvement project form - START');
+
+    // Add event listener to status dropdown
+    const statusSelect = document.getElementById('editImprovementProjectStatus');
+    if (statusSelect) {
+        statusSelect.addEventListener('change', toggleImprovementProjectFields);
+        console.log('🟠 Added change listener to improvement project status select');
+    }
+
+    // Set initial visibility based on current status
+    toggleImprovementProjectFields();
+
+    // Handle form submission
+    const form = document.getElementById('editImprovementProjectForm');
+    console.log('🟠 Improvement project form element found:', form);
+    if (form) {
+        console.log('🟠 Adding submit event listener to improvement project form');
+
+        // Add multiple event listeners to catch any submission
+        form.addEventListener('submit', function(e) {
+            console.log('🔴 IMPROVEMENT PROJECT SUBMIT EVENT FIRED');
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            console.log('🔴 Default prevented and propagation stopped');
+
+            const formData = new FormData(this);
+            console.log('🔴 FormData created, action URL:', this.action);
+
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => {
+                console.log('🔴 Response received:', response.status, response.url);
+                return response.json();
+            })
+            .then(data => {
+                console.log('🔴 Response data:', data);
+                if (data.success) {
+                    // Close modal and refresh current page to show updated values
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editImprovementProjectModal'));
+                    modal.hide();
+                    console.log('🔴 Modal hidden');
+
+                    // Show success message and refresh to show updated project data
+                    alert('Improvement project updated successfully!');
+                    console.log('🔴 About to reload page. Current URL:', window.location.href);
+
+                    // Store current active tab before reload
+                    const activeTab = document.querySelector('#implementTabs .nav-link.active');
+                    if (activeTab) {
+                        localStorage.setItem('activeImplementTab', activeTab.id);
+                        console.log('🔴 Stored active tab:', activeTab.id);
+                    }
+
+                    location.reload();
+                } else {
+                    console.log('🔴 Error in response:', data.error);
+                    alert('Error: ' + (data.error || 'Unknown error occurred'));
+                }
+            })
+            .catch(error => {
+                console.error('🔴 Fetch error:', error);
+                alert('An error occurred while saving the improvement project');
+            });
+        }, true); // Use capture phase
+
+        console.log('🟠 Added improvement project form submit listener successfully');
+    } else {
+        console.error('🟠 ERROR: Improvement project form not found');
+    }
+}
+
+// Toggle fields for improvement project based on status
+function toggleImprovementProjectFields() {
+    console.log('=== toggleImprovementProjectFields called ===');
+
+    const statusElement = document.getElementById('editImprovementProjectStatus');
+    const challengeGroup = document.getElementById('improvementChallengeGroup');
+
+    console.log('Elements found:');
+    console.log('- statusElement:', statusElement);
+    console.log('- challengeGroup:', challengeGroup);
+
+    if (!statusElement) {
+        console.error('Improvement project status element not found');
+        return;
+    }
+    if (!challengeGroup) {
+        console.error('Improvement project challenge group not found');
+        return;
+    }
+
+    const status = statusElement.value;
+    console.log('Current status:', status);
+
+    // Hide challenge field by default
+    challengeGroup.style.display = 'none';
+
+    // Show challenge field for at_risk and danger status
+    if (status === 'at_risk' || status === 'danger') {
+        console.log('Status is at_risk or danger - showing challenge field');
+        challengeGroup.style.display = 'block';
+    } else {
+        console.log('Status is not at_risk or danger - hiding challenge field');
+    }
+
+    console.log('Final states:');
+    console.log('- challengeGroup display:', challengeGroup.style.display);
+    console.log('=== End toggleImprovementProjectFields ===');
 }
 
 // Action Modal Functions
@@ -952,10 +1145,13 @@ function initializeActionForm() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Action updated successfully!');
+                    // Close modal and refresh to show updated values
                     const modal = bootstrap.Modal.getInstance(document.getElementById('editActionModal'));
                     modal.hide();
-                    location.reload(); // Refresh to show updated data
+
+                    // Show success message and refresh page to show updated data
+                    alert('Action updated successfully!');
+                    location.reload();
                 } else {
                     alert('Error updating action: ' + (data.error || 'Unknown error'));
                 }
@@ -977,9 +1173,16 @@ function createProject() {
 }
 
 
-function editProject(projectId) {
+function editProject(projectId, projectType) {
+    // Determine the correct URL based on project type
+    const editUrl = projectType === 'Improvement' ?
+        `/implement/improvement-project/${projectId}/edit/` :
+        `/implement/project/${projectId}/edit/`;
+
+    console.log(`🟡 editProject called with ID: ${projectId}, Type: ${projectType}, URL: ${editUrl}`);
+
     // Load the project edit modal content via AJAX
-    fetch(`/implement/project/${projectId}/edit/`, {
+    fetch(editUrl, {
         method: 'GET',
         headers: {
             'X-CSRFToken': getCookie('csrftoken'),
@@ -993,32 +1196,30 @@ function editProject(projectId) {
 
         // Initialize the form after DOM is ready
         setTimeout(() => {
-            console.log('Checking for initializeProjectForm function...');
-            if (typeof initializeProjectForm === 'function') {
-                console.log('Calling initializeProjectForm');
-                initializeProjectForm();
-            } else {
-                console.error('initializeProjectForm function not found');
-            }
+            console.log('🟡 setTimeout callback executed - checking for form initialization...');
 
-            // Also try to directly attach the event listener as backup
-            const statusSelect = document.getElementById('editProjectStatus');
-            if (statusSelect) {
-                console.log('Found status select, adding direct listener');
-                statusSelect.addEventListener('change', function() {
-                    console.log('Status changed to:', this.value);
-                    toggleProjectFields();
-                });
-                // Call once to set initial state
-                toggleProjectFields();
+            // Determine if this is PPI or Improvement project modal
+            const ppiModal = document.getElementById('editProjectModal');
+            const improvementModal = document.getElementById('editImprovementProjectModal');
+
+            if (ppiModal) {
+                console.log('🟡 PPI Project modal detected, initializing PPI form');
+                if (typeof initializeProjectForm === 'function') {
+                    initializeProjectForm();
+                } else {
+                    console.error('🟡 ERROR: initializeProjectForm function not found');
+                }
+                const modal = new bootstrap.Modal(ppiModal);
+                modal.show();
+            } else if (improvementModal) {
+                console.log('🟡 Improvement Project modal detected, initializing improvement form');
+                initializeImprovementProjectForm();
+                const modal = new bootstrap.Modal(improvementModal);
+                modal.show();
             } else {
-                console.error('Status select element not found');
+                console.error('🟡 ERROR: No modal found');
             }
         }, 200);
-
-        // Show the modal
-        const modal = new bootstrap.Modal(document.getElementById('editProjectModal'));
-        modal.show();
     })
     .catch(error => {
         console.error('Error loading project edit modal:', error);
@@ -1049,8 +1250,12 @@ function toggleProjectComplete(projectId) {
     }
 }
 
-function viewProjectHistory(projectId) {
-    window.location.href = `/implement/project/${projectId}/history/`;
+function viewProjectHistory(projectId, projectType) {
+    if (projectType === 'Improvement') {
+        window.location.href = `/improve/project/${projectId}/history/`;
+    } else {
+        window.location.href = `/implement/project/${projectId}/history/`;
+    }
 }
 
 function toggleProjectDetails(projectId) {
@@ -1557,6 +1762,8 @@ function getCookie(name) {
 <!-- Edit Project Modal Container -->
 <div id="editProjectModalContainer"></div>
 
+<!-- Edit Improvement Project Modal Container (same container as above, will hold either modal type) -->
+
 <!-- Include the issue and action modals -->
 {% include 'includes/new_issue_modal.html' %}
 {% include 'includes/new_action_modal.html' %}
@@ -1564,6 +1771,5 @@ function getCookie(name) {
 <!-- Edit Action Modal Container -->
 <div id="editActionModalContainer"></div>
 
-<!-- Include the common issue and action modal JavaScript -->
-<script src="{% static 'js/issue_action_modals.js' %}"></script>
+<!-- Issue and action modal JavaScript is now loaded globally in base.html -->
 {% endblock %}

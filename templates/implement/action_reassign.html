@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}Reassign Action - PRE System{% endblock %}
 
@@ -143,7 +144,7 @@ function loadTeamMembers() {
         assigneeSelect.innerHTML = '<option value="">Loading...</option>';
 
         // Fetch team members
-        fetch(`/api/teams/${teamId}/members/`)
+        fetch(`/api/team-members/${teamId}/`)
             .then(response => response.json())
             .then(data => {
                 assigneeSelect.innerHTML = '<option value="">Select Member</option>';
@@ -177,21 +178,21 @@ document.getElementById('reassignForm').addEventListener('submit', function(e) {
 
     const formData = new FormData(this);
 
-    fetch(`/implement/action/{{ action.id }}/reassign/`, {
+    fetch(`/implement/action/{{ action.id|unlocalize }}/reassign/`, {
         method: 'POST',
         body: formData,
         headers: {
-            'X-CSRFToken': getCookie('csrftoken')
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
         }
     })
-    .then(response => {
-        if (response.ok) {
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
             alert('Action reassigned successfully!');
             window.location.href = '{% url "implement:my_todo" %}';
         } else {
-            return response.text().then(text => {
-                throw new Error(text);
-            });
+            alert('Error reassigning action: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {

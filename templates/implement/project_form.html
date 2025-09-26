@@ -4,7 +4,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="editProjectModalLabel">Edit Project</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="confirmCancel(event)" aria-label="Close"></button>
             </div>
             <form method="post" id="editProjectForm" action="{% url 'implement:project_edit' object.pk %}">
                 {% csrf_token %}
@@ -79,7 +79,7 @@
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save me-2"></i>Save
                     </button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="confirmCancel()">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="confirmCancel(event)">
                         <i class="fas fa-times me-2"></i>Cancel
                     </button>
                 </div>
@@ -90,12 +90,34 @@
 
 <script>
 
-function confirmCancel() {
-    if (confirm('You will lose the data entered. Do you wish to continue – Yes / No')) {
-        // Close modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('editProjectModal'));
-        modal.hide();
+function confirmCancel(event) {
+    // Check if form has unsaved changes
+    const form = document.getElementById('editProjectForm');
+    const hasChanges = isFormDirty(form);
+
+    if (hasChanges) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (confirm('You will lose the data entered. Do you wish to continue?')) {
+            // Close modal - user clicked OK (wants to continue)
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editProjectModal'));
+            modal.hide();
+        }
     }
+    // If no changes, let the modal close normally
+}
+
+// Helper function to check if form is dirty
+function isFormDirty(form) {
+    if (!form) return false;
+    const inputs = form.querySelectorAll('input, textarea, select');
+    for (let input of inputs) {
+        if (input.type === 'hidden' || input.name === 'csrfmiddlewaretoken') continue;
+        if (input.value && input.value.trim() !== '' && input.value !== input.defaultValue) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function viewProjectHistory(projectId) {

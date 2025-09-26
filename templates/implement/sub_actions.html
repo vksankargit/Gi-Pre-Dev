@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}Sub Actions - PRE System{% endblock %}
 
@@ -72,13 +73,13 @@
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-primary" onclick="editSubAction({{ sub_action.id }})" title="Edit">
+                                            <button class="btn btn-outline-primary" onclick="editSubAction({{ sub_action.id|unlocalize }})" title="Edit">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            <button class="btn btn-outline-success" onclick="toggleSubActionComplete({{ sub_action.id }})" title="Toggle Complete">
+                                            <button class="btn btn-outline-success" onclick="toggleSubActionComplete({{ sub_action.id|unlocalize }})" title="Toggle Complete">
                                                 <i class="fas fa-check"></i>
                                             </button>
-                                            <button class="btn btn-outline-danger" onclick="deleteSubAction({{ sub_action.id }})" title="Delete">
+                                            <button class="btn btn-outline-danger" onclick="deleteSubAction({{ sub_action.id|unlocalize }})" title="Delete">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </div>
@@ -226,7 +227,7 @@
                         <select class="form-control" id="subActionTeam" name="team" required>
                             <option value="">Select Team</option>
                             {% for team in available_teams %}
-                            <option value="{{ team.id }}" {% if team.id == parent_action.team.id %}selected{% endif %}>{{ team.name }}</option>
+                            <option value="{{ team.id }}">{{ team.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -322,7 +323,7 @@ function editSubAction(subActionId) {
 function saveSubAction() {
     const form = document.getElementById('subActionForm');
     const formData = new FormData(form);
-    formData.append('parent_action_id', {{ parent_action.id }});
+    formData.append('parent_action_id', {{ parent_action.id|unlocalize }});
 
     const subActionId = document.getElementById('subActionId').value;
     const url = subActionId ? `/implement/action/${subActionId}/update/` : '/implement/action/create-sub/';
@@ -331,7 +332,8 @@ function saveSubAction() {
         method: 'POST',
         body: formData,
         headers: {
-            'X-CSRFToken': getCookie('csrftoken')
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
         }
     })
     .then(response => response.json())

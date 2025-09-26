@@ -8,6 +8,7 @@ urlpatterns = [
     path('upload/', views.ImprovementProjectUploadView.as_view(), name='upload'),
     path('download-template/', views.ImprovementProjectTemplateDownloadView.as_view(), name='download_template'),
     path('history/', views.ImprovementProjectHistoryView.as_view(), name='history'),
+    path('project/<int:pk>/history/', views.IndividualImprovementProjectHistoryView.as_view(), name='project_history'),
     path('download-file/<int:project_id>/', views.ImprovementProjectFileDownloadView.as_view(), name='download_file'),
     path('error-log/<int:project_id>/', views.ImprovementProjectErrorLogView.as_view(), name='error_log'),
 ]

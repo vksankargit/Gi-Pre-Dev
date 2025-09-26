@@ -21,7 +21,9 @@
       "Bash(netstat:*)",
       "Bash(tasklist:*)",
       "Bash(taskkill:*)",
-      "Bash(del check_financial_years.py create_next_fy.py)"
+      "Bash(del check_financial_years.py create_next_fy.py)",
+      "Bash(git commit:*)",
+      "Bash(git config:*)"
     ],
     "deny": [],
     "ask": []
