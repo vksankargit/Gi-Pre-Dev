@@ -21,8 +21,7 @@
                             <div class="d-flex align-items-center mb-2">
                                 <span class="badge bg-success me-2">D{{ decision.serial_number }}</span>
                                 <small class="text-muted">
-                                    Decided by {{ decision.created_by.get_full_name|default:decision.created_by.username }}
-                                    on {{ decision.created_at|date:"M d, Y g:i A" }}
+                                    Decision made on {{ decision.created_at|date:"M d, Y g:i A" }}
                                 </small>
                             </div>
                             <div class="decision-content">
@@ -199,6 +198,7 @@ function createDecision(event) {
 
     const formData = new FormData(event.target);
     formData.append('meeting_id', {{ meeting.pk }});
+    formData.append('action', 'add');
 
     fetch('{% url "reviews:decisions" meeting.pk %}', {
         method: 'POST',
@@ -260,9 +260,10 @@ function saveDecision(event, decisionId) {
 
     const formData = new FormData(event.target);
     formData.append('decision_id', decisionId);
+    formData.append('action', 'edit');
 
     fetch('{% url "reviews:decisions" meeting.pk %}', {
-        method: 'PUT',
+        method: 'POST',
         headers: {
             'X-CSRFToken': getCsrfToken()
         },
@@ -289,13 +290,16 @@ function saveDecision(event, decisionId) {
 
 function deleteDecision(decisionId) {
     if (confirm('Are you sure you want to delete this decision? This will renumber all subsequent decisions.')) {
+        const formData = new FormData();
+        formData.append('decision_id', decisionId);
+        formData.append('action', 'delete');
+
         fetch('{% url "reviews:decisions" meeting.pk %}', {
-            method: 'DELETE',
+            method: 'POST',
             headers: {
-                'X-CSRFToken': getCsrfToken(),
-                'Content-Type': 'application/json'
+                'X-CSRFToken': getCsrfToken()
             },
-            body: JSON.stringify({decision_id: decisionId})
+            body: formData
         })
         .then(response => response.json())
         .then(data => {
@@ -318,6 +322,7 @@ function moveDecision(decisionId, direction) {
         method: 'PATCH',
         headers: {
             'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -354,7 +359,6 @@ function copyDecisions() {
 
     {% for decision in decisions %}
     textToCopy += 'D{{ decision.serial_number }}. {{ decision.decision }}\n';
-    textToCopy += '    Decided by: {{ decision.created_by.get_full_name|default:decision.created_by.username }}\n';
     textToCopy += '    Date: {{ decision.created_at|date:"M d, Y g:i A" }}\n\n';
     {% endfor %}
 
@@ -395,7 +399,14 @@ function refreshDecisions() {
 }
 
 function getCsrfToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
 }
 
 // Initialize tooltips

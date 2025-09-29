@@ -2,36 +2,37 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h6 class="mb-0">
         <i class="fas fa-sticky-note me-2"></i>Review Notes
-        <span class="badge bg-secondary ms-2">{{ review_notes|length }} note{{ review_notes|length|pluralize }}</span>
+        <span class="badge bg-secondary ms-2">{{ notes|length }} note{{ notes|length|pluralize }}</span>
     </h6>
     <button class="btn btn-success btn-sm" onclick="addReviewNote()">
         <i class="fas fa-plus me-1"></i>Add Note
     </button>
 </div>
 
-{% if review_notes %}
+{% if notes %}
     <!-- Existing Review Notes -->
     <div class="card">
         <div class="card-body p-0">
             <div class="list-group list-group-flush">
-                {% for note in review_notes %}
+                {% for note in notes %}
                 <div class="list-group-item" id="note-{{ note.id }}">
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
                             <div class="d-flex align-items-center mb-2">
-                                <span class="badge bg-primary me-2">{{ note.serial_number }}</span>
+                                <span class="badge bg-primary me-2">{{ forloop.counter }}</span>
                                 <small class="text-muted">
-                                    Added by {{ note.created_by.get_full_name|default:note.created_by.username }}
+                                    {{ note.title }} - Added by {{ note.created_by.get_full_name|default:note.created_by.username }}
                                     on {{ note.created_at|date:"M d, Y g:i A" }}
                                 </small>
                             </div>
                             <div class="note-content">
-                                <p class="mb-0">{{ note.review_note|linebreaks }}</p>
+                                <p class="mb-0">{{ note.content|linebreaks }}</p>
                             </div>
                             <div class="note-edit-form" style="display: none;">
                                 <form onsubmit="saveNote(event, {{ note.id }})">
                                     <div class="mb-2">
-                                        <textarea class="form-control" name="review_note" rows="3" required>{{ note.review_note }}</textarea>
+                                        <input type="text" class="form-control mb-2" name="title" placeholder="Note title" value="{{ note.title }}" required>
+                                        <textarea class="form-control" name="review_note" rows="3" required>{{ note.content }}</textarea>
                                     </div>
                                     <div class="d-flex gap-2">
                                         <button type="submit" class="btn btn-primary btn-sm">
@@ -110,10 +111,13 @@
         <div class="card-body">
             <form onsubmit="createNote(event)">
                 <div class="mb-3">
+                    <label for="newNoteTitle" class="form-label">Note Title <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="newNoteTitle" name="title" placeholder="Enter note title..." required>
+                </div>
+                <div class="mb-3">
                     <label for="newNoteContent" class="form-label">Note Content <span class="text-danger">*</span></label>
                     <textarea class="form-control" id="newNoteContent" name="review_note" rows="4"
                               placeholder="Enter your review note here..." required></textarea>
-                    <div class="form-text">This note will be automatically assigned the next serial number.</div>
                 </div>
                 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-primary">
@@ -140,6 +144,7 @@ function addReviewNote() {
 
 function cancelAdd() {
     document.getElementById('addNoteForm').style.display = 'none';
+    document.getElementById('newNoteTitle').value = '';
     document.getElementById('newNoteContent').value = '';
 }
 
@@ -148,6 +153,7 @@ function createNote(event) {
 
     const formData = new FormData(event.target);
     formData.append('meeting_id', {{ meeting.pk }});
+    formData.append('action', 'add');
 
     fetch('{% url "reviews:review_notes" meeting.pk %}', {
         method: 'POST',
@@ -198,9 +204,12 @@ function cancelEdit(noteId) {
     editForm.style.display = 'none';
     buttons.style.display = 'flex';
 
-    // Reset textarea to original value
+    // Reset form fields to original values
+    const titleInput = editForm.querySelector('input[name=\"title\"]');
     const textarea = editForm.querySelector('textarea');
-    const originalText = content.querySelector('p').innerText.trim();
+    const originalTitle = titleInput.defaultValue;
+    const originalText = textarea.defaultValue;
+    titleInput.value = originalTitle;
     textarea.value = originalText;
 }
 
@@ -209,9 +218,10 @@ function saveNote(event, noteId) {
 
     const formData = new FormData(event.target);
     formData.append('note_id', noteId);
+    formData.append('action', 'edit');
 
     fetch('{% url "reviews:review_notes" meeting.pk %}', {
-        method: 'PUT',
+        method: 'POST',
         headers: {
             'X-CSRFToken': getCsrfToken()
         },
@@ -238,13 +248,16 @@ function saveNote(event, noteId) {
 
 function deleteNote(noteId) {
     if (confirm('Are you sure you want to delete this note? This will renumber all subsequent notes.')) {
+        const formData = new FormData();
+        formData.append('note_id', noteId);
+        formData.append('action', 'delete');
+
         fetch('{% url "reviews:review_notes" meeting.pk %}', {
-            method: 'DELETE',
+            method: 'POST',
             headers: {
-                'X-CSRFToken': getCsrfToken(),
-                'Content-Type': 'application/json'
+                'X-CSRFToken': getCsrfToken()
             },
-            body: JSON.stringify({note_id: noteId})
+            body: formData
         })
         .then(response => response.json())
         .then(data => {
@@ -267,6 +280,7 @@ function moveNote(noteId, direction) {
         method: 'PATCH',
         headers: {
             'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -309,7 +323,14 @@ function refreshNotes() {
 }
 
 function getCsrfToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
 }
 
 // Initialize tooltips

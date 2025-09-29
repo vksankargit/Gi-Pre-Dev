@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.utils import timezone
 from datetime import date, datetime
 from calendar import monthrange
+import json
 
 from .models import ReviewMeeting, ReviewCommitment, ReviewNote, ReviewActionItem, ReviewDecision
 from organizations.models import Team
@@ -730,6 +731,54 @@ class ReviewNotesView(LoginRequiredMixin, TemplateView):
 
         return JsonResponse({'success': True})
 
+    def patch(self, request, pk):
+        meeting = get_object_or_404(ReviewMeeting, pk=pk)
+        try:
+            data = json.loads(request.body)
+            action = data.get('action')
+
+            if action == 'move':
+                note_id = data.get('note_id')
+                direction = data.get('direction')
+
+                try:
+                    note = meeting.review_notes.get(id=note_id)
+                    notes = list(meeting.review_notes.all().order_by('created_at', 'id'))
+                    current_index = notes.index(note)
+
+                    if direction == 'up' and current_index > 0:
+                        # Swap creation times with previous note
+                        prev_note = notes[current_index - 1]
+                        note.created_at, prev_note.created_at = prev_note.created_at, note.created_at
+                        note.save()
+                        prev_note.save()
+                    elif direction == 'down' and current_index < len(notes) - 1:
+                        # Swap creation times with next note
+                        next_note = notes[current_index + 1]
+                        note.created_at, next_note.created_at = next_note.created_at, note.created_at
+                        note.save()
+                        next_note.save()
+                    elif direction == 'top' and current_index > 0:
+                        # Move to top - set creation time before the first note
+                        first_note = notes[0]
+                        note.created_at = first_note.created_at - timezone.timedelta(seconds=1)
+                        note.save()
+                    elif direction == 'bottom' and current_index < len(notes) - 1:
+                        # Move to bottom - set creation time after the last note
+                        last_note = notes[-1]
+                        note.created_at = last_note.created_at + timezone.timedelta(seconds=1)
+                        note.save()
+
+                    return JsonResponse({'success': True})
+                except ReviewNote.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Note not found'})
+
+            return JsonResponse({'success': False, 'error': 'Invalid action'})
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Invalid JSON'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
 
 class DecisionsView(LoginRequiredMixin, TemplateView):
     """Decisions popup as per PRD"""
@@ -790,6 +839,105 @@ class DecisionsView(LoginRequiredMixin, TemplateView):
                 pass
 
         return JsonResponse({'success': True})
+
+    def patch(self, request, pk):
+        meeting = get_object_or_404(ReviewMeeting, pk=pk)
+        try:
+            data = json.loads(request.body)
+            action = data.get('action')
+
+            if action == 'move':
+                decision_id = data.get('decision_id')
+                direction = data.get('direction')
+
+                try:
+                    decision = meeting.decisions.get(id=decision_id)
+                    decisions = list(meeting.decisions.all().order_by('serial_number'))
+                    current_index = decisions.index(decision)
+
+                    if direction == 'up' and current_index > 0:
+                        # Swap serial numbers with previous decision using temporary value
+                        prev_decision = decisions[current_index - 1]
+                        temp_serial = 9999  # Temporary serial number
+
+                        current_serial = decision.serial_number
+                        prev_serial = prev_decision.serial_number
+
+                        # Move current decision to temp position
+                        decision.serial_number = temp_serial
+                        decision.save()
+
+                        # Move previous decision to current position
+                        prev_decision.serial_number = current_serial
+                        prev_decision.save()
+
+                        # Move current decision to previous position
+                        decision.serial_number = prev_serial
+                        decision.save()
+
+                    elif direction == 'down' and current_index < len(decisions) - 1:
+                        # Swap serial numbers with next decision using temporary value
+                        next_decision = decisions[current_index + 1]
+                        temp_serial = 9999  # Temporary serial number
+
+                        current_serial = decision.serial_number
+                        next_serial = next_decision.serial_number
+
+                        # Move current decision to temp position
+                        decision.serial_number = temp_serial
+                        decision.save()
+
+                        # Move next decision to current position
+                        next_decision.serial_number = current_serial
+                        next_decision.save()
+
+                        # Move current decision to next position
+                        decision.serial_number = next_serial
+                        decision.save()
+
+                    elif direction == 'top' and current_index > 0:
+                        # Move to top - shift all decisions down by 1
+                        original_serial = decision.serial_number
+                        # First move current decision to temporary position
+                        decision.serial_number = 9999
+                        decision.save()
+
+                        # Shift all decisions with serial < original_serial down by 1
+                        for d in decisions[:current_index]:
+                            d.serial_number += 1
+                            d.save()
+
+                        # Move decision to position 1
+                        decision.serial_number = 1
+                        decision.save()
+
+                    elif direction == 'bottom' and current_index < len(decisions) - 1:
+                        # Move to bottom - shift all decisions up by 1
+                        original_serial = decision.serial_number
+                        max_serial = len(decisions)
+
+                        # First move current decision to temporary position
+                        decision.serial_number = 9999
+                        decision.save()
+
+                        # Shift all decisions with serial > original_serial up by 1
+                        for d in decisions[current_index + 1:]:
+                            d.serial_number -= 1
+                            d.save()
+
+                        # Move decision to bottom position
+                        decision.serial_number = max_serial
+                        decision.save()
+
+                    return JsonResponse({'success': True})
+                except ReviewDecision.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Decision not found'})
+
+            return JsonResponse({'success': False, 'error': 'Invalid action'})
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Invalid JSON'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
 
 
 class ActionItemPopupView(LoginRequiredMixin, TemplateView):
