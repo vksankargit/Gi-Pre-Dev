@@ -38,7 +38,7 @@
 
                     <div class="mb-3">
                         <label for="team" class="form-label">Select Team <span class="text-danger">*</span></label>
-                        <select class="form-control" id="team" name="team" onchange="loadTeamMembers()" required>
+                        <select class="form-control" id="team" name="team" required>
                             <option value="">Choose Team</option>
                             {% for team in teams %}
                             <option value="{{ team.id }}">{{ team.name }}</option>
@@ -48,7 +48,7 @@
 
                     <div class="mb-3">
                         <label for="assigned_to" class="form-label">Assign To <span class="text-danger">*</span></label>
-                        <select class="form-control" id="assigned_to" name="assigned_to" required disabled>
+                        <select class="form-control" id="assigned_to" name="assigned_to" required>
                             <option value="">Select team first</option>
                         </select>
                     </div>
@@ -133,72 +133,89 @@
 </div>
 
 <script>
-function loadTeamMembers() {
+function loadReassignTeamMembers() {
     const teamId = document.getElementById('team').value;
     const assigneeSelect = document.getElementById('assigned_to');
     const reassignBtn = document.getElementById('reassignBtn');
 
     if (teamId) {
-        // Enable the assignee dropdown
-        assigneeSelect.disabled = false;
+        // Show loading state
         assigneeSelect.innerHTML = '<option value="">Loading...</option>';
 
-        // Fetch team members
-        fetch(`/api/team-members/${teamId}/`)
+        // Fetch team members for reassignment
+        fetch(`/api/team-members-reassign/${teamId}/`)
             .then(response => response.json())
             .then(data => {
-                assigneeSelect.innerHTML = '<option value="">Select Member</option>';
-                data.members.forEach(member => {
-                    const option = document.createElement('option');
-                    option.value = member.id;
-                    option.textContent = `${member.name} (${member.email})`;
-                    assigneeSelect.appendChild(option);
-                });
+                if (data.success && data.members && data.members.length > 0) {
+                    assigneeSelect.innerHTML = '<option value="">Select Member</option>';
+                    data.members.forEach(member => {
+                        const option = document.createElement('option');
+                        option.value = member.id;
+                        option.textContent = `${member.name} (${member.email})`;
+                        assigneeSelect.appendChild(option);
+                    });
+                } else {
+                    assigneeSelect.innerHTML = '<option value="">No members available</option>';
+                }
             })
             .catch(error => {
                 console.error('Error loading team members:', error);
                 assigneeSelect.innerHTML = '<option value="">Error loading members</option>';
             });
     } else {
-        assigneeSelect.disabled = true;
         assigneeSelect.innerHTML = '<option value="">Select team first</option>';
         reassignBtn.disabled = true;
     }
 }
 
-// Enable reassign button when assignee is selected
-document.getElementById('assigned_to').addEventListener('change', function() {
-    const reassignBtn = document.getElementById('reassignBtn');
-    reassignBtn.disabled = !this.value;
-});
+// Wait for DOM to be ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Attach team dropdown change event
+    const teamSelect = document.getElementById('team');
+    if (teamSelect) {
+        teamSelect.addEventListener('change', loadReassignTeamMembers);
+    }
 
-// Form submission
-document.getElementById('reassignForm').addEventListener('submit', function(e) {
-    e.preventDefault();
+    // Enable reassign button when assignee is selected
+    const assigneeSelect = document.getElementById('assigned_to');
+    if (assigneeSelect) {
+        assigneeSelect.addEventListener('change', function() {
+            const reassignBtn = document.getElementById('reassignBtn');
+            reassignBtn.disabled = !this.value;
+        });
+    }
 
-    const formData = new FormData(this);
+    // Form submission
+    const reassignForm = document.getElementById('reassignForm');
+    if (reassignForm) {
+        reassignForm.addEventListener('submit', function(e) {
+            e.preventDefault();
 
-    fetch(`/implement/action/{{ action.id|unlocalize }}/reassign/`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Action reassigned successfully!');
-            window.location.href = '{% url "implement:my_todo" %}';
-        } else {
-            alert('Error reassigning action: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error reassigning action: ' + error.message);
-    });
+            const formData = new FormData(this);
+
+            fetch(`/implement/action/{{ action.id|unlocalize }}/reassign/`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Action reassigned successfully!');
+                    window.location.href = '{% url "implement:my_todo" %}';
+                } else {
+                    alert('Error reassigning action: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error reassigning action: ' + error.message);
+            });
+        });
+    }
 });
 
 // CSRF token helper

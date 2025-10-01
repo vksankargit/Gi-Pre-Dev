@@ -12,6 +12,7 @@ from .models import ProjectStatus, Action, Issue, ActionHistory
 from plans.models import PPIProject, FPIParameter, GPIParameter, GPIMilestone, FPIMilestone, PPITask, FinancialYear
 from improve.models import ImprovementProject, ImprovementTask
 from organizations.models import Team, TeamMember
+from accounts.utils import get_effective_user
 
 
 class ImplementDashboardView(LoginRequiredMixin, TemplateView):
@@ -22,7 +23,7 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         import calendar
 
         context = super().get_context_data(**kwargs)
-        user = self.request.user
+        user = get_effective_user(self.request)
 
         # Get current date and calculate week info as per PRD format
         today = date.today()
@@ -307,11 +308,11 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
 
 class MyNumbersView(LoginRequiredMixin, TemplateView):
     template_name = 'implement/my_numbers.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.request.user
-        
+        user = get_effective_user(self.request)
+
         # Get current week/month numbers
         weekly_numbers_qs = GPIParameter.objects.filter(
             responsible_user=user,
@@ -359,7 +360,7 @@ class MyNumbersView(LoginRequiredMixin, TemplateView):
                 name = param.sub_head
             else:
                 name = param.name
-            print(f"  {name}: last_month_actual={param.last_month_actual}, current_month_plan={param.current_month_plan}")
+            print(f"  {name}: last_month_actual={param.last_month_actual}, current_month_plan={param.current_month_plan}, last_month_goal={param.last_month_goal}")
 
         context.update({
             'weekly_numbers': weekly_numbers,
@@ -379,7 +380,7 @@ class SaveNumberView(LoginRequiredMixin, TemplateView):
             value = request.POST.get('value', '').strip()
 
             # Determine if this is a numeric or text field
-            numeric_fields = ['last_week_actual', 'current_week_plan', 'last_month_actual', 'current_month_plan']
+            numeric_fields = ['last_week_actual', 'last_week_goal', 'current_week_plan', 'last_month_actual', 'last_month_goal', 'current_month_plan']
             text_fields = ['explanation']
 
             if field in numeric_fields:
@@ -399,7 +400,7 @@ class SaveNumberView(LoginRequiredMixin, TemplateView):
 
             if data_type == 'gpi':
                 param = get_object_or_404(GPIParameter, id=param_id, responsible_user=request.user)
-                if field in ['last_week_actual', 'current_week_plan', 'last_month_actual', 'current_month_plan', 'explanation']:
+                if field in ['last_week_actual', 'last_week_goal', 'current_week_plan', 'last_month_actual', 'last_month_goal', 'current_month_plan', 'explanation']:
                     old_value = getattr(param, field, 'NOT_SET')
                     setattr(param, field, value)
                     param.save()
@@ -410,7 +411,7 @@ class SaveNumberView(LoginRequiredMixin, TemplateView):
 
             elif data_type == 'fpi':
                 param = get_object_or_404(FPIParameter, id=param_id, responsible_user=request.user)
-                if field in ['last_month_actual', 'current_month_plan', 'explanation']:
+                if field in ['last_month_actual', 'last_month_goal', 'current_month_plan', 'explanation']:
                     old_value = getattr(param, field, 'NOT_SET')
                     setattr(param, field, value)
                     param.save()
@@ -472,36 +473,97 @@ class ReassignParameterView(LoginRequiredMixin, View):
 
 class ReassignTaskView(LoginRequiredMixin, View):
     def post(self, request):
+        print("*" * 80)
+        print("REASSIGN TASK VIEW POST METHOD CALLED")
+        print("*" * 80)
+
+        import logging
+        logger = logging.getLogger(__name__)
+
         try:
             task_id = request.POST.get('entity_id')
             member_id = request.POST.get('member_id')
 
+            print(f"task_id={task_id}, member_id={member_id}, user={request.user.get_full_name()}")
+
+            logger.info(f"=== REASSIGN TASK START === task_id={task_id}, member_id={member_id}, user={request.user.get_full_name()}")
+
             if not all([task_id, member_id]):
+                logger.error("Missing required parameters")
                 return JsonResponse({'success': False, 'error': 'Missing required parameters'})
 
             # Get the new responsible user
             from django.contrib.auth import get_user_model
             User = get_user_model()
             new_user = get_object_or_404(User, id=member_id)
+            logger.info(f"New user found: {new_user.get_full_name()} (ID: {new_user.id})")
 
             # Get the task and ensure only the project owner can reassign
             from plans.models import PPITask
             task = get_object_or_404(PPITask, id=task_id)
+            logger.info(f"Task found: {task.id}, currently assigned to: {task.assigned_to.get_full_name() if task.assigned_to else 'None'} (ID: {task.assigned_to.id if task.assigned_to else 'None'})")
 
             # Check if the current user is the project owner
             if task.project.responsible_user != request.user:
+                logger.error(f"Permission denied: user {request.user.get_full_name()} is not project owner")
                 return JsonResponse({'success': False, 'error': 'Only project owner can reassign tasks'})
 
             # Reassign the task
+            old_assignee = task.assigned_to
             task.assigned_to = new_user
             task.save()
+            logger.info(f"Task {task.id} saved with new assignee: {new_user.get_full_name()}")
 
+            # Verify the save
+            task.refresh_from_db()
+            logger.info(f"Task {task.id} after refresh: assigned_to={task.assigned_to.get_full_name()} (ID: {task.assigned_to.id})")
+
+            # Get or create the corresponding Action for this task
+            try:
+                action = Action.objects.get(ppi_task=task)
+                logger.info(f"Found existing action {action.id} for task {task.id}, currently assigned to: {action.assigned_to.get_full_name()} (ID: {action.assigned_to.id})")
+
+                # Update the existing action
+                action.assigned_to = new_user
+                action.team = task.project.quarterly_plan.team
+                action.save()
+                logger.info(f"Action {action.id} saved with new assignee")
+
+                # Verify the save
+                action.refresh_from_db()
+                logger.info(f"Action {action.id} after refresh: assigned_to={action.assigned_to.get_full_name()} (ID: {action.assigned_to.id})")
+
+                # Create history entry
+                ActionHistory.objects.create(
+                    action=action,
+                    status=action.status,
+                    comments=f"Task reassigned from {old_assignee.get_full_name()} to {new_user.get_full_name()}",
+                    updated_by=request.user
+                )
+                logger.info(f"Created ActionHistory entry for action {action.id}")
+            except Action.DoesNotExist:
+                logger.info(f"No existing action found for task {task.id}, creating new one")
+                # Create a new action for this task
+                action = Action.objects.create(
+                    team=task.project.quarterly_plan.team,
+                    source='ppi',
+                    ppi_task=task,
+                    action=f"Week {task.week_number}: {task.task_description}",
+                    priority='medium',
+                    assigned_to=new_user,
+                    original_due_date=task.project.end_date if task.project.end_date else timezone.now().date(),
+                    created_by=request.user
+                )
+                logger.info(f"Created new action {action.id} for task {task.id}")
+
+            logger.info(f"=== REASSIGN TASK SUCCESS === Task {task.id} reassigned to {new_user.get_full_name()}")
             return JsonResponse({
                 'success': True,
                 'message': f'Task successfully reassigned to {new_user.get_full_name()}'
             })
 
         except Exception as e:
+            logger.exception(f"=== REASSIGN TASK ERROR === {str(e)}")
             return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -549,13 +611,21 @@ class MyTodoView(LoginRequiredMixin, TemplateView):
     template_name = 'implement/my_todo.html'
 
     def get_context_data(self, **kwargs):
+        from django.db.models import Q
         context = super().get_context_data(**kwargs)
-        user = self.request.user
+        user = get_effective_user(self.request)
 
-        # Get actions assigned to user
+        # Get actions assigned to user OR created by user OR owned via project
+        # This includes:
+        # 1. Actions assigned to the user
+        # 2. Actions created by the user (delegated tasks)
+        # 3. Actions linked to PPI tasks where user owns the project
         actions = Action.objects.filter(
-            assigned_to=user
-        ).select_related('team', 'created_by').order_by('original_due_date', '-created_at')
+            Q(assigned_to=user) |
+            Q(created_by=user) |
+            Q(ppi_task__project__responsible_user=user) |
+            Q(improvement_task__project__responsible_user=user)
+        ).distinct().select_related('team', 'created_by', 'assigned_to', 'ppi_task__project', 'improvement_task__project').order_by('original_due_date', '-created_at')
 
         # Actions are filtered and ready for My To Do template
 
@@ -709,15 +779,23 @@ class ActionReassignView(LoginRequiredMixin, TemplateView):
 
     def post(self, request, pk):
         """Handle action reassignment"""
+        import logging
+        logger = logging.getLogger(__name__)
+
         action = get_object_or_404(Action, pk=pk)
+        logger.info(f"Reassigning action {pk}. Current assignee: {action.assigned_to.get_full_name()} (ID: {action.assigned_to.id})")
 
         team_id = request.POST.get('team')
         assigned_to_id = request.POST.get('assigned_to')
         reassignment_reason = request.POST.get('reassignment_reason', '')
         notify_assignee = request.POST.get('notify_assignee') == 'on'
 
+        logger.info(f"POST data - team_id: {team_id}, assigned_to_id: {assigned_to_id}")
+        logger.info(f"All POST data: {dict(request.POST)}")
+
         # Validate required fields
         if not team_id or not assigned_to_id:
+            logger.error("Missing required fields")
             return JsonResponse({
                 'success': False,
                 'error': 'Team and assignee are required'
@@ -731,10 +809,15 @@ class ActionReassignView(LoginRequiredMixin, TemplateView):
             new_team = get_object_or_404(Team, pk=team_id)
             new_assignee = get_object_or_404(User, pk=assigned_to_id)
 
+            logger.info(f"New team: {new_team.name} (ID: {new_team.id})")
+            logger.info(f"New assignee: {new_assignee.get_full_name()} (ID: {new_assignee.id})")
+
             # Update the action
             action.team = new_team
             action.assigned_to = new_assignee
             action.save()
+
+            logger.info(f"Action saved. New assignee: {action.assigned_to.get_full_name()} (ID: {action.assigned_to.id})")
 
             # Create history entry for reassignment
             from .models import ActionHistory
@@ -744,6 +827,8 @@ class ActionReassignView(LoginRequiredMixin, TemplateView):
                 comments=f"Reassigned to {new_assignee.get_full_name()} in {new_team.name}. {reassignment_reason}".strip(),
                 updated_by=request.user
             )
+
+            logger.info("Reassignment completed successfully")
 
             return JsonResponse({
                 'success': True,
@@ -1059,7 +1144,7 @@ class ImprovementProjectEditView(LoginRequiredMixin, View):
             'status_choices': ImprovementProject.STATUS_CHOICES,
         }
 
-        return render(request, 'implement/improvement_project_form.html', context)
+        return render(request, 'implement/unified_project_form.html', context)
 
     def post(self, request, pk):
         """Handle the modal form submission for improvement project"""
@@ -1090,7 +1175,26 @@ class ImprovementProjectEditView(LoginRequiredMixin, View):
             })
 
         try:
-            # Update project status directly (no separate status history table for improvements)
+            # Import the new status model
+            from improve.models import ImprovementProjectStatus
+
+            # Create a new status history entry
+            revised_due_date_obj = None
+            if revised_due_date:
+                from datetime import datetime
+                revised_due_date_obj = datetime.strptime(revised_due_date, '%Y-%m-%d').date()
+
+            ImprovementProjectStatus.objects.create(
+                project=project,
+                status=status,
+                completion_percentage=0,  # You might want to add this field to the form later
+                revised_due_date=revised_due_date_obj,
+                challenge=challenge,
+                comments=comments,
+                updated_by=request.user
+            )
+
+            # Also update the project's current status for consistency
             project.status = status
             project.save()
 
@@ -1119,7 +1223,7 @@ class ProjectEditView(LoginRequiredMixin, View):
             'status_choices': ProjectStatus.STATUS_CHOICES,
         }
 
-        return render(request, 'implement/project_form.html', context)
+        return render(request, 'implement/unified_project_form.html', context)
 
     def post(self, request, pk):
         """Handle the modal form submission"""
@@ -1165,8 +1269,15 @@ class ProjectEditView(LoginRequiredMixin, View):
 class ProjectReassignView(LoginRequiredMixin, View):
     template_name = 'implement/project_reassign.html'
 
+    def get_project(self, pk):
+        """Get project from either PPIProject or ImprovementProject"""
+        try:
+            return get_object_or_404(PPIProject, pk=pk)
+        except:
+            return get_object_or_404(ImprovementProject, pk=pk)
+
     def get(self, request, pk):
-        project = get_object_or_404(PPIProject, pk=pk)
+        project = self.get_project(pk)
         from django.contrib.auth import get_user_model
         User = get_user_model()
 
@@ -1184,7 +1295,7 @@ class ProjectReassignView(LoginRequiredMixin, View):
         return render(request, self.template_name, context)
 
     def post(self, request, pk):
-        project = get_object_or_404(PPIProject, pk=pk)
+        project = self.get_project(pk)
 
         new_responsible_user_id = request.POST.get('responsible_user')
         team_id = request.POST.get('team')
@@ -1298,11 +1409,19 @@ class ProjectToggleCompleteView(LoginRequiredMixin, TemplateView):
 
 
 class ProjectHistoryView(LoginRequiredMixin, TemplateView):
-    template_name = 'implement/project_history.html'
+    template_name = 'implement/unified_project_history.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        project = get_object_or_404(PPIProject, pk=kwargs['pk'])
+
+        # Try to get either PPI or Improvement project
+        project_id = kwargs['pk']
+        project = None
+
+        try:
+            project = get_object_or_404(PPIProject, pk=project_id)
+        except:
+            project = get_object_or_404(ImprovementProject, pk=project_id)
 
         # Calculate completed tasks count
         completed_tasks_count = project.tasks.filter(is_completed=True).count() if hasattr(project, 'tasks') and project.tasks.exists() else 0

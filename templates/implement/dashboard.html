@@ -72,10 +72,10 @@
                                             <th>Team</th>
                                             <th>GPI (including unit of measure)</th>
                                             <th>Last Week Budget</th>
-                                            <th>Last Week Plan</th>
+                                            <th>Last Week Goal</th>
                                             <th>Last Week Actual</th>
                                             <th>Current Week Budget</th>
-                                            <th>Current Week Plan</th>
+                                            <th>Current Week Goal</th>
                                             <th>Comments</th>
                                             <th>Assigned To</th>
                                             <th>Actions</th>
@@ -158,10 +158,10 @@
                                             <th>Team</th>
                                             <th>FPI/GPI</th>
                                             <th>Last Month Budget</th>
-                                            <th>Last Month Plan</th>
+                                            <th>Last Month Goal</th>
                                             <th>Last Month Actual</th>
                                             <th>Current Month Budget</th>
-                                            <th>Current Month Plan</th>
+                                            <th>Next Month Goal</th>
                                             <th>Comments</th>
                                             <th>Assigned To</th>
                                             <th>Actions</th>
@@ -655,20 +655,33 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('🔵 Dashboard DOMContentLoaded - Current URL:', window.location.href);
     console.log('🔵 Page title:', document.title);
 
-    // Restore previously active tab if it exists
-    const savedActiveTab = localStorage.getItem('activeImplementTab');
-    if (savedActiveTab) {
-        console.log('🔵 Restoring saved active tab:', savedActiveTab);
-        // Clear the stored value
-        localStorage.removeItem('activeImplementTab');
+    // Check for URL fragment first, then localStorage
+    let targetTab = null;
+    const urlFragment = window.location.hash.substring(1); // Remove the # character
 
-        // Activate the saved tab
-        const tabButton = document.getElementById(savedActiveTab);
+    if (urlFragment && ['my-numbers', 'my-projects', 'my-todo'].includes(urlFragment)) {
+        targetTab = urlFragment + '-tab';
+        console.log('🔵 Found URL fragment, targeting tab:', targetTab);
+        // Clear the fragment from URL after handling it
+        history.replaceState(null, null, window.location.pathname);
+    } else {
+        // Restore previously active tab if it exists
+        const savedActiveTab = localStorage.getItem('activeImplementTab');
+        if (savedActiveTab) {
+            targetTab = savedActiveTab;
+            console.log('🔵 Restoring saved active tab:', targetTab);
+            // Clear the stored value
+            localStorage.removeItem('activeImplementTab');
+        }
+    }
+
+    if (targetTab) {
+        const tabButton = document.getElementById(targetTab);
         if (tabButton) {
-            console.log('🔵 Found saved tab button, activating');
+            console.log('🔵 Found target tab button, activating');
             tabButton.click();
         } else {
-            console.log('🔵 Saved tab button not found');
+            console.log('🔵 Target tab button not found');
         }
     }
     const teamSelect = document.getElementById('reassignTeam');
@@ -705,11 +718,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Save reassignment
 function saveReassignment() {
+    console.log('=== SAVE REASSIGNMENT CALLED ===');
+
     const entityId = document.getElementById('reassignParamId').value;
     const entityType = document.getElementById('reassignEntityType').value;
     const paramType = document.getElementById('reassignParamType').value;
     const teamId = document.getElementById('reassignTeam').value;
     const memberId = document.getElementById('reassignMember').value;
+
+    console.log('Form values:');
+    console.log('  entityId:', entityId);
+    console.log('  entityType:', entityType);
+    console.log('  paramType:', paramType);
+    console.log('  teamId:', teamId);
+    console.log('  memberId:', memberId);
 
     if (!memberId) {
         alert('Please select Member');
@@ -718,33 +740,54 @@ function saveReassignment() {
 
     // Send AJAX request to save reassignment
     const formData = new FormData();
-    formData.append('entity_id', entityId);
-    formData.append('entity_type', entityType);
-    formData.append('param_type', paramType);
+
+    // Use different parameter names based on entity type
+    if (entityType === 'task') {
+        console.log('Entity type is TASK - appending entity_id');
+        formData.append('entity_id', entityId);
+    } else {
+        console.log('Entity type is PARAMETER - appending param_id and param_type');
+        formData.append('param_id', entityId);
+        formData.append('param_type', paramType);
+    }
+
     formData.append('member_id', memberId);
     formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
 
     // Use different endpoint based on entity type
     const url = entityType === 'task' ? '{% url "implement:reassign_task" %}' : '{% url "implement:reassign_parameter" %}';
+    console.log('POST URL:', url);
+
+    // Log all formData entries
+    console.log('FormData contents:');
+    for (let pair of formData.entries()) {
+        console.log('  ' + pair[0] + ': ' + pair[1]);
+    }
 
     fetch(url, {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Response received:', response.status, response.statusText);
+        return response.json();
+    })
     .then(data => {
+        console.log('Response data:', data);
         if (data.success) {
+            console.log('Reassignment successful, reloading page');
             // Close modal and refresh page
             const modal = bootstrap.Modal.getInstance(document.getElementById('reassignModal'));
             modal.hide();
             location.reload();
         } else {
+            console.error('Reassignment failed:', data.error);
             alert('Error: ' + data.error);
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while reassigning the parameter');
+        console.error('Error during reassignment:', error);
+        alert('An error occurred while reassigning');
     });
 }
 
@@ -1196,28 +1239,22 @@ function editProject(projectId, projectType) {
 
         // Initialize the form after DOM is ready
         setTimeout(() => {
-            console.log('🟡 setTimeout callback executed - checking for form initialization...');
+            console.log('🟡 setTimeout callback executed - checking for unified modal...');
 
-            // Determine if this is PPI or Improvement project modal
-            const ppiModal = document.getElementById('editProjectModal');
-            const improvementModal = document.getElementById('editImprovementProjectModal');
+            // Now we always use the unified modal
+            const unifiedModal = document.getElementById('editProjectModal');
 
-            if (ppiModal) {
-                console.log('🟡 PPI Project modal detected, initializing PPI form');
+            if (unifiedModal) {
+                console.log('🟡 Unified project modal detected, initializing form');
                 if (typeof initializeProjectForm === 'function') {
                     initializeProjectForm();
                 } else {
                     console.error('🟡 ERROR: initializeProjectForm function not found');
                 }
-                const modal = new bootstrap.Modal(ppiModal);
-                modal.show();
-            } else if (improvementModal) {
-                console.log('🟡 Improvement Project modal detected, initializing improvement form');
-                initializeImprovementProjectForm();
-                const modal = new bootstrap.Modal(improvementModal);
+                const modal = new bootstrap.Modal(unifiedModal);
                 modal.show();
             } else {
-                console.error('🟡 ERROR: No modal found');
+                console.error('🟡 ERROR: Unified modal not found');
             }
         }, 200);
     })
@@ -1251,11 +1288,8 @@ function toggleProjectComplete(projectId) {
 }
 
 function viewProjectHistory(projectId, projectType) {
-    if (projectType === 'Improvement') {
-        window.location.href = `/improve/project/${projectId}/history/`;
-    } else {
-        window.location.href = `/implement/project/${projectId}/history/`;
-    }
+    // All projects now use the unified implement history view
+    window.location.href = `/implement/project/${projectId}/history/`;
 }
 
 function toggleProjectDetails(projectId) {
@@ -1298,10 +1332,18 @@ function markProjectComplete(projectId) {
 }
 
 function reassignTask(taskId) {
+    console.log('=== REASSIGN TASK MODAL OPENED ===');
+    console.log('Task ID:', taskId);
+
     // Set the task details in hidden fields
     document.getElementById('reassignParamId').value = taskId;
     document.getElementById('reassignParamType').value = 'task';
     document.getElementById('reassignEntityType').value = 'task';
+
+    console.log('Hidden fields set:');
+    console.log('  reassignParamId:', document.getElementById('reassignParamId').value);
+    console.log('  reassignParamType:', document.getElementById('reassignParamType').value);
+    console.log('  reassignEntityType:', document.getElementById('reassignEntityType').value);
 
     // Reset the form
     document.getElementById('reassignTeam').value = '';
@@ -1590,7 +1632,53 @@ function toggleActionComplete(actionId) {
 }
 
 function rejectAction(actionId) {
-    window.location.href = `/implement/action/${actionId}/reject/`;
+    // Store the action ID for use in the modal
+    window.currentRejectActionId = actionId;
+
+    // Show the rejection reason modal
+    const modal = new bootstrap.Modal(document.getElementById('rejectActionModal'));
+    modal.show();
+}
+
+function submitRejection() {
+    const rejectionReason = document.getElementById('rejectionReason').value.trim();
+
+    if (!rejectionReason) {
+        alert('Please provide a reason for rejection.');
+        return;
+    }
+
+    const actionId = window.currentRejectActionId;
+
+    fetch(`/implement/action/${actionId}/reject/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `rejection_reason=${encodeURIComponent(rejectionReason)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Close modal and reload page
+            const modal = bootstrap.Modal.getInstance(document.getElementById('rejectActionModal'));
+            modal.hide();
+            location.reload();
+        } else {
+            alert('Error rejecting action: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error rejecting action:', error);
+        alert('Error rejecting action: ' + error.message);
+    });
+}
+
+function clearRejectModal() {
+    document.getElementById('rejectionReason').value = '';
+    window.currentRejectActionId = null;
 }
 
 function viewActionHistory(actionId) {
@@ -1770,6 +1858,50 @@ function getCookie(name) {
 
 <!-- Edit Action Modal Container -->
 <div id="editActionModalContainer"></div>
+
+<!-- Reject Action Modal -->
+<div class="modal fade" id="rejectActionModal" tabindex="-1" aria-labelledby="rejectActionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="rejectActionModalLabel">
+                    <i class="fas fa-times-circle me-2"></i>Reject Action
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="clearRejectModal()"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <h6><i class="fas fa-exclamation-triangle me-2"></i>You are about to reject this action</h6>
+                    <p class="mb-0">Please provide a detailed reason for rejection. This will be visible to the action creator and other stakeholders.</p>
+                </div>
+
+                <div class="mb-3">
+                    <label for="rejectionReason" class="form-label">Reason for Rejection <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="rejectionReason" rows="4" required placeholder="Please provide a detailed reason for rejecting this action..."></textarea>
+                    <div class="form-text">This reason will be visible to the action creator and other stakeholders.</div>
+                </div>
+
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-info-circle me-2"></i>What happens when you reject this action?</h6>
+                    <ul class="mb-0">
+                        <li>The action status will be changed to "Rejected"</li>
+                        <li>The action creator will be notified</li>
+                        <li>The action will appear in rejected actions reports</li>
+                        <li>The action will be reopened for the creator to address</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="clearRejectModal()">
+                    <i class="fas fa-times me-2"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-danger" onclick="submitRejection()">
+                    <i class="fas fa-times-circle me-2"></i>Reject Action
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Issue and action modal JavaScript is now loaded globally in base.html -->
 {% endblock %}

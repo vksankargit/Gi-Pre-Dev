@@ -12,12 +12,11 @@ from implement.models import Issue, Action
 
 
 class UserTeamsAPIView(LoginRequiredMixin, View):
-    """API to get teams where user is a member or manager"""
+    """API to get teams where user is a manager (for Add Action popup)"""
 
     def get(self, request):
         user = request.user
         teams = []
-        seen_team_ids = set()
 
         # Get teams where user is a manager
         managed_teams = Team.objects.filter(manager=user, is_active=True)
@@ -27,21 +26,53 @@ class UserTeamsAPIView(LoginRequiredMixin, View):
                 'name': team.name,
                 'role': 'Manager'
             })
-            seen_team_ids.add(team.id)
 
-        # Get teams where user is a member (but not already added as manager)
-        team_memberships = TeamMember.objects.filter(
+        # Sort teams by name
+        teams.sort(key=lambda x: x['name'])
+
+        return JsonResponse({
+            'success': True,
+            'teams': teams
+        })
+
+
+class IssueTeamsAPIView(LoginRequiredMixin, View):
+    """API to get teams where user is a manager or member (for Create Issue popup)"""
+
+    def get(self, request):
+        user = request.user
+        teams = []
+        team_ids_seen = set()
+
+        # Get teams where user is a manager
+        managed_teams = Team.objects.filter(manager=user, is_active=True)
+        for team in managed_teams:
+            teams.append({
+                'id': team.id,
+                'name': team.name,
+                'role': 'Manager'
+            })
+            team_ids_seen.add(team.id)
+
+        # Get teams where user is a member
+        member_teams = TeamMember.objects.filter(
             member=user,
-            is_active=True
+            is_active=True,
+            team__is_active=True
         ).select_related('team')
 
-        for membership in team_memberships:
-            if membership.team.id not in seen_team_ids and membership.team.is_active:
+        for membership in member_teams:
+            # Only add if not already added as manager
+            if membership.team.id not in team_ids_seen:
                 teams.append({
                     'id': membership.team.id,
                     'name': membership.team.name,
                     'role': 'Member'
                 })
+                team_ids_seen.add(membership.team.id)
+
+        # Sort teams by name
+        teams.sort(key=lambda x: x['name'])
 
         return JsonResponse({
             'success': True,
@@ -204,6 +235,52 @@ class CreateIssueAPIView(LoginRequiredMixin, View):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
+class TeamMembersForReassignAPIView(LoginRequiredMixin, View):
+    """API to get all members of a team for reassignment purposes"""
+
+    def get(self, request, team_id):
+        try:
+            team = Team.objects.get(id=team_id, is_active=True)
+
+            members = []
+
+            # Get all team members
+            team_members = TeamMember.objects.filter(
+                team=team,
+                is_active=True
+            ).select_related('member')
+
+            for membership in team_members:
+                members.append({
+                    'id': membership.member.id,
+                    'name': membership.member.get_full_name(),
+                    'email': membership.member.email
+                })
+
+            # Add manager if not already in list
+            manager_in_list = any(m['id'] == team.manager.id for m in members)
+            if not manager_in_list:
+                members.append({
+                    'id': team.manager.id,
+                    'name': team.manager.get_full_name(),
+                    'email': team.manager.email
+                })
+
+            # Sort by name
+            members.sort(key=lambda x: x['name'])
+
+            return JsonResponse({
+                'success': True,
+                'members': members
+            })
+
+        except Team.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Team not found'
+            })
+
+
 class CreateActionAPIView(LoginRequiredMixin, View):
     """API to create a new action"""
 
