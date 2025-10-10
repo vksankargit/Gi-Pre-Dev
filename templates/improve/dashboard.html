@@ -49,15 +49,17 @@
                     </div>
                 </div>
 
-                <div class="d-flex gap-2 mb-4">
-                    <button type="button" class="btn btn-success" onclick="downloadTemplate()">
-                        <i class="fas fa-download me-2"></i>Download Template
-                    </button>
+                <div class="d-flex justify-content-between mb-4">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-success" onclick="downloadTemplate()">
+                            <i class="fas fa-download me-2"></i>Download Template
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="viewHistory()">
+                            <i class="fas fa-history me-2"></i>View History
+                        </button>
+                    </div>
                     <button type="button" class="btn btn-primary" onclick="uploadFile()" disabled id="uploadBtn">
                         <i class="fas fa-upload me-2"></i>Upload
-                    </button>
-                    <button type="button" class="btn btn-secondary" onclick="viewHistory()">
-                        <i class="fas fa-history me-2"></i>View History
                     </button>
                 </div>
             </div>
