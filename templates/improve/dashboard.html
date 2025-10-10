@@ -11,69 +11,6 @@
     </div>
 </div>
 
-<!-- Statistics Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="me-3">
-                        <i class="fas fa-upload fa-2x"></i>
-                    </div>
-                    <div>
-                        <h5 class="card-title mb-1">Total Uploads</h5>
-                        <h3 class="mb-0">{{ total_uploads }}</h3>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="me-3">
-                        <i class="fas fa-check-circle fa-2x"></i>
-                    </div>
-                    <div>
-                        <h5 class="card-title mb-1">Successful</h5>
-                        <h3 class="mb-0">{{ successful_uploads }}</h3>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="me-3">
-                        <i class="fas fa-lightbulb fa-2x"></i>
-                    </div>
-                    <div>
-                        <h5 class="card-title mb-1">Suggestions</h5>
-                        <h3 class="mb-0">{{ total_suggestions }}</h3>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="me-3">
-                        <i class="fas fa-rocket fa-2x"></i>
-                    </div>
-                    <div>
-                        <h5 class="card-title mb-1">Implemented</h5>
-                        <h3 class="mb-0">{{ implemented_suggestions }}</h3>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Main Content -->
 <div class="row">
@@ -83,12 +20,12 @@
                 <h5 class="mb-0">Improvement Analysis Dashboard</h5>
             </div>
             <div class="card-body">
-                <div class="row mb-4">
+                <div class="row">
                     <div class="col-md-3">
                         <div class="mb-3">
                             <label class="form-label">Team</label>
                             <select class="form-control" id="teamSelect">
-                                <option value="">All Teams</option>
+                                <option value="">Select Team</option>
                                 {% for team in user_teams %}
                                 <option value="{{ team.id }}">{{ team.name }}</option>
                                 {% endfor %}
@@ -103,120 +40,25 @@
                             <input type="hidden" id="currentFinancialYear" value="{% if financial_years %}{{ financial_years.first.id }}{% endif %}">
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-6">
                         <div class="mb-3">
-                            <label class="form-label">File</label>
+                            <label class="form-label">Select File</label>
                             <input type="file" class="form-control" id="improvementFile" accept=".xlsx,.xls,.csv">
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="mb-3">
-                            <label class="form-label">&nbsp;</label>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-success" onclick="downloadTemplate()">
-                                    <i class="fas fa-download me-1"></i>Template
-                                </button>
-                                <button type="button" class="btn btn-primary" onclick="uploadFile()" disabled id="uploadBtn">
-                                    <i class="fas fa-upload me-1"></i>Upload
-                                </button>
-                            </div>
+                            <div class="form-text">Upload Excel file with PPI sheet</div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="mb-3">Recent Uploads</h6>
-                        {% if recent_uploads %}
-                            <div class="list-group">
-                                {% for upload in recent_uploads %}
-                                <div class="list-group-item">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <h6 class="mb-1">{{ upload.file_name }}</h6>
-                                            <p class="mb-1">{{ upload.team.name }} - {{ upload.financial_year.year }}</p>
-                                            <small class="text-muted">{{ upload.uploaded_at|date:"M d, Y H:i" }}</small>
-                                        </div>
-                                        <div>
-                                            <span class="badge bg-{% if upload.upload_status == 'successful' %}success{% elif upload.upload_status == 'failed' %}danger{% else %}warning{% endif %}">
-                                                {{ upload.get_upload_status_display }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="mt-2">
-                                        <small class="text-muted">
-                                            Records: {{ upload.total_records }} |
-                                            Processed: {{ upload.processed_records }} |
-                                            Errors: {{ upload.error_records }}
-                                        </small>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <div class="text-center py-4">
-                                <i class="fas fa-upload fa-3x text-muted mb-3"></i>
-                                <p class="text-muted">No improvement data uploaded yet.</p>
-                                <button type="button" class="btn btn-primary" onclick="showUploadForm()">
-                                    <i class="fas fa-upload me-2"></i>Upload First File
-                                </button>
-                            </div>
-                        {% endif %}
-                    </div>
-
-                    <div class="col-md-6">
-                        <h6 class="mb-3">Recent Improvement Suggestions</h6>
-                        {% if suggestions %}
-                            <div class="list-group">
-                                {% for suggestion in suggestions %}
-                                <div class="list-group-item">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <h6 class="mb-1">{{ suggestion.title }}</h6>
-                                            <p class="mb-1">{{ suggestion.description|truncatechars:80 }}</p>
-                                            <small class="text-muted">Category: {{ suggestion.category }}</small>
-                                        </div>
-                                        <div>
-                                            <span class="badge bg-{% if suggestion.priority == 'high' %}danger{% elif suggestion.priority == 'medium' %}warning{% else %}secondary{% endif %}">
-                                                {{ suggestion.get_priority_display }}
-                                            </span>
-                                            <br>
-                                            <span class="badge bg-{% if suggestion.status == 'implemented' %}success{% elif suggestion.status == 'approved' %}primary{% elif suggestion.status == 'under_review' %}info{% else %}secondary{% endif %} mt-1">
-                                                {{ suggestion.get_status_display }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    {% if suggestion.estimated_savings %}
-                                    <div class="mt-2">
-                                        <small class="text-success">
-                                            <i class="fas fa-dollar-sign me-1"></i>
-                                            Estimated Savings: ₹{{ suggestion.estimated_savings|floatformat:2 }}
-                                        </small>
-                                    </div>
-                                    {% endif %}
-                                </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <div class="text-center py-4">
-                                <i class="fas fa-lightbulb fa-3x text-muted mb-3"></i>
-                                <p class="text-muted">No improvement suggestions yet.</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="row mt-4">
-                    <div class="col-12">
-                        <div class="d-flex gap-2">
-                            <a href="{% url 'improve:history' %}" class="btn btn-outline-info">
-                                <i class="fas fa-history me-2"></i>View History
-                            </a>
-                            <a href="#" class="btn btn-outline-success">
-                                <i class="fas fa-chart-line me-2"></i>Detailed Analysis
-                            </a>
-                        </div>
-                    </div>
+                <div class="d-flex gap-2 mb-4">
+                    <button type="button" class="btn btn-success" onclick="downloadTemplate()">
+                        <i class="fas fa-download me-2"></i>Download Template
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="uploadFile()" disabled id="uploadBtn">
+                        <i class="fas fa-upload me-2"></i>Upload
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="viewHistory()">
+                        <i class="fas fa-history me-2"></i>View History
+                    </button>
                 </div>
             </div>
         </div>
@@ -224,6 +66,10 @@
 </div>
 
 <div id="uploadStatus" class="alert mt-3" style="display: none;"></div>
+
+<!-- Include the new issue and action modals -->
+{% include 'includes/new_issue_modal.html' %}
+{% include 'includes/new_action_modal.html' %}
 
 <script>
 // Enable upload button when file is selected
@@ -295,6 +141,19 @@ function uploadFile() {
         statusDiv.className = 'alert alert-danger';
         statusDiv.textContent = 'Upload failed: ' + error.message;
     });
+}
+
+function viewHistory() {
+    window.location.href = '{% url "improve:history" %}';
+}
+
+// These functions are handled by the included JavaScript file
+function createIssue() {
+    openNewIssueModal();
+}
+
+function addAction() {
+    openNewActionModal();
 }
 
 // CSRF token helper

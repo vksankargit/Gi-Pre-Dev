@@ -5,6 +5,12 @@
 {% block title %}Implement - PRE System{% endblock %}
 
 {% block content %}
+<script>
+console.log('###############################################');
+console.log('DASHBOARD TEMPLATE VERSION: 2025-10-02-04:00');
+console.log('FIXES: Action modal fields, Reassign validation & cancel');
+console.log('###############################################');
+</script>
 <div class="row mt-4">
     <div class="col-12">
         <h1 class="h3 mb-4">
@@ -57,14 +63,6 @@
 
                         <!-- Weekly Numbers Section -->
                         <div id="weeklyNumbersSection" class="numbers-section">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <button type="button" class="btn btn-info" onclick="openNewIssueModal()">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
-                                </button>
-                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
-                                    <i class="fas fa-plus-circle me-2"></i>Add Action
-                                </button>
-                            </div>
                             <div class="table-responsive">
                                 <table class="table table-bordered table-hover">
                                     <thead class="table-dark">
@@ -118,6 +116,14 @@
                                             <td>{{ gpi.responsible_user.get_full_name }}</td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-success" onclick="openParameterActions('gpi', {{ gpi.id }}, {{ current_week_in_quarter }}, null)"
+                                                            data-bs-toggle="tooltip" title="Action Items">
+                                                        <i class="fas fa-plus-circle"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-danger" onclick="openParameterIssues('gpi', {{ gpi.id }}, {{ current_week_in_quarter }}, null)"
+                                                            data-bs-toggle="tooltip" title="Issues">
+                                                        <i class="fas fa-exclamation-triangle"></i>
+                                                    </button>
                                                     <button class="btn btn-outline-warning" onclick="reassignParameter({{ gpi.id }})"
                                                             data-bs-toggle="tooltip" title="Reassign"
                                                             {% if gpi.responsible_user != user %}disabled{% endif %}>
@@ -142,14 +148,6 @@
 
                         <!-- Monthly Numbers Section -->
                         <div id="monthlyNumbersSection" class="numbers-section" style="display: none;">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <button type="button" class="btn btn-info" onclick="openNewIssueModal()">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
-                                </button>
-                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
-                                    <i class="fas fa-plus-circle me-2"></i>Add Action
-                                </button>
-                            </div>
                             <div class="table-responsive">
                                 <table class="table table-bordered table-hover">
                                     <thead class="table-dark">
@@ -161,7 +159,7 @@
                                             <th>Last Month Goal</th>
                                             <th>Last Month Actual</th>
                                             <th>Current Month Budget</th>
-                                            <th>Next Month Goal</th>
+                                            <th>Current Month Goal</th>
                                             <th>Comments</th>
                                             <th>Assigned To</th>
                                             <th>Actions</th>
@@ -226,6 +224,14 @@
                                             <td>{{ param.responsible_user.get_full_name }}</td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-success" onclick="openParameterActions('{% if param.main_head %}fpi{% else %}gpi{% endif %}', {{ param.id }}, null, {{ current_month_in_quarter }})"
+                                                            data-bs-toggle="tooltip" title="Action Items">
+                                                        <i class="fas fa-plus-circle"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-danger" onclick="openParameterIssues('{% if param.main_head %}fpi{% else %}gpi{% endif %}', {{ param.id }}, null, {{ current_month_in_quarter }})"
+                                                            data-bs-toggle="tooltip" title="Issues">
+                                                        <i class="fas fa-exclamation-triangle"></i>
+                                                    </button>
                                                     <button class="btn btn-outline-warning" onclick="reassignParameter({{ param.id }}, '{% if param.main_head %}fpi{% else %}gpi{% endif %}')"
                                                             data-bs-toggle="tooltip" title="Reassign"
                                                             {% if param.responsible_user != user %}disabled{% endif %}>
@@ -258,23 +264,11 @@
                         </div>
 
                         <!-- Action Buttons -->
-                        <div class="d-flex justify-content-start align-items-center mb-3">
-                            <div class="btn-group" role="group">
-                                <button type="button" class="btn btn-info" onclick="openNewIssueModal()">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
-                                </button>
-                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
-                                    <i class="fas fa-plus-circle me-2"></i>Add Action
-                                </button>
-                            </div>
-                        </div>
-
                         <!-- Projects Grid -->
                         <div class="table-responsive">
                             <table class="table table-bordered table-hover">
                                 <thead class="table-dark">
                                     <tr>
-                                        <th width="40">+</th>
                                         <th>Team</th>
                                         <th>PPI (Project) Name</th>
                                         <th>Completion Criteria</th>
@@ -289,12 +283,6 @@
                                 <tbody>
                                     {% for project in projects %}
                                     <tr id="project-row-{{ project.id }}">
-                                        <td class="text-center">
-                                            <button class="btn btn-link btn-sm p-0" onclick="toggleProjectDetails({{ project.id }})"
-                                                    id="expand-btn-{{ project.id }}" title="Expand Project Details">
-                                                <i class="fas fa-plus text-primary"></i>
-                                            </button>
-                                        </td>
                                         <td>{{ project.quarterly_plan.team.name }}</td>
                                         <td>
                                             <strong>{{ project.name }}</strong>
@@ -359,6 +347,18 @@
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-success" onclick="openProjectActions({{ project.id }}, '{{ project.project_type }}')"
+                                                        data-bs-toggle="tooltip" title="Action Items">
+                                                    <i class="fas fa-plus-circle"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger" onclick="openProjectIssues({{ project.id }}, '{{ project.project_type }}')"
+                                                        data-bs-toggle="tooltip" title="Issues">
+                                                    <i class="fas fa-exclamation-triangle"></i>
+                                                </button>
+                                                <button class="btn btn-outline-info" onclick="viewProjectDetailsFromDashboard({{ project.id }}, '{{ project.project_type }}')"
+                                                        data-bs-toggle="tooltip" title="Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
                                                 <button class="btn btn-outline-primary" onclick="editProject({{ project.id }}, '{{ project.project_type }}')"
                                                         data-bs-toggle="tooltip" title="Edit">
                                                     <i class="fas fa-edit"></i>
@@ -382,76 +382,9 @@
                                             </div>
                                         </td>
                                     </tr>
-                                    <!-- Project Details Slider Row (Initially Hidden) -->
-                                    <tr id="project-details-{{ project.id }}" class="project-details-row" style="display: none;">
-                                        <td colspan="10">
-                                            <div class="card border-0 bg-light">
-                                                <div class="card-body">
-                                                    <h6 class="card-title">Project Tasks</h6>
-                                                    <div class="table-responsive">
-                                                        <table class="table table-sm">
-                                                            <thead>
-                                                                <tr>
-                                                                    <th>Task</th>
-                                                                    <th>Original Due Date</th>
-                                                                    <th>Status</th>
-                                                                    <th>Revised Due Date</th>
-                                                                    <th>Assigned To</th>
-                                                                    <th>Actions</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {% for task in project.tasks.all %}
-                                                                <tr>
-                                                                    <td>
-                                                                        <strong>Week {{ task.week_number }}</strong>
-                                                                        <br>{{ task.task_description|truncatechars:60 }}
-                                                                    </td>
-                                                                    <td>-</td>
-                                                                    <td>
-                                                                        <span class="badge bg-{% if task.is_completed %}success{% else %}secondary{% endif %}">
-                                                                            {% if task.is_completed %}Completed{% else %}Pending{% endif %}
-                                                                        </span>
-                                                                        {% if task.completed_at %}
-                                                                        <br><small class="text-muted">{{ task.completed_at|date:"M d, Y" }}</small>
-                                                                        {% endif %}
-                                                                    </td>
-                                                                    <td>-</td>
-                                                                    <td>
-                                                                        {% if task.assigned_to == user %}
-                                                                            Self
-                                                                        {% else %}
-                                                                            {{ task.assigned_to.get_full_name }}
-                                                                        {% endif %}
-                                                                    </td>
-                                                                    <td>
-                                                                        {% if project.responsible_user == user %}
-                                                                        <button class="btn btn-outline-warning btn-sm" onclick="reassignTask({{ task.id }})"
-                                                                                data-bs-toggle="tooltip" title="Reassign">
-                                                                            <i class="fas fa-user-edit"></i>
-                                                                        </button>
-                                                                        {% endif %}
-                                                                        <button class="btn btn-outline-info btn-sm" onclick="viewTaskHistory({{ task.id }})"
-                                                                                data-bs-toggle="tooltip" title="View History">
-                                                                            <i class="fas fa-history"></i>
-                                                                        </button>
-                                                                    </td>
-                                                                </tr>
-                                                                {% empty %}
-                                                                <tr>
-                                                                    <td colspan="6" class="text-center text-muted">No tasks defined for this project</td>
-                                                                </tr>
-                                                                {% endfor %}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
                                     {% empty %}
                                     <tr>
-                                        <td colspan="10" class="text-center text-muted">No projects assigned to you</td>
+                                        <td colspan="9" class="text-center text-muted">No projects assigned to you</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -463,15 +396,41 @@
                     <div class="tab-pane fade" id="my-todo" role="tabpanel">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="mb-0">My Action Items</h5>
-                            <div class="btn-group" role="group">
-                                <button type="button" class="btn btn-info" onclick="openNewIssueModal()">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
-                                </button>
-                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
-                                    <i class="fas fa-plus-circle me-2"></i>Add Action
-                                </button>
+                        </div>
+
+                        <!-- Due Date Filter -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-calendar-alt me-2"></i>Filter by Due Date:
+                            </label>
+                            <div class="d-flex gap-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filterOverdue" value="overdue" {% if 'overdue' in selected_filters %}checked{% endif %} onchange="applyDueDateFilter()">
+                                    <label class="form-check-label" for="filterOverdue">
+                                        Overdue
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filterCurrentWeek" value="current_week" {% if 'current_week' in selected_filters %}checked{% endif %} onchange="applyDueDateFilter()">
+                                    <label class="form-check-label" for="filterCurrentWeek">
+                                        Current Week ({{ current_week_start|date:"M d" }} - {{ current_week_end|date:"M d" }})
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filterNextWeek" value="next_week" {% if 'next_week' in selected_filters %}checked{% endif %} onchange="applyDueDateFilter()">
+                                    <label class="form-check-label" for="filterNextWeek">
+                                        Next Week ({{ next_week_start|date:"M d" }} - {{ next_week_end|date:"M d" }})
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filterLater" value="later" {% if 'later' in selected_filters %}checked{% endif %} onchange="applyDueDateFilter()">
+                                    <label class="form-check-label" for="filterLater">
+                                        Later (after {{ next_week_end|date:"M d" }})
+                                    </label>
+                                </div>
                             </div>
                         </div>
+                        <hr>
 
                         <div class="table-responsive">
                             <table class="table table-bordered table-hover">
@@ -493,9 +452,7 @@
                                     <tr class="{% if action.original_due_date < today and action.status != 'completed' %}table-warning{% endif %}">
                                         <td>{{ action.team.name }}</td>
                                         <td>
-                                            <span class="badge bg-{% if action.source == 'manual' %}primary{% elif action.source == 'ppi' %}success{% elif action.source == 'improvement' %}danger{% elif action.source == 'review' %}warning{% else %}info{% endif %}">
-                                                {{ action.get_source_display }}
-                                            </span>
+                                            <small class="text-muted">{{ action.source_display }}</small>
                                         </td>
                                         <td>
                                             <strong>{{ action.action|truncatechars:80 }}</strong>
@@ -518,7 +475,7 @@
                                         <td>{{ action.original_due_date|date:"M d, Y" }}</td>
                                         <td>
                                             <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% elif action.status == 'at_risk' %}warning{% elif action.status == 'danger' %}danger{% elif action.status == 'rejected' %}dark{% else %}secondary{% endif %}">
-                                                {{ action.get_status_display }}
+                                                {% if action.status == 'in_progress' %}On Track{% else %}{{ action.get_status_display }}{% endif %}
                                             </span>
                                         </td>
                                         <td>
@@ -530,6 +487,12 @@
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-success" onclick="openActionActions({{ action.id|unlocalize }})" title="Action Items">
+                                                    <i class="fas fa-plus-circle"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger" onclick="openActionIssues({{ action.id|unlocalize }})" title="Issues">
+                                                    <i class="fas fa-exclamation-triangle"></i>
+                                                </button>
                                                 {% if action.id and action.id > 0 %}
                                                 <button class="btn btn-outline-primary" onclick="editAction({{ action.id|unlocalize }})" title="Edit (ID: {{ action.id }})">
                                                     <i class="fas fa-edit"></i>
@@ -715,6 +678,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Cancel reassignment with confirmation
+function confirmReassignCancel(event) {
+    const form = document.getElementById('reassignForm');
+    const hasChanges = isFormDirty(form);
+
+    if (hasChanges) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (confirm('You will lose the data entered. Do you wish to continue?')) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('reassignModal'));
+            if (modal) {
+                modal.hide();
+            }
+        }
+    }
+    // If no changes, let the modal close normally
+}
 
 // Save reassignment
 function saveReassignment() {
@@ -1112,6 +1093,38 @@ function toggleImprovementProjectFields() {
 }
 
 // Action Modal Functions
+function confirmActionCancel(event) {
+    // Check if form has unsaved changes
+    const form = document.getElementById('editActionForm');
+    const hasChanges = isFormDirty(form);
+
+    if (hasChanges) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (confirm('You will lose the data entered. Do you wish to continue?')) {
+            // Close modal - user clicked OK (wants to continue)
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editActionModal'));
+            if (modal) {
+                modal.hide();
+            }
+        }
+    }
+    // If no changes, let the modal close normally
+}
+
+// Helper function to check if form is dirty (has unsaved changes)
+function isFormDirty(form) {
+    if (!form) return false;
+    const inputs = form.querySelectorAll('input, textarea, select');
+    for (let input of inputs) {
+        if (input.type === 'hidden' || input.name === 'csrfmiddlewaretoken') continue;
+        if (input.value && input.value.trim() !== '' && input.value !== input.defaultValue) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function toggleActionFields() {
     console.log('=== toggleActionFields called ===');
 
@@ -1290,22 +1303,6 @@ function toggleProjectComplete(projectId) {
 function viewProjectHistory(projectId, projectType) {
     // All projects now use the unified implement history view
     window.location.href = `/implement/project/${projectId}/history/`;
-}
-
-function toggleProjectDetails(projectId) {
-    const detailsRow = document.getElementById(`project-details-${projectId}`);
-    const expandBtn = document.getElementById(`expand-btn-${projectId}`);
-    const icon = expandBtn.querySelector('i');
-
-    if (detailsRow.style.display === 'none') {
-        detailsRow.style.display = 'table-row';
-        icon.className = 'fas fa-minus text-primary';
-        expandBtn.title = 'Collapse Project Details';
-    } else {
-        detailsRow.style.display = 'none';
-        icon.className = 'fas fa-plus text-primary';
-        expandBtn.title = 'Expand Project Details';
-    }
 }
 
 function markProjectComplete(projectId) {
@@ -1689,6 +1686,174 @@ function viewSubActions(actionId) {
     window.location.href = `/implement/action/${actionId}/sub-actions/`;
 }
 
+// View project details from dashboard
+function viewProjectDetailsFromDashboard(projectId, projectType) {
+    console.log(`Opening project details for ${projectType} project ID: ${projectId}`);
+
+    // Get or create the project details modal
+    let modal = document.getElementById('projectDetailsModal');
+    if (!modal) {
+        // Create modal if it doesn't exist
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'projectDetailsModal';
+        modal.setAttribute('tabindex', '-1');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content" id="projectDetailsContent">
+                    <div class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                        <p class="text-muted mt-2">Loading project details...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const content = document.getElementById('projectDetailsContent');
+
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading project details...</p>
+        </div>
+    `;
+
+    // Show the modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    // Fetch project details from implement module
+    fetch(`/implement/project/${projectId}/details/?project_type=${projectType}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.body.appendChild(newScript);
+                setTimeout(() => {
+                    if (newScript.parentNode) {
+                        newScript.parentNode.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading project details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading project details</p>
+                    <button class="btn btn-outline-primary" onclick="viewProjectDetailsFromDashboard(${projectId}, '${projectType}')">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+// Open week tasks in implement context
+function openWeekTasksImplement(projectId, projectType, weekNumber) {
+    console.log(`Opening tasks for week ${weekNumber}, project ${projectId}`);
+
+    // Get or create the week tasks modal
+    let modal = document.getElementById('weekTasksModal');
+    if (!modal) {
+        // Create modal if it doesn't exist
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'weekTasksModal';
+        modal.setAttribute('tabindex', '-1');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content" id="weekTasksContent">
+                    <div class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                        <p class="text-muted mt-2">Loading week tasks...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const content = document.getElementById('weekTasksContent');
+
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading week ${weekNumber} tasks...</p>
+        </div>
+    `;
+
+    // Close the project details modal first
+    const detailsModal = bootstrap.Modal.getInstance(document.getElementById('projectDetailsModal'));
+    if (detailsModal) {
+        detailsModal.hide();
+    }
+
+    // Show the week tasks modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    // Fetch week tasks from implement module
+    fetch(`/implement/project/${projectId}/week-tasks/?project_type=${projectType}&week=${weekNumber}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.body.appendChild(newScript);
+                setTimeout(() => {
+                    if (newScript.parentNode) {
+                        newScript.parentNode.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading week tasks:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading week tasks</p>
+                    <button class="btn btn-outline-primary" onclick="openWeekTasksImplement(${projectId}, '${projectType}', ${weekNumber})">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
 // CSRF token helper
 function getCookie(name) {
     let cookieValue = null;
@@ -1712,7 +1877,7 @@ function getCookie(name) {
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="reassignModalLabel">Reassign</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="confirmReassignCancel(event)" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form id="reassignForm">
@@ -1737,7 +1902,7 @@ function getCookie(name) {
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="confirmReassignCancel(event)">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="saveReassignment()">Save</button>
             </div>
         </div>
@@ -1902,6 +2067,18 @@ function getCookie(name) {
         </div>
     </div>
 </div>
+
+<!-- Project Actions Modal Container -->
+<div id="projectActionsModal"></div>
+
+<!-- Project Issues Modal Container -->
+<div id="projectIssuesModal"></div>
+
+<!-- Action Actions Modal Container (for My To Do) -->
+<div id="actionActionsModal"></div>
+
+<!-- Action Issues Modal Container (for My To Do) -->
+<div id="actionIssuesModal"></div>
 
 <!-- Issue and action modal JavaScript is now loaded globally in base.html -->
 {% endblock %}

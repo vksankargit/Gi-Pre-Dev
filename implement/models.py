@@ -87,9 +87,11 @@ class Action(models.Model):
         ('in_progress', 'In Progress'),
         ('at_risk', 'At Risk'),
         ('danger', 'Danger'),
+        ('overdue', 'Overdue'),
         ('done', 'Done'),
         ('completed', 'Completed'),
         ('rejected', 'Rejected'),
+        ('carry_forward', 'Carry Forward'),
     ]
     
     SOURCE_CHOICES = [
@@ -105,7 +107,20 @@ class Action(models.Model):
     ppi_task = models.OneToOneField('plans.PPITask', on_delete=models.CASCADE, null=True, blank=True)
     improvement_task = models.OneToOneField('improve.ImprovementTask', on_delete=models.CASCADE, null=True, blank=True)
     parent_action = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='sub_actions')
-    
+    issue = models.ForeignKey('Issue', on_delete=models.CASCADE, null=True, blank=True, related_name='related_actions')
+
+    # Link to GPI/FPI parameters (for My Numbers)
+    gpi_parameter = models.ForeignKey('plans.GPIParameter', on_delete=models.CASCADE, null=True, blank=True, related_name='actions')
+    fpi_parameter = models.ForeignKey('plans.FPIParameter', on_delete=models.CASCADE, null=True, blank=True, related_name='actions')
+
+    # Link to projects (for My Projects)
+    ppi_project = models.ForeignKey('plans.PPIProject', on_delete=models.CASCADE, null=True, blank=True, related_name='actions')
+    improvement_project = models.ForeignKey('improve.ImprovementProject', on_delete=models.CASCADE, null=True, blank=True, related_name='actions')
+
+    # Week/Month tracking for My Numbers (only used when linked to parameters)
+    week_number = models.IntegerField(null=True, blank=True, help_text='Week number within quarter (1-13) for weekly tracking')
+    month_number = models.IntegerField(null=True, blank=True, help_text='Month number within quarter (1-3) for monthly tracking')
+
     action = models.TextField()
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='assigned_actions')
@@ -123,7 +138,58 @@ class Action(models.Model):
     class Meta:
         db_table = 'actions'
         ordering = ['original_due_date', '-created_at']
-        
+
+    @property
+    def effective_status(self):
+        """
+        Returns the effective status, considering overdue conditions.
+        If the action is incomplete and past its due date, returns 'overdue'.
+        Otherwise returns the actual status.
+        """
+        from datetime import date
+
+        # If already completed or done, return actual status
+        if self.status in ['done', 'completed']:
+            return self.status
+
+        # Check if overdue
+        today = date.today()
+        due_date = self.revised_due_date if self.revised_due_date else self.original_due_date
+
+        if due_date < today:
+            return 'overdue'
+
+        return self.status
+
+    @property
+    def source_display(self):
+        """Returns a human-readable description of where this action originated from"""
+        if self.ppi_task:
+            task_desc = self.ppi_task.task_description[:50] + "..." if len(self.ppi_task.task_description) > 50 else self.ppi_task.task_description
+            return f"PPI Task: {task_desc}"
+        elif self.improvement_task:
+            task_desc = self.improvement_task.task_description[:50] + "..." if len(self.improvement_task.task_description) > 50 else self.improvement_task.task_description
+            return f"Improvement Task: {task_desc}"
+        elif self.parent_action:
+            action_text = self.parent_action.action[:50] + "..." if len(self.parent_action.action) > 50 else self.parent_action.action
+            return f"Sub-action of: {action_text}"
+        elif self.issue:
+            return f"Issue Resolution: {self.issue.title}"
+        elif self.gpi_parameter:
+            period = f"Week {self.week_number}" if self.week_number else f"Month {self.month_number}" if self.month_number else "N/A"
+            return f"My Numbers - GPI: {self.gpi_parameter.name} ({period})"
+        elif self.fpi_parameter:
+            period = f"Week {self.week_number}" if self.week_number else f"Month {self.month_number}" if self.month_number else "N/A"
+            return f"My Numbers - FPI: {self.fpi_parameter.sub_head} ({period})"
+        elif self.ppi_project:
+            return f"PPI Project: {self.ppi_project.name}"
+        elif self.improvement_project:
+            return f"Improvement Project: {self.improvement_project.name}"
+        elif self.source == 'review':
+            return "Review Meeting"
+        else:
+            return "Manual Entry"
+
     def __str__(self):
         return f"{self.action[:50]}... - {self.assigned_to.get_full_name()}"
 
@@ -165,9 +231,25 @@ class Issue(models.Model):
     description = models.TextField(blank=True)
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    previous_status = models.CharField(max_length=20, choices=STATUS_CHOICES, blank=True)
     required_by = models.DateField(null=True, blank=True)
     escalated_to_team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True, related_name='escalated_issues')
-    
+
+    # Link to GPI/FPI parameters (for My Numbers)
+    gpi_parameter = models.ForeignKey('plans.GPIParameter', on_delete=models.CASCADE, null=True, blank=True, related_name='issues')
+    fpi_parameter = models.ForeignKey('plans.FPIParameter', on_delete=models.CASCADE, null=True, blank=True, related_name='issues')
+
+    # Link to projects (for My Projects)
+    ppi_project = models.ForeignKey('plans.PPIProject', on_delete=models.CASCADE, null=True, blank=True, related_name='issues')
+    improvement_project = models.ForeignKey('improve.ImprovementProject', on_delete=models.CASCADE, null=True, blank=True, related_name='issues')
+
+    # Link to actions (for My To Do)
+    action = models.ForeignKey(Action, on_delete=models.CASCADE, null=True, blank=True, related_name='issues')
+
+    # Week/Month tracking for My Numbers (only used when linked to parameters)
+    week_number = models.IntegerField(null=True, blank=True, help_text='Week number within quarter (1-13) for weekly tracking')
+    month_number = models.IntegerField(null=True, blank=True, help_text='Month number within quarter (1-3) for monthly tracking')
+
     reported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reported_issues')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -182,7 +264,25 @@ class Issue(models.Model):
     @property
     def actions_completed_count(self):
         return self.related_actions.filter(status='completed').count()
-        
+
     @property
     def total_actions_count(self):
         return self.related_actions.count()
+
+    @property
+    def source_display(self):
+        """Returns a human-readable description of where this issue originated from"""
+        if self.action:
+            return f"Action: {self.action.action[:50]}..."
+        elif self.gpi_parameter:
+            period = f"Week {self.week_number}" if self.week_number else f"Month {self.month_number}" if self.month_number else "N/A"
+            return f"My Numbers - GPI: {self.gpi_parameter.name} ({period})"
+        elif self.fpi_parameter:
+            period = f"Week {self.week_number}" if self.week_number else f"Month {self.month_number}" if self.month_number else "N/A"
+            return f"My Numbers - FPI: {self.fpi_parameter.sub_head} ({period})"
+        elif self.ppi_project:
+            return f"PPI Project: {self.ppi_project.name}"
+        elif self.improvement_project:
+            return f"Improvement Project: {self.improvement_project.name}"
+        else:
+            return "Manual Entry"

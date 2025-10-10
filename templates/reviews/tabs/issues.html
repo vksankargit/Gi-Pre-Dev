@@ -4,89 +4,12 @@
         <i class="fas fa-exclamation-triangle me-2"></i>Issues Log
     </h5>
     <div class="btn-group">
-        <button class="btn btn-success btn-sm" onclick="addNewIssue()">
+        <button class="btn btn-success btn-sm" onclick="openNewIssueModal()">
             <i class="fas fa-plus me-1"></i>Add Issue
         </button>
-        <button class="btn btn-primary btn-sm" onclick="refreshIssues()">
+        <button class="btn btn-primary btn-sm" onclick="window.location.reload()">
             <i class="fas fa-sync-alt me-1"></i>Refresh
         </button>
-    </div>
-</div>
-
-<!-- Issue Status Summary Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card text-center border-danger">
-            <div class="card-body py-2">
-                <h4 class="card-title mb-1 text-danger">{{ issues_summary.critical }}</h4>
-                <small class="text-muted">Critical</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center border-warning">
-            <div class="card-body py-2">
-                <h4 class="card-title mb-1 text-warning">{{ issues_summary.high }}</h4>
-                <small class="text-muted">High Priority</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center border-primary">
-            <div class="card-body py-2">
-                <h4 class="card-title mb-1 text-primary">{{ issues_summary.open }}</h4>
-                <small class="text-muted">Open Issues</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center border-success">
-            <div class="card-body py-2">
-                <h4 class="card-title mb-1 text-success">{{ issues_summary.resolved }}</h4>
-                <small class="text-muted">Resolved</small>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Issues Filter -->
-<div class="card mb-4">
-    <div class="card-body py-2">
-        <div class="row g-2 align-items-center">
-            <div class="col-md-3">
-                <select id="issueStatusFilter" class="form-select form-select-sm" onchange="filterIssues()">
-                    <option value="">All Statuses</option>
-                    <option value="open">Open</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="resolved">Resolved</option>
-                    <option value="closed">Closed</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <select id="issuePriorityFilter" class="form-select form-select-sm" onchange="filterIssues()">
-                    <option value="">All Priorities</option>
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <select id="issueCategoryFilter" class="form-select form-select-sm" onchange="filterIssues()">
-                    <option value="">All Categories</option>
-                    <option value="technical">Technical</option>
-                    <option value="process">Process</option>
-                    <option value="resource">Resource</option>
-                    <option value="quality">Quality</option>
-                    <option value="other">Other</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearFilters()">
-                    <i class="fas fa-times me-1"></i>Clear Filters
-                </button>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -105,23 +28,20 @@
                     <thead class="table-light">
                         <tr>
                             <th style="width: 5%">ID</th>
-                            <th style="width: 25%">Issue Description</th>
-                            <th style="width: 12%">Priority</th>
-                            <th style="width: 12%">Category</th>
-                            <th style="width: 12%">Status</th>
-                            <th style="width: 12%">Assigned To</th>
-                            <th style="width: 12%">Due Date</th>
-                            <th style="width: 10%">Actions</th>
+                            <th style="width: 15%">Description</th>
+                            <th style="width: 20%">Source</th>
+                            <th style="width: 10%">Status</th>
+                            <th style="width: 10%">Reported By</th>
+                            <th style="width: 10%">Required By</th>
+                            <th style="width: 8%">Actions</th>
+                            <th style="width: 22%">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for issue in issues %}
-                        <tr class="issue-row {% if issue.priority == 'critical' %}table-danger{% elif issue.priority == 'high' %}table-warning{% endif %}"
-                            data-status="{{ issue.status }}"
-                            data-priority="{{ issue.priority }}"
-                            data-category="{{ issue.category }}">
+                        <tr class="issue-row" data-issue-id="{{ issue.id }}" data-status="{{ issue.status }}">
                             <td>
-                                <span class="badge bg-dark">#{{ issue.issue_number }}</span>
+                                <span class="badge bg-dark">#{{ issue.id }}</span>
                             </td>
                             <td>
                                 <div>
@@ -134,76 +54,97 @@
                                             <i class="fas fa-info-circle"></i>
                                         </button>
                                     {% endif %}
-                                    <br>
-                                    <small class="text-muted">
-                                        Reported: {{ issue.created_at|date:"M d, Y" }}
-                                        by {{ issue.reported_by.get_full_name|default:issue.reported_by.username }}
-                                    </small>
                                 </div>
                             </td>
                             <td>
-                                <span class="badge bg-{% if issue.priority == 'critical' %}danger{% elif issue.priority == 'high' %}warning{% elif issue.priority == 'medium' %}info{% else %}secondary{% endif %}">
-                                    {{ issue.get_priority_display }}
-                                </span>
+                                <small class="text-muted">{{ issue.source_display }}</small>
                             </td>
                             <td>
-                                <span class="badge bg-light text-dark">{{ issue.get_category_display }}</span>
-                            </td>
-                            <td>
-                                <span class="badge bg-{% if issue.status == 'resolved' or issue.status == 'closed' %}success{% elif issue.status == 'in_progress' %}primary{% else %}secondary{% endif %}">
+                                <span class="badge status-badge bg-{% if issue.status == 'resolved' %}success{% elif issue.status == 'open' %}secondary{% elif issue.status == 'on_hold' %}warning{% elif issue.status == 'dropped' %}danger{% elif issue.status == 'escalated' %}info{% endif %}">
                                     {{ issue.get_status_display }}
                                 </span>
                             </td>
                             <td>
-                                {% if issue.assigned_to %}
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-user me-1"></i>
-                                        <small>{{ issue.assigned_to.get_full_name|default:issue.assigned_to.username }}</small>
-                                    </div>
-                                {% else %}
-                                    <span class="text-muted">Unassigned</span>
-                                {% endif %}
+                                <small>{{ issue.reported_by.get_full_name|default:issue.reported_by.username }}</small>
                             </td>
                             <td>
-                                {% if issue.due_date %}
-                                    <div>
-                                        {{ issue.due_date|date:"M d, Y" }}
-                                        {% if issue.is_overdue %}
-                                            <br><small class="text-danger">
-                                                <i class="fas fa-exclamation-triangle me-1"></i>Overdue
-                                            </small>
-                                        {% elif issue.is_due_soon %}
-                                            <br><small class="text-warning">
-                                                <i class="fas fa-clock me-1"></i>Due Soon
-                                            </small>
-                                        {% endif %}
-                                    </div>
+                                {% if issue.required_by %}
+                                    {{ issue.required_by|date:"M d, Y" }}
                                 {% else %}
-                                    <span class="text-muted">No due date</span>
+                                    <span class="text-muted">N/A</span>
                                 {% endif %}
                             </td>
+                            <td class="text-center">
+                                <span class="badge bg-light text-dark">{{ issue.action_count }}</span>
+                            </td>
                             <td>
-                                <div class="btn-group btn-group-sm">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <!-- Add Action Button -->
                                     <button class="btn btn-outline-primary"
-                                            onclick="viewIssueDetails({{ issue.id }})"
+                                            onclick="addIssueAction({{ issue.id }})"
                                             data-bs-toggle="tooltip"
-                                            title="View Details">
-                                        <i class="fas fa-eye"></i>
+                                            title="Add Action">
+                                        <i class="fas fa-plus-circle"></i> Action
                                     </button>
-                                    <button class="btn btn-outline-secondary"
-                                            onclick="editIssue({{ issue.id }})"
-                                            data-bs-toggle="tooltip"
-                                            title="Edit Issue">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    {% if issue.status != 'resolved' and issue.status != 'closed' %}
+
+                                    <!-- Mark Resolved / Undo Resolved -->
+                                    {% if issue.status == 'resolved' %}
                                     <button class="btn btn-outline-success"
-                                            onclick="markResolved({{ issue.id }})"
+                                            onclick="revertIssueStatus({{ issue.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Undo Resolved">
+                                        <i class="fas fa-undo"></i> Undo
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-outline-success"
+                                            onclick="updateIssueStatus({{ issue.id }}, 'resolved')"
                                             data-bs-toggle="tooltip"
                                             title="Mark Resolved">
-                                        <i class="fas fa-check"></i>
+                                        <i class="fas fa-check-circle"></i> Resolve
                                     </button>
                                     {% endif %}
+
+                                    <!-- Mark On Hold / Resume -->
+                                    {% if issue.status == 'on_hold' %}
+                                    <button class="btn btn-outline-warning"
+                                            onclick="revertIssueStatus({{ issue.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Resume">
+                                        <i class="fas fa-play"></i> Resume
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-outline-warning"
+                                            onclick="updateIssueStatus({{ issue.id }}, 'on_hold')"
+                                            data-bs-toggle="tooltip"
+                                            title="Mark On Hold">
+                                        <i class="fas fa-pause"></i> Hold
+                                    </button>
+                                    {% endif %}
+
+                                    <!-- Mark Drop / Mark Active -->
+                                    {% if issue.status == 'dropped' %}
+                                    <button class="btn btn-outline-danger"
+                                            onclick="revertIssueStatus({{ issue.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Mark Active">
+                                        <i class="fas fa-play-circle"></i> Activate
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-outline-danger"
+                                            onclick="updateIssueStatus({{ issue.id }}, 'dropped')"
+                                            data-bs-toggle="tooltip"
+                                            title="Mark Drop">
+                                        <i class="fas fa-ban"></i> Drop
+                                    </button>
+                                    {% endif %}
+
+                                    <!-- Escalate Button -->
+                                    <button class="btn btn-outline-info"
+                                            onclick="escalateIssue({{ issue.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Escalate">
+                                        <i class="fas fa-level-up-alt"></i> Escalate
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -221,321 +162,156 @@
         <p class="text-muted">
             Great! There are currently no issues logged for this team.
         </p>
-        <button class="btn btn-outline-primary" onclick="addNewIssue()">
+        <button class="btn btn-outline-primary" onclick="openNewIssueModal()">
             <i class="fas fa-plus me-2"></i>Report New Issue
         </button>
     </div>
 {% endif %}
 
-<!-- Add/Edit Issue Modal -->
-<div class="modal fade" id="issueModal" tabindex="-1" aria-labelledby="issueModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<!-- Escalate Issue Modal -->
+<div class="modal fade" id="escalateModal" tabindex="-1">
+    <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="issueModalLabel">
-                    <i class="fas fa-plus me-2"></i>Add New Issue
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title">Escalate Issue</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="issueForm">
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label for="issueTitle" class="form-label">Issue Title <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="issueTitle" name="title" required>
-                        </div>
-                        <div class="col-12">
-                            <label for="issueDescription" class="form-label">Description <span class="text-danger">*</span></label>
-                            <textarea class="form-control" id="issueDescription" name="description" rows="3" required></textarea>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="issuePriority" class="form-label">Priority <span class="text-danger">*</span></label>
-                            <select class="form-select" id="issuePriority" name="priority" required>
-                                <option value="">Select Priority</option>
-                                <option value="critical">Critical</option>
-                                <option value="high">High</option>
-                                <option value="medium">Medium</option>
-                                <option value="low">Low</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="issueCategory" class="form-label">Category <span class="text-danger">*</span></label>
-                            <select class="form-select" id="issueCategory" name="category" required>
-                                <option value="">Select Category</option>
-                                <option value="technical">Technical</option>
-                                <option value="process">Process</option>
-                                <option value="resource">Resource</option>
-                                <option value="quality">Quality</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="issueAssignedTo" class="form-label">Assigned To</label>
-                            <select class="form-select" id="issueAssignedTo" name="assigned_to">
-                                <option value="">Select Assignee</option>
-                                {% for member in team_members %}
-                                <option value="{{ member.id }}">{{ member.get_full_name|default:member.username }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="issueDueDate" class="form-label">Due Date</label>
-                            <input type="date" class="form-control" id="issueDueDate" name="due_date">
-                        </div>
-                        <div class="col-12">
-                            <label for="issueImpact" class="form-label">Impact/Consequence</label>
-                            <textarea class="form-control" id="issueImpact" name="impact" rows="2"></textarea>
-                        </div>
-                        <div class="col-12">
-                            <label for="issueProposedSolution" class="form-label">Proposed Solution</label>
-                            <textarea class="form-control" id="issueProposedSolution" name="proposed_solution" rows="2"></textarea>
-                        </div>
-                    </div>
+            <div class="modal-body">
+                <input type="hidden" id="escalateIssueId">
+                <div class="mb-3">
+                    <label class="form-label">Escalate to Team <span class="text-danger">*</span></label>
+                    <select class="form-select" id="escalateTeamId" required>
+                        <option value="">Select Team</option>
+                        {% for team in user_teams %}
+                        <option value="{{ team.id }}">{{ team.name }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save me-2"></i>Save Issue
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Issue Details Modal -->
-<div class="modal fade" id="issueDetailModal" tabindex="-1" aria-labelledby="issueDetailModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="issueDetailModalLabel">
-                    <i class="fas fa-info-circle me-2"></i>Issue Details
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="issueDetailContent">
-                <!-- Issue details loaded via AJAX -->
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-info" onclick="confirmEscalate()">
+                    <i class="fas fa-level-up-alt me-1"></i>Escalate
+                </button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-function filterIssues() {
-    const statusFilter = document.getElementById('issueStatusFilter').value;
-    const priorityFilter = document.getElementById('issuePriorityFilter').value;
-    const categoryFilter = document.getElementById('issueCategoryFilter').value;
+const meetingId = {{ meeting.pk }};
 
-    const rows = document.querySelectorAll('.issue-row');
-
-    rows.forEach(row => {
-        let showRow = true;
-
-        if (statusFilter && row.dataset.status !== statusFilter) {
-            showRow = false;
-        }
-        if (priorityFilter && row.dataset.priority !== priorityFilter) {
-            showRow = false;
-        }
-        if (categoryFilter && row.dataset.category !== categoryFilter) {
-            showRow = false;
-        }
-
-        row.style.display = showRow ? '' : 'none';
-    });
+function addIssueAction(issueId) {
+    // Redirect to action items popup with issue context
+    window.location.href = `/review/${meetingId}/action-items/?issue_id=${issueId}`;
 }
 
-function clearFilters() {
-    document.getElementById('issueStatusFilter').value = '';
-    document.getElementById('issuePriorityFilter').value = '';
-    document.getElementById('issueCategoryFilter').value = '';
-
-    const rows = document.querySelectorAll('.issue-row');
-    rows.forEach(row => row.style.display = '');
-}
-
-function addNewIssue() {
-    document.getElementById('issueModalLabel').innerHTML = '<i class="fas fa-plus me-2"></i>Add New Issue';
-    document.getElementById('issueForm').reset();
-    document.getElementById('issueForm').removeAttribute('data-issue-id');
-
-    const modal = new bootstrap.Modal(document.getElementById('issueModal'));
-    modal.show();
-}
-
-function editIssue(issueId) {
-    document.getElementById('issueModalLabel').innerHTML = '<i class="fas fa-edit me-2"></i>Edit Issue';
-    document.getElementById('issueForm').setAttribute('data-issue-id', issueId);
-
-    // Load issue data for editing
-    fetch(`/api/issues/${issueId}/`)
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('issueTitle').value = data.title;
-            document.getElementById('issueDescription').value = data.description;
-            document.getElementById('issuePriority').value = data.priority;
-            document.getElementById('issueCategory').value = data.category;
-            document.getElementById('issueAssignedTo').value = data.assigned_to;
-            document.getElementById('issueDueDate').value = data.due_date;
-            document.getElementById('issueImpact').value = data.impact || '';
-            document.getElementById('issueProposedSolution').value = data.proposed_solution || '';
-
-            const modal = new bootstrap.Modal(document.getElementById('issueModal'));
-            modal.show();
-        })
-        .catch(error => {
-            console.error('Error loading issue:', error);
-            alert('Error loading issue data');
-        });
-}
-
-function viewIssueDetails(issueId) {
-    const modal = new bootstrap.Modal(document.getElementById('issueDetailModal'));
-    const content = document.getElementById('issueDetailContent');
-
-    content.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-            <p class="text-muted mt-2">Loading issue details...</p>
-        </div>
-    `;
-
-    modal.show();
-
-    fetch(`/api/issues/${issueId}/details/`)
-        .then(response => response.json())
-        .then(data => {
-            content.innerHTML = `
-                <div class="row">
-                    <div class="col-12">
-                        <h6>Issue Information</h6>
-                        <table class="table table-borderless">
-                            <tr><td><strong>ID:</strong></td><td>#${data.issue_number}</td></tr>
-                            <tr><td><strong>Title:</strong></td><td>${data.title}</td></tr>
-                            <tr><td><strong>Status:</strong></td><td><span class="badge bg-primary">${data.status}</span></td></tr>
-                            <tr><td><strong>Priority:</strong></td><td><span class="badge bg-warning">${data.priority}</span></td></tr>
-                            <tr><td><strong>Category:</strong></td><td>${data.category}</td></tr>
-                            <tr><td><strong>Reported By:</strong></td><td>${data.reported_by}</td></tr>
-                            <tr><td><strong>Assigned To:</strong></td><td>${data.assigned_to || 'Unassigned'}</td></tr>
-                            <tr><td><strong>Due Date:</strong></td><td>${data.due_date || 'Not set'}</td></tr>
-                        </table>
-                        <h6>Description</h6>
-                        <p>${data.description}</p>
-                        ${data.impact ? `<h6>Impact</h6><p>${data.impact}</p>` : ''}
-                        ${data.proposed_solution ? `<h6>Proposed Solution</h6><p>${data.proposed_solution}</p>` : ''}
-                        ${data.resolution ? `<h6>Resolution</h6><p>${data.resolution}</p>` : ''}
-                    </div>
-                </div>
-            `;
-        })
-        .catch(error => {
-            console.error('Error loading issue details:', error);
-            content.innerHTML = `
-                <div class="text-center py-4">
-                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
-                    <p class="text-danger mt-2">Error loading issue details</p>
-                </div>
-            `;
-        });
-}
-
-function markResolved(issueId) {
-    if (confirm('Mark this issue as resolved?')) {
-        fetch(`/api/issues/${issueId}/resolve/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCsrfToken(),
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                refreshIssues();
-            } else {
-                alert('Error marking issue as resolved');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error marking issue as resolved');
-        });
-    }
-}
-
-function refreshIssues() {
-    const issuesContent = document.getElementById('issues-content');
-
-    // Show loading
-    issuesContent.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-            <p class="text-muted mt-2">Refreshing issues...</p>
-        </div>
-    `;
-
-    // Reload issues data
-    fetch('{% url "reviews:issues" meeting.pk %}')
-        .then(response => response.text())
-        .then(html => {
-            issuesContent.innerHTML = html;
-
-            // Reinitialize tooltips
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
-            });
-        })
-        .catch(error => {
-            console.error('Error refreshing issues:', error);
-            issuesContent.innerHTML = `
-                <div class="text-center py-4">
-                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
-                    <p class="text-danger mt-2">Error refreshing issues</p>
-                    <button class="btn btn-sm btn-outline-primary" onclick="refreshIssues()">
-                        <i class="fas fa-redo me-1"></i>Try Again
-                    </button>
-                </div>
-            `;
-        });
-}
-
-// Handle form submission
-document.getElementById('issueForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-
-    const formData = new FormData(this);
-    const issueId = this.getAttribute('data-issue-id');
-    const url = issueId ? `/api/issues/${issueId}/` : '/api/issues/';
-    const method = issueId ? 'PUT' : 'POST';
-
-    fetch(url, {
-        method: method,
+function updateIssueStatus(issueId, status) {
+    fetch(`/review/${meetingId}/update-issue-status/`, {
+        method: 'POST',
         headers: {
+            'Content-Type': 'application/json',
             'X-CSRFToken': getCsrfToken()
         },
-        body: formData
+        body: JSON.stringify({
+            issue_id: issueId,
+            status: status
+        })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            bootstrap.Modal.getInstance(document.getElementById('issueModal')).hide();
-            refreshIssues();
+            location.reload();
         } else {
-            alert('Error saving issue');
+            alert('Error updating issue status: ' + data.error);
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Error saving issue');
+        alert('Error updating issue status');
     });
-});
-
-function getCsrfToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]').value;
 }
 
-// Initialize tooltips when content loads
+function revertIssueStatus(issueId) {
+    fetch(`/review/${meetingId}/revert-issue-status/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({
+            issue_id: issueId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error reverting issue status: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error reverting issue status');
+    });
+}
+
+function escalateIssue(issueId) {
+    document.getElementById('escalateIssueId').value = issueId;
+    document.getElementById('escalateTeamId').value = '';
+    const modal = new bootstrap.Modal(document.getElementById('escalateModal'));
+    modal.show();
+}
+
+function confirmEscalate() {
+    const issueId = document.getElementById('escalateIssueId').value;
+    const escalatedTeamId = document.getElementById('escalateTeamId').value;
+
+    if (!escalatedTeamId) {
+        alert('Please select a team to escalate to');
+        return;
+    }
+
+    fetch(`/review/${meetingId}/update-issue-status/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({
+            issue_id: issueId,
+            status: 'escalated',
+            escalated_team_id: escalatedTeamId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('escalateModal')).hide();
+            location.reload();
+        } else {
+            alert('Error escalating issue: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error escalating issue');
+    });
+}
+
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
+}
+
+// Initialize tooltips
 document.addEventListener('DOMContentLoaded', function() {
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {

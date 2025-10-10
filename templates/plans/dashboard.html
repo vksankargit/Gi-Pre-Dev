@@ -75,12 +75,6 @@
                             <button type="button" class="btn btn-primary" id="uploadAnnualBtn" onclick="uploadAnnualPlan()" disabled>
                                 <i class="fas fa-upload me-2"></i>Upload
                             </button>
-                            <button type="button" class="btn btn-info" onclick="createIssue('annual')">
-                                <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
-                            </button>
-                            <button type="button" class="btn btn-warning" onclick="addAction('annual')">
-                                <i class="fas fa-plus-circle me-2"></i>Add Action
-                            </button>
                             <button type="button" class="btn btn-secondary" onclick="viewHistory('annual')">
                                 <i class="fas fa-history me-2"></i>View History
                             </button>
@@ -134,12 +128,6 @@
                             </button>
                             <button type="button" class="btn btn-primary" id="uploadQuarterlyBtn" onclick="uploadQuarterlyPlan()" disabled>
                                 <i class="fas fa-upload me-2"></i>Upload
-                            </button>
-                            <button type="button" class="btn btn-info" onclick="createIssue('quarterly')">
-                                <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
-                            </button>
-                            <button type="button" class="btn btn-warning" onclick="addAction('quarterly')">
-                                <i class="fas fa-plus-circle me-2"></i>Add Action
                             </button>
                             <button type="button" class="btn btn-secondary" onclick="viewHistory('quarterly')">
                                 <i class="fas fa-history me-2"></i>View History
@@ -274,11 +262,12 @@ function uploadAnnualPlan() {
     });
 }
 
-function uploadQuarterlyPlan() {
+function uploadQuarterlyPlan(confirmDelete = false) {
     const formData = new FormData();
     formData.append('team_id', document.getElementById('quarterlyTeam').value);
     formData.append('quarter_id', document.getElementById('quarterlyQuarter').value);
     formData.append('file', document.getElementById('quarterlyFile').files[0]);
+    formData.append('confirm_delete', confirmDelete.toString());
 
     const statusDiv = document.getElementById('quarterlyUploadStatus');
     statusDiv.className = 'alert alert-info';
@@ -304,11 +293,25 @@ function uploadQuarterlyPlan() {
             document.getElementById('quarterlyFile').value = '';
             document.getElementById('uploadQuarterlyBtn').disabled = true;
             document.getElementById('downloadQuarterlyBtn').disabled = true;
+        } else if (data.requires_confirmation) {
+            // Show confirmation dialog
+            statusDiv.className = 'alert alert-warning';
+            statusDiv.innerHTML = `
+                <p>${data.error}</p>
+                <div class="mt-3">
+                    <button class="btn btn-danger" onclick="uploadQuarterlyPlan(true)">
+                        <i class="fas fa-trash me-2"></i>Yes, Delete and Upload
+                    </button>
+                    <button class="btn btn-secondary ms-2" onclick="cancelQuarterlyUpload()">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                </div>
+            `;
         } else {
             statusDiv.className = 'alert alert-danger';
             let errorText = data.error;
             if (data.errors && data.errors.length > 0) {
-                errorText += ':\\n' + data.errors.join('\\n');
+                errorText += ':\n' + data.errors.join('\n');
             }
             statusDiv.textContent = errorText;
         }
@@ -317,6 +320,11 @@ function uploadQuarterlyPlan() {
         statusDiv.className = 'alert alert-danger';
         statusDiv.textContent = 'Upload failed: ' + error.message;
     });
+}
+
+function cancelQuarterlyUpload() {
+    const statusDiv = document.getElementById('quarterlyUploadStatus');
+    statusDiv.style.display = 'none';
 }
 
 function viewHistory(planType) {
