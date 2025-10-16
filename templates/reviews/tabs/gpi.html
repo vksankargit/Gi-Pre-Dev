@@ -3,153 +3,119 @@
     <h5 class="mb-0">
         <i class="fas fa-trophy me-2"></i>Goal Performance Indicators (GPI)
     </h5>
-    <div class="btn-group">
-        <button class="btn btn-outline-primary btn-sm" onclick="showGPIDetails()">
-            <i class="fas fa-search-plus me-1"></i>Detailed View
-        </button>
-        <button class="btn btn-primary btn-sm" onclick="refreshGPI()">
-            <i class="fas fa-sync-alt me-1"></i>Refresh
-        </button>
-    </div>
+    <button class="btn btn-primary btn-sm" onclick="window.location.reload()">
+        <i class="fas fa-sync-alt me-1"></i>Refresh
+    </button>
 </div>
 
-<!-- Period Selection Radio Buttons -->
-<div class="card mb-4">
-    <div class="card-body py-2">
-        <div class="d-flex align-items-center">
-            <label class="form-label mb-0 me-3">View Period:</label>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="gpiPeriod" id="weeklyGPI" value="weekly"
-                       {% if gpi_period == 'weekly' or not gpi_period %}checked{% endif %}
-                       onchange="loadGPIPeriod('weekly')">
-                <label class="form-check-label" for="weeklyGPI">Weekly</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="gpiPeriod" id="monthlyGPI" value="monthly"
-                       {% if gpi_period == 'monthly' %}checked{% endif %}
-                       onchange="loadGPIPeriod('monthly')">
-                <label class="form-check-label" for="monthlyGPI">Monthly</label>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Period Selection Tabs -->
+<ul class="nav nav-tabs" id="gpiTab" role="tablist">
+    <!-- Weekly tab - show for Weekly meetings -->
+    {% if meeting.review_type == 'weekly' %}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="gpi-weekly-tab" data-bs-toggle="tab"
+                data-bs-target="#gpi-weekly" type="button" role="tab">
+            Weekly
+        </button>
+    </li>
+    {% endif %}
 
-<div id="gpiPeriodContent">
-    {% if gpi_data %}
-        <!-- Goal Performance Summary Cards -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="card text-center border-info">
-                    <div class="card-body py-2">
-                        <h4 class="card-title mb-1 text-info">
-                            {{ gpi_data|length }}
-                        </h4>
-                        <small class="text-muted">Total Parameters</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center border-primary">
-                    <div class="card-body py-2">
-                        <h4 class="card-title mb-1 text-primary">{{ view_type|title }}</h4>
-                        <small class="text-muted">Tracking Type</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center border-success">
-                    <div class="card-body py-2">
-                        <h4 class="card-title mb-1 text-success">{{ current_period }}</h4>
-                        <small class="text-muted">Current Period</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-center border-warning">
-                    <div class="card-body py-2">
-                        <h4 class="card-title mb-1 text-warning">Q{{ quarter|default:"?" }}</h4>
-                        <small class="text-muted">Quarter</small>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- Monthly tab - show for Monthly meetings -->
+    {% if meeting.review_type == 'monthly' %}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="gpi-monthly-tab" data-bs-toggle="tab"
+                data-bs-target="#gpi-monthly" type="button" role="tab">
+            Monthly
+        </button>
+    </li>
+    {% endif %}
+</ul>
 
-        <!-- Goal Performance Table -->
+<!-- Tab Content -->
+<div class="tab-content mt-3" id="gpiTabContent">
+    <!-- Weekly GPI Tab - show for Weekly meetings -->
+    {% if meeting.review_type == 'weekly' %}
+    <div class="tab-pane fade show active" id="gpi-weekly" role="tabpanel">
+        {% if weekly_gpi_data %}
         <div class="card">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <i class="fas fa-bullseye me-2"></i>{{ view_type|title }} Goal Performance - Quarter {{ quarter|default:"?" }}
-                    <span class="badge bg-secondary ms-2">Period {{ current_period }}</span>
-                </h6>
-            </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 5%">S.No</th>
-                                <th style="width: 30%">Parameter</th>
-                                <th style="width: 15%">Cumulative Budget</th>
-                                <th style="width: 15%">Cumulative Plan</th>
-                                <th style="width: 15%">Cumulative Actual</th>
-                                <th style="width: 10%">Achievement</th>
-                                <th style="width: 10%">Responsible</th>
+                                <th>Parameter</th>
+                                <th>Last Week Budget</th>
+                                <th>Last Week Goal</th>
+                                <th>Last Week Actual</th>
+                                <th>Current Week Budget</th>
+                                <th>Current Week Goal</th>
+                                <th>Comments</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for param_data in gpi_data %}
-                            <tr class="{% if param_data.achievement_percentage >= 90 %}table-success{% elif param_data.achievement_percentage >= 70 %}table-warning{% elif param_data.achievement_percentage < 50 %}table-danger{% endif %}">
+                            {% for param_data in weekly_gpi_data %}
+                            <tr>
                                 <td>
-                                    <span class="badge bg-secondary">{{ forloop.counter }}</span>
-                                </td>
-                                <td>
-                                    <div>
-                                        <strong>{{ param_data.parameter.parameter_name|truncatechars:35 }}</strong>
-                                        {% if param_data.parameter.parameter_name|length > 35 %}
-                                            <button class="btn btn-link btn-sm p-0 ms-1"
-                                                    data-bs-toggle="tooltip"
-                                                    data-bs-placement="top"
-                                                    title="{{ param_data.parameter.parameter_name }}">
-                                                <i class="fas fa-info-circle"></i>
-                                            </button>
+                                    <strong>{{ param_data.parameter.name }}</strong>
+                                    <br><small class="text-muted">
+                                        {{ param_data.parameter.get_indicator_type_display }}
+                                        {% if param_data.parameter.unit_of_measure %}
+                                            - {{ param_data.parameter.unit_of_measure }}
                                         {% endif %}
-                                        <br>
-                                        <small class="text-muted">{{ param_data.parameter.unit|default:"Units" }}</small>
+                                    </small>
+                                </td>
+                                <td>{{ param_data.last_week_budget|default:"0" }}</td>
+                                <td>{{ param_data.last_week_goal|default:"" }}</td>
+                                <td>
+                                    <div class="editable-cell"
+                                         contenteditable="true"
+                                         data-type="gpi"
+                                         data-id="{{ param_data.parameter.id }}"
+                                         data-field="last_week_actual"
+                                         data-original-value="{{ param_data.last_week_actual|default:'' }}">
+                                        {{ param_data.last_week_actual|default:"" }}
                                     </div>
                                 </td>
-                                <td class="text-end">
-                                    <strong>{{ param_data.cumulative_budget|floatformat:0 }}</strong>
-                                    <br>
-                                    <small class="text-muted">{{ param_data.parameter.unit|default:"Units" }}</small>
-                                </td>
-                                <td class="text-end">
-                                    <strong>{{ param_data.cumulative_plan|floatformat:0 }}</strong>
-                                    <br>
-                                    <small class="text-muted">{{ param_data.parameter.unit|default:"Units" }}</small>
-                                </td>
-                                <td class="text-end">
-                                    <strong class="text-{% if param_data.achievement_percentage >= 90 %}success{% elif param_data.achievement_percentage >= 70 %}warning{% else %}danger{% endif %}">
-                                        {{ param_data.cumulative_actual|floatformat:0 }}
-                                    </strong>
-                                    <br>
-                                    <small class="text-muted">{{ param_data.parameter.unit|default:"Units" }}</small>
-                                </td>
+                                <td>{{ param_data.current_week_budget|default:"0" }}</td>
                                 <td>
-                                    <div class="progress mb-1" style="height: 10px;">
-                                        <div class="progress-bar
-                                            {% if param_data.achievement_percentage >= 90 %}bg-success
-                                            {% elif param_data.achievement_percentage >= 70 %}bg-warning
-                                            {% elif param_data.achievement_percentage >= 50 %}bg-info
-                                            {% else %}bg-danger
-                                            {% endif %}"
-                                            role="progressbar"
-                                            style="width: {{ param_data.achievement_percentage }}%">
-                                        </div>
+                                    <div class="editable-cell"
+                                         contenteditable="true"
+                                         data-type="gpi"
+                                         data-id="{{ param_data.parameter.id }}"
+                                         data-field="current_week_plan"
+                                         data-original-value="{{ param_data.current_week_goal|default:'' }}">
+                                        {{ param_data.current_week_goal|default:"" }}
                                     </div>
-                                    <small class="text-muted">{{ param_data.achievement_percentage }}%</small>
                                 </td>
                                 <td>
-                                    <small>{{ param_data.parameter.responsible_user.get_full_name|default:param_data.parameter.responsible_user.username|default:"Unassigned" }}</small>
+                                    <div class="editable-cell"
+                                         contenteditable="true"
+                                         data-type="gpi"
+                                         data-id="{{ param_data.parameter.id }}"
+                                         data-field="explanation"
+                                         data-original-value="{{ param_data.comments|default:'' }}">
+                                        {{ param_data.comments|default:"" }}
+                                    </div>
+                                </td>
+                                <td class="action-buttons">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-info btn-sm"
+                                                onclick="viewDetails('gpi', {{ param_data.parameter.id }})"
+                                                title="Details View">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success btn-sm"
+                                                onclick="addGPIAction('gpi', {{ param_data.parameter.id }})"
+                                                title="Action Items">
+                                            <i class="fas fa-plus-circle"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm"
+                                                onclick="addGPIIssue('gpi', {{ param_data.parameter.id }})"
+                                                title="Issues">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -158,140 +124,421 @@
                 </div>
             </div>
         </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-trophy fa-4x text-muted mb-3"></i>
+            <h5 class="text-muted mb-3">No Weekly Goal Data Available</h5>
+            <p class="text-muted">
+                Weekly goal performance data is not available yet.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
 
-        <!-- Milestone Breakdown -->
-        {% if gpi_data %}
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-chart-pie me-2"></i>Period-wise Breakdown
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Parameter</th>
-                                        {% for period in "123456789101112"|make_list %}
-                                        <th class="text-center">P{{ period }}</th>
-                                        {% endfor %}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for param_data in gpi_data %}
-                                    <tr>
-                                        <td><strong>{{ param_data.parameter.parameter_name|truncatechars:20 }}</strong></td>
-                                        {% for period in "123456789101112"|make_list %}
-                                        <td class="text-center">
-                                            {% with milestone_value=param_data.milestones|default_if_none:0 %}
-                                            <span class="badge bg-{% if forloop.counter0 < current_period %}secondary{% else %}light text-dark{% endif %}">
-                                                {{ milestone_value|floatformat:0|default:"-" }}
-                                            </span>
-                                            {% endwith %}
-                                        </td>
-                                        {% endfor %}
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+    <!-- Monthly GPI Tab - show for Monthly meetings -->
+    {% if meeting.review_type == 'monthly' %}
+    <div class="tab-pane fade show active" id="gpi-monthly" role="tabpanel">
+        {% if monthly_gpi_data %}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Last Month Budget</th>
+                                <th>Last Month Goal</th>
+                                <th>Last Month Actual</th>
+                                <th>Current Month Budget</th>
+                                <th>Current Month Goal</th>
+                                <th>Comments</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for param_data in monthly_gpi_data %}
+                            <tr>
+                                <td>
+                                    <strong>{{ param_data.parameter.name }}</strong>
+                                    <br><small class="text-muted">
+                                        {{ param_data.parameter.get_indicator_type_display }}
+                                        {% if param_data.parameter.unit_of_measure %}
+                                            - {{ param_data.parameter.unit_of_measure }}
+                                        {% endif %}
+                                    </small>
+                                </td>
+                                <td>{{ param_data.last_month_budget|default:"0" }}</td>
+                                <td>{{ param_data.last_month_goal|default:"" }}</td>
+                                <td>
+                                    <div class="editable-cell"
+                                         contenteditable="true"
+                                         data-type="gpi"
+                                         data-id="{{ param_data.parameter.id }}"
+                                         data-field="last_month_actual"
+                                         data-original-value="{{ param_data.last_month_actual|default:'' }}">
+                                        {{ param_data.last_month_actual|default:"" }}
+                                    </div>
+                                </td>
+                                <td>{{ param_data.current_month_budget|default:"0" }}</td>
+                                <td>
+                                    <div class="editable-cell"
+                                         contenteditable="true"
+                                         data-type="gpi"
+                                         data-id="{{ param_data.parameter.id }}"
+                                         data-field="current_month_plan"
+                                         data-original-value="{{ param_data.current_month_goal|default:'' }}">
+                                        {{ param_data.current_month_goal|default:"" }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="editable-cell"
+                                         contenteditable="true"
+                                         data-type="gpi"
+                                         data-id="{{ param_data.parameter.id }}"
+                                         data-field="explanation"
+                                         data-original-value="{{ param_data.comments|default:'' }}">
+                                        {{ param_data.comments|default:"" }}
+                                    </div>
+                                </td>
+                                <td class="action-buttons">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-info btn-sm"
+                                                onclick="viewDetails('gpi', {{ param_data.parameter.id }})"
+                                                title="Details View">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success btn-sm"
+                                                onclick="addGPIAction('gpi', {{ param_data.parameter.id }})"
+                                                title="Action Items">
+                                            <i class="fas fa-plus-circle"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm"
+                                                onclick="addGPIIssue('gpi', {{ param_data.parameter.id }})"
+                                                title="Issues">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
-        {% endif %}
-
-    {% else %}
+        {% else %}
         <div class="text-center py-5">
             <i class="fas fa-trophy fa-4x text-muted mb-3"></i>
-            <h5 class="text-muted mb-3">No Goal Data Available</h5>
+            <h5 class="text-muted mb-3">No Monthly Goal Data Available</h5>
             <p class="text-muted">
-                Goal performance data for this {{ gpi_period|default:"weekly" }} period is not available yet.
-                Please ensure goals have been set and progress has been updated.
+                Monthly goal performance data is not available yet.
             </p>
-            <button class="btn btn-outline-primary" onclick="refreshGPI()">
-                <i class="fas fa-sync-alt me-2"></i>Check Again
-            </button>
         </div>
+        {% endif %}
+    </div>
     {% endif %}
 </div>
 
-<!-- GPI Detailed View Modal -->
-<div class="modal fade" id="gpiDetailModal" tabindex="-1" aria-labelledby="gpiDetailModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="gpiDetailModalLabel">
-                    <i class="fas fa-trophy me-2"></i>Detailed Goal Performance Analysis
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="gpiDetailContent">
-                <!-- Detailed content loaded via AJAX -->
-            </div>
-        </div>
-    </div>
-</div>
+<style>
+.editable-cell {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 8px;
+    cursor: text;
+    min-height: 32px;
+    min-width: 80px;
+}
 
-<!-- Goal Details Modal -->
-<div class="modal fade" id="goalDetailModal" tabindex="-1" aria-labelledby="goalDetailModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="goalDetailModalLabel">
-                    <i class="fas fa-bullseye me-2"></i>Goal Details
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="goalDetailContent">
-                <!-- Goal details loaded via AJAX -->
-            </div>
-        </div>
-    </div>
-</div>
+.editable-cell:hover {
+    background-color: #e9ecef;
+}
+
+.editable-cell:focus {
+    background-color: white;
+    outline: 2px solid #007bff;
+    border-color: #007bff;
+}
+
+.editable-cell.saving {
+    background-color: #fff3cd !important;
+    border-color: #ffeaa7 !important;
+}
+
+.editable-cell.saved {
+    background-color: #d4edda !important;
+    border-color: #c3e6cb !important;
+}
+
+.editable-cell.error {
+    background-color: #f8d7da !important;
+    border-color: #f5c6cb !important;
+}
+</style>
 
 <script>
-function loadGPIPeriod(period) {
-    const content = document.getElementById('gpiPeriodContent');
+// GPI Action button function - similar to FPI
+window.addGPIAction = function(type, id) {
+    console.log(`🎯 GPI addGPIAction called for ${type} parameter ID: ${id}`);
 
-    // Show loading
+    // Store the parameter context for the modal
+    window.currentParameterContext = {
+        type: type,
+        id: id
+    };
+
+    // Open the action items modal with parameter context
+    openParameterActionItemsDirectly(type, id);
+};
+
+window.addGPIIssue = function(type, id) {
+    console.log(`🎯 GPI addGPIIssue called for ${type} parameter ID: ${id}`);
+
+    // Store the parameter context for the modal
+    window.currentParameterContext = {
+        type: type,
+        id: id
+    };
+
+    // Open the issues modal with parameter context
+    openParameterIssuesDirectly(type, id);
+};
+
+function openParameterIssuesDirectly(type, id) {
+    console.log(`Opening Issues popup for ${type} parameter ID: ${id}`);
+
+    // Get the existing issues modal
+    const modal = document.getElementById('issuesModal');
+    const content = document.getElementById('issuesContent');
+
+    if (!modal) {
+        console.error('issuesModal not found!');
+        alert('Error: Issues modal not found. Please refresh the page and try again.');
+        return;
+    }
+
+    if (!content) {
+        console.error('issuesContent not found!');
+        alert('Error: Issues content area not found. Please refresh the page and try again.');
+        return;
+    }
+
+    // Show loading state
     content.innerHTML = `
         <div class="text-center py-4">
             <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-            <p class="text-muted mt-2">Loading ${period} GPI data...</p>
+            <p class="text-muted mt-2">Loading issues...</p>
         </div>
     `;
 
-    // Load period-specific data
-    fetch(`{% url "reviews:gpi" meeting.pk %}?period=${period}`)
+    // Show the modal
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+
+    // Load issues with parameter context
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        content.innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+        return;
+    }
+    const issuesUrl = `/review/${meetingId}/issues/?parameter_type=${type}&parameter_id=${id}`;
+
+    fetch(issuesUrl)
         .then(response => response.text())
         .then(html => {
-            // Extract just the period content part
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const periodContent = doc.getElementById('gpiPeriodContent');
-            if (periodContent) {
-                content.innerHTML = periodContent.innerHTML;
-            } else {
-                content.innerHTML = html;
-            }
+            content.innerHTML = html;
 
-            // Reinitialize tooltips
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.head.appendChild(newScript);
+                setTimeout(() => {
+                    if (document.head.contains(newScript)) {
+                        document.head.removeChild(newScript);
+                    }
+                }, 100);
             });
         })
         .catch(error => {
-            console.error('Error loading GPI period:', error);
+            console.error('Error loading issues:', error);
             content.innerHTML = `
                 <div class="text-center py-4">
                     <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
-                    <p class="text-danger mt-2">Error loading ${period} GPI data</p>
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadGPIPeriod('${period}')">
+                    <p class="text-danger mt-2">Error loading issues</p>
+                    <button class="btn btn-outline-primary" onclick="openParameterIssuesDirectly('${type}', '${id}')">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+
+    // Clear parameter context when modal is closed
+    modal.addEventListener('hidden.bs.modal', function () {
+        console.log('Issues modal closed, clearing parameter context');
+        window.currentParameterContext = null;
+    }, { once: true });
+}
+
+function openParameterActionItemsDirectly(type, id) {
+    console.log(`Opening Action Items popup for ${type} parameter ID: ${id}`);
+
+    // Get the existing action items modal
+    const modal = document.getElementById('actionItemsModal');
+    const content = document.getElementById('actionItemsContent');
+
+    if (!modal) {
+        console.error('actionItemsModal not found!');
+        alert('Error: Action Items modal not found. Please refresh the page and try again.');
+        return;
+    }
+
+    if (!content) {
+        console.error('actionItemsContent not found!');
+        alert('Error: Action Items content area not found. Please refresh the page and try again.');
+        return;
+    }
+
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action items...</p>
+        </div>
+    `;
+
+    // Show the modal
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+
+    // Load action items with parameter context
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        content.innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+        return;
+    }
+    const actionItemsUrl = `/review/${meetingId}/action-items/?parameter_type=${type}&parameter_id=${id}`;
+
+    fetch(actionItemsUrl)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.head.appendChild(newScript);
+                setTimeout(() => {
+                    if (document.head.contains(newScript)) {
+                        document.head.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading action items:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action items</p>
+                    <button class="btn btn-outline-primary" onclick="openParameterActionItemsDirectly('${type}', '${id}')">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+
+    // Clear parameter context when modal is closed
+    modal.addEventListener('hidden.bs.modal', function () {
+        console.log('Action Items modal closed, clearing parameter context');
+        window.currentParameterContext = null;
+    }, { once: true });
+}
+
+function viewDetails(type, id) {
+    console.log(`Opening details view for ${type} parameter ID: ${id}`);
+
+    // Get or create the GPI details modal
+    let modal = document.getElementById('gpiDetailsModal');
+    if (!modal) {
+        // Create modal if it doesn't exist
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'gpiDetailsModal';
+        modal.setAttribute('tabindex', '-1');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content" id="gpiDetailsContent">
+                    <div class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                        <p class="text-muted mt-2">Loading details...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const content = document.getElementById('gpiDetailsContent');
+
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading GPI details...</p>
+        </div>
+    `;
+
+    // Show the modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    // Fetch GPI parameter details
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        content.innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+        return;
+    }
+    fetch(`/review/${meetingId}/gpi-details/?parameter_id=${id}`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.body.appendChild(newScript);
+                setTimeout(() => {
+                    if (newScript.parentNode) {
+                        newScript.parentNode.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading GPI details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading details</p>
+                    <button class="btn btn-outline-primary" onclick="viewDetails('${type}', ${id})">
                         <i class="fas fa-redo me-1"></i>Try Again
                     </button>
                 </div>
@@ -299,98 +546,122 @@ function loadGPIPeriod(period) {
         });
 }
 
-function refreshGPI() {
-    const selectedPeriod = document.querySelector('input[name="gpiPeriod"]:checked').value;
-    loadGPIPeriod(selectedPeriod);
-}
+// Initialize editable cells for GPI - called when tab content loads
+(function initializeGPIEditableCells() {
+    console.log('🔧 Initializing GPI editable cells');
 
-function showGPIDetails() {
-    const modal = new bootstrap.Modal(document.getElementById('gpiDetailModal'));
-    const content = document.getElementById('gpiDetailContent');
-    const selectedPeriod = document.querySelector('input[name="gpiPeriod"]:checked').value;
-
-    content.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-            <p class="text-muted mt-2">Loading detailed GPI analysis...</p>
-        </div>
-    `;
-
-    modal.show();
-
-    // Load detailed GPI view
-    fetch(`{% url "reviews:gpi" meeting.pk %}?period=${selectedPeriod}&detailed=true`)
-        .then(response => response.text())
-        .then(html => {
-            content.innerHTML = html;
-        })
-        .catch(error => {
-            console.error('Error loading GPI details:', error);
-            content.innerHTML = `
-                <div class="text-center py-4">
-                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
-                    <p class="text-danger mt-2">Error loading detailed GPI data</p>
-                </div>
-            `;
-        });
-}
-
-function viewGoalDetails(goalId) {
-    const modal = new bootstrap.Modal(document.getElementById('goalDetailModal'));
-    const content = document.getElementById('goalDetailContent');
-
-    content.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-            <p class="text-muted mt-2">Loading goal details...</p>
-        </div>
-    `;
-
-    modal.show();
-
-    // Load goal details
-    fetch(`/api/goals/${goalId}/details/`)
-        .then(response => response.json())
-        .then(data => {
-            content.innerHTML = `
-                <div class="row">
-                    <div class="col-12">
-                        <h6>Goal Information</h6>
-                        <table class="table table-borderless">
-                            <tr><td><strong>Title:</strong></td><td>${data.title}</td></tr>
-                            <tr><td><strong>Category:</strong></td><td>${data.category}</td></tr>
-                            <tr><td><strong>Target:</strong></td><td>${data.target_value} ${data.unit}</td></tr>
-                            <tr><td><strong>Achieved:</strong></td><td>${data.achieved_value} ${data.unit}</td></tr>
-                            <tr><td><strong>Progress:</strong></td><td>${data.achievement_percentage}%</td></tr>
-                            <tr><td><strong>Status:</strong></td><td><span class="badge bg-primary">${data.status}</span></td></tr>
-                        </table>
-                        ${data.description ? `<h6>Description</h6><p>${data.description}</p>` : ''}
-                        ${data.notes ? `<h6>Recent Notes</h6><p>${data.notes}</p>` : ''}
-                    </div>
-                </div>
-            `;
-        })
-        .catch(error => {
-            console.error('Error loading goal details:', error);
-            content.innerHTML = `
-                <div class="text-center py-4">
-                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
-                    <p class="text-danger mt-2">Error loading goal details</p>
-                </div>
-            `;
-        });
-}
-
-function updateGoalProgress(goalId) {
-    // This would open a form to update goal progress
-    alert('Goal progress update functionality would be implemented here');
-}
-
-// Initialize tooltips when content loads
-document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-});
+
+    // Initialize editable cells
+    const editableCells = document.querySelectorAll('.editable-cell[data-type="gpi"]');
+    console.log(`Found ${editableCells.length} GPI editable cells`);
+
+    editableCells.forEach(cell => {
+        // Store original value when cell gets focus
+        cell.addEventListener('focus', function() {
+            this.dataset.originalValue = this.textContent.trim();
+        });
+
+        // Auto-save when cell loses focus (tab out)
+        cell.addEventListener('blur', function() {
+            const newValue = this.textContent.trim();
+            const originalValue = this.dataset.originalValue || '';
+
+            // Only save if value changed
+            if (newValue !== originalValue) {
+                console.log(`💾 Saving GPI cell - Field: ${this.dataset.field}, Value: ${newValue}`);
+                saveGPICell(this, newValue);
+            }
+        });
+
+        // Allow Enter to save and move to next field
+        cell.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.blur();
+            }
+        });
+    });
+})();
+
+// Save GPI cell data
+function saveGPICell(cell, newValue) {
+    const type = cell.dataset.type;
+    const id = cell.dataset.id;
+    const field = cell.dataset.field;
+
+    console.log(`Saving GPI ${field} for ID ${id}: ${newValue}`);
+
+    // Show saving state
+    cell.classList.add('saving');
+
+    // Get meeting ID from the tab content element
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        console.error('Meeting ID not found');
+        cell.classList.remove('saving');
+        cell.classList.add('error');
+        alert('Error: Meeting ID not found');
+        return;
+    }
+
+    // Prepare data
+    const formData = new FormData();
+    formData.append('type', type);
+    formData.append('id', id);
+    formData.append('field', field);
+    formData.append('value', newValue);
+    formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+    // Save to server
+    fetch(`/review/${meetingId}/save-gpi-data/`, {
+        method: 'POST',
+        body: formData,
+    })
+    .then(response => response.json())
+    .then(data => {
+        cell.classList.remove('saving');
+        if (data.success) {
+            // Show saved state
+            cell.classList.add('saved');
+            setTimeout(() => {
+                cell.classList.remove('saved');
+            }, 2000);
+
+            // Update the original value
+            cell.dataset.originalValue = newValue;
+        } else {
+            // Show error state
+            cell.classList.add('error');
+            alert('Error saving: ' + (data.error || 'Unknown error'));
+            setTimeout(() => {
+                cell.classList.remove('error');
+            }, 3000);
+        }
+    })
+    .catch(error => {
+        cell.classList.remove('saving');
+        cell.classList.add('error');
+        console.error('Error saving GPI data:', error);
+        alert('Error saving data: ' + error);
+        setTimeout(() => {
+            cell.classList.remove('error');
+        }, 3000);
+    });
+}
+
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
+}
 </script>

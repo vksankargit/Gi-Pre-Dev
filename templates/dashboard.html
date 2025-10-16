@@ -102,78 +102,302 @@
 {% endif %}
 
 {% if user.role == 'general' %}
+
+<!-- Team Performance Summary (for Managers) -->
+{% if team_performance %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i>Team Performance Summary
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for team in team_performance %}
+                <div class="mb-4 {% if not forloop.last %}border-bottom pb-4{% endif %}">
+                    <h6 class="mb-3">{{ team.team_name }} - Quarter {{ team.quarter }}</h6>
+                    <div class="row">
+                        <!-- FPI Performance -->
+                        <div class="col-md-4 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title text-primary">
+                                        <i class="fas fa-dollar-sign me-2"></i>FPI
+                                    </h6>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div style="width: 100%;">
+                                            <div class="mb-1">
+                                                <small class="text-muted">On Track:</small>
+                                                <strong>{{ team.fpi.on_track }}/{{ team.fpi.total }}</strong>
+                                            </div>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar {% if team.fpi.percentage >= 80 %}bg-success{% elif team.fpi.percentage >= 60 %}bg-warning{% else %}bg-danger{% endif %}"
+                                                     role="progressbar"
+                                                     style="width: {{ team.fpi.percentage }}%"
+                                                     aria-valuenow="{{ team.fpi.percentage }}"
+                                                     aria-valuemin="0"
+                                                     aria-valuemax="100">
+                                                    {{ team.fpi.percentage }}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- GPI Performance -->
+                        <div class="col-md-4 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title text-success">
+                                        <i class="fas fa-chart-bar me-2"></i>GPI
+                                    </h6>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div style="width: 100%;">
+                                            <div class="mb-1">
+                                                <small class="text-muted">Tracked:</small>
+                                                <strong>{{ team.gpi.tracked }}/{{ team.gpi.total }}</strong>
+                                            </div>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar {% if team.gpi.percentage >= 80 %}bg-success{% elif team.gpi.percentage >= 60 %}bg-warning{% else %}bg-danger{% endif %}"
+                                                     role="progressbar"
+                                                     style="width: {{ team.gpi.percentage }}%"
+                                                     aria-valuenow="{{ team.gpi.percentage }}"
+                                                     aria-valuemin="0"
+                                                     aria-valuemax="100">
+                                                    {{ team.gpi.percentage }}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PPI Performance -->
+                        <div class="col-md-4 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title text-info">
+                                        <i class="fas fa-project-diagram me-2"></i>PPI
+                                    </h6>
+                                    <div class="mb-1">
+                                        <small class="text-muted">Status:</small>
+                                        <span class="badge bg-success">{{ team.ppi.completed }} Completed</span>
+                                        <span class="badge bg-primary">{{ team.ppi.on_track }} On Track</span>
+                                        <span class="badge bg-danger">{{ team.ppi.at_risk }} At Risk</span>
+                                    </div>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-success"
+                                             role="progressbar"
+                                             style="width: {{ team.ppi.percentage }}%"
+                                             aria-valuenow="{{ team.ppi.percentage }}"
+                                             aria-valuemin="0"
+                                             aria-valuemax="100">
+                                            {{ team.ppi.percentage }}% Complete
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="row">
-    <div class="col-md-6 col-lg-3 mb-4">
+    <!-- Upcoming Review Meetings -->
+    <div class="col-md-6 mb-4">
         <div class="card h-100">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-calendar-alt me-2"></i>Upcoming Review Meetings
+                </h5>
+            </div>
             <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-clipboard-list fa-2x text-primary"></i>
+                {% if upcoming_reviews %}
+                <div class="list-group list-group-flush">
+                    {% for review in upcoming_reviews %}
+                    <a href="{% url 'reviews:meeting' review.id %}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ review.team.name }}</h6>
+                            <small class="text-muted">{{ review.meeting_date|date:"M d, Y" }}</small>
+                        </div>
+                        <p class="mb-1">
+                            <small>{{ review.financial_year.year }} - {{ review.get_quarter_display }}</small>
+                        </p>
+                        <small class="text-muted">
+                            <i class="fas fa-clock me-1"></i>{{ review.meeting_time }}
+                        </small>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-calendar-check fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No upcoming review meetings in the next 30 days</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- My To Do -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="fas fa-tasks me-2"></i>My To Do
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Overdue Actions -->
+                {% if overdue_actions %}
+                <div class="mb-3">
+                    <h6 class="text-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Overdue ({{ overdue_actions|length }})
+                    </h6>
+                    <div class="list-group list-group-flush">
+                        {% for action in overdue_actions|slice:":5" %}
+                        <div class="list-group-item px-0 py-2">
+                            <div class="d-flex w-100 justify-content-between">
+                                <small class="mb-1 text-truncate" style="max-width: 70%;">{{ action.action }}</small>
+                                <small class="text-danger">
+                                    {% if action.revised_due_date %}
+                                        {{ action.revised_due_date|date:"M d" }}
+                                    {% else %}
+                                        {{ action.original_due_date|date:"M d" }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <small class="text-muted">{{ action.source_display|truncatewords:5 }}</small>
+                        </div>
+                        {% endfor %}
                     </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h6 class="card-title">Plan</h6>
-                        <p class="card-text">Upload and manage plans</p>
-                        <a href="{% url 'plans:dashboard' %}" class="btn btn-primary btn-sm">
-                            Go to Plan
-                        </a>
+                </div>
+                {% endif %}
+
+                <!-- Current Week Actions -->
+                <div>
+                    <h6 class="text-primary">
+                        <i class="fas fa-calendar-week me-2"></i>Week {{ current_week_number }} ({{ current_week_actions|length }})
+                    </h6>
+                    {% if current_week_actions %}
+                    <div class="list-group list-group-flush">
+                        {% for action in current_week_actions|slice:":5" %}
+                        <div class="list-group-item px-0 py-2">
+                            <div class="d-flex w-100 justify-content-between">
+                                <small class="mb-1 text-truncate" style="max-width: 70%;">{{ action.action }}</small>
+                                <small>
+                                    {% if action.revised_due_date %}
+                                        {{ action.revised_due_date|date:"M d" }}
+                                    {% else %}
+                                        {{ action.original_due_date|date:"M d" }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <small class="text-muted">{{ action.source_display|truncatewords:5 }}</small>
+                        </div>
+                        {% endfor %}
                     </div>
+                    {% else %}
+                    <p class="text-muted mb-0"><small>No actions due this week</small></p>
+                    {% endif %}
+                </div>
+
+                <div class="mt-3">
+                    <a href="{% url 'implement:dashboard' %}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-list me-1"></i>View All Actions
+                    </a>
                 </div>
             </div>
         </div>
     </div>
-    
-    <div class="col-md-6 col-lg-3 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-cogs fa-2x text-success"></i>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h6 class="card-title">Implement</h6>
-                        <p class="card-text">Track numbers, projects, and actions</p>
-                        <a href="{% url 'implement:dashboard' %}" class="btn btn-success btn-sm">
-                            Go to Implement
-                        </a>
-                    </div>
-                </div>
+</div>
+
+<!-- Assigned Projects Performance -->
+{% if assigned_projects %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-project-diagram me-2"></i>My Projects
+                </h5>
             </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6 col-lg-3 mb-4">
-        <div class="card h-100">
             <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-search fa-2x text-info"></i>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h6 class="card-title">Review</h6>
-                        <p class="card-text">Conduct review meetings</p>
-                        <a href="{% url 'reviews:dashboard' %}" class="btn btn-info btn-sm">
-                            Go to Review
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6 col-lg-3 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-arrow-trend-up fa-2x text-warning"></i>
-                    </div>
-                    <div class="flex-grow-1 ms-3">
-                        <h6 class="card-title">Improve</h6>
-                        <p class="card-text">Upload improvement projects</p>
-                        <a href="{% url 'improve:dashboard' %}" class="btn btn-warning btn-sm">
-                            Go to Improve
-                        </a>
-                    </div>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Project Name</th>
+                                <th>Type</th>
+                                <th>Team</th>
+                                <th>Status</th>
+                                <th>Completion</th>
+                                <th>Due Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in assigned_projects %}
+                            <tr>
+                                <td>{{ item.project.name }}</td>
+                                <td>
+                                    <span class="badge {% if item.type == 'PPI' %}bg-primary{% else %}bg-info{% endif %}">
+                                        {{ item.type }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if item.type == 'PPI' %}
+                                        {{ item.project.quarterly_plan.team.name }}
+                                    {% else %}
+                                        {{ item.project.upload.team.name }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.status %}
+                                    <span class="badge
+                                        {% if item.status.status == 'completed' %}bg-success
+                                        {% elif item.status.status == 'on_track' %}bg-primary
+                                        {% elif item.status.status == 'at_risk' %}bg-warning
+                                        {% elif item.status.status == 'danger' %}bg-danger
+                                        {% else %}bg-secondary
+                                        {% endif %}">
+                                        {{ item.status.get_status_display }}
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">No Status</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.status %}
+                                    <div class="progress" style="width: 100px; height: 20px;">
+                                        <div class="progress-bar bg-success"
+                                             role="progressbar"
+                                             style="width: {{ item.status.completion_percentage }}%"
+                                             aria-valuenow="{{ item.status.completion_percentage }}"
+                                             aria-valuemin="0"
+                                             aria-valuemax="100">
+                                            {{ item.status.completion_percentage }}%
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    0%
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ item.project.end_date|date:"M d, Y" }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -181,22 +405,5 @@
 </div>
 {% endif %}
 
-<!-- Quick Stats Section -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-chart-bar me-2"></i>Quick Overview
-                </h5>
-            </div>
-            <div class="card-body">
-                <p class="text-muted">
-                    Welcome to the PRE (Periodic Review Environment) system. This platform helps you manage 
-                    your team's performance indicators, track progress, and conduct effective review meetings.
-                </p>
-            </div>
-        </div>
-    </div>
-</div>
+{% endif %}
 {% endblock %}

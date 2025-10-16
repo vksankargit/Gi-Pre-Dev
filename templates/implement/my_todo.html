@@ -4,19 +4,16 @@
 {% block title %}My To Do - PRE System{% endblock %}
 
 {% block content %}
-<div class="row mt-4">
-    <div class="col-12">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{% url 'implement:dashboard' %}">Implement</a></li>
-                <li class="breadcrumb-item active">My To Do</li>
-            </ol>
-        </nav>
+<div class="style-3">
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'implement:dashboard' %}">Implement</a></li>
+        <li class="breadcrumb-item active">My To Do</li>
+    </ol>
+</nav>
 
-        <h1 class="h3 mb-4">
-            <i class="fas fa-list-check me-2"></i>My To Do
-        </h1>
-    </div>
+<div class="page-header">
+    <h1><i class="fas fa-list-check me-2"></i>My To Do</h1>
 </div>
 
 <div class="row">
@@ -36,6 +33,32 @@
                 </div>
             </div>
             <div class="card-body">
+                <!-- Due Date Filter -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="dueDateFilter" class="form-label fw-bold">
+                            <i class="fas fa-calendar-alt me-2"></i>Filter by Due Date
+                        </label>
+                        <select class="form-select" id="dueDateFilter" multiple size="4" onchange="applyDueDateFilter()">
+                            <option value="overdue" {% if 'overdue' in selected_filters %}selected{% endif %}>
+                                Overdue (before {{ today|date:"M d, Y" }})
+                            </option>
+                            <option value="current_week" {% if 'current_week' in selected_filters %}selected{% endif %}>
+                                Current Week ({{ current_week_start|date:"M d" }} - {{ current_week_end|date:"M d, Y" }})
+                            </option>
+                            <option value="next_week" {% if 'next_week' in selected_filters %}selected{% endif %}>
+                                Next Week ({{ next_week_start|date:"M d" }} - {{ next_week_end|date:"M d, Y" }})
+                            </option>
+                            <option value="later" {% if 'later' in selected_filters %}selected{% endif %}>
+                                Later (after {{ next_week_end|date:"M d, Y" }})
+                            </option>
+                        </select>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>Hold Ctrl (Cmd on Mac) to select multiple options. Default: Overdue & Current Week
+                        </div>
+                    </div>
+                </div>
+                <hr>
                 <div class="table-responsive">
                     <table class="table table-bordered table-hover">
                         <thead class="table-dark">
@@ -62,6 +85,11 @@
                                 </td>
                                 <td>
                                     <strong>{{ action.action|truncatechars:80 }}</strong>
+                                    {% if action.ppi_task %}
+                                        <br><small class="text-muted">From PPI project: {{ action.ppi_task.project.project_name }}</small>
+                                    {% elif action.improvement_task %}
+                                        <br><small class="text-muted">From Improvement project: {{ action.improvement_task.project.project_name }}</small>
+                                    {% endif %}
                                     {% if action.comments %}
                                         <br><small class="text-muted">{{ action.comments|truncatechars:100 }}</small>
                                     {% endif %}
@@ -81,7 +109,7 @@
                                 <td>{{ action.original_due_date|date:"M d, Y" }}</td>
                                 <td>
                                     <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% elif action.status == 'at_risk' %}warning{% elif action.status == 'danger' %}danger{% elif action.status == 'rejected' %}dark{% else %}secondary{% endif %}">
-                                        {{ action.get_status_display }}
+                                        {% if action.status == 'in_progress' %}On Track{% else %}{{ action.get_status_display }}{% endif %}
                                     </span>
                                 </td>
                                 <td>
@@ -248,28 +276,53 @@ function toggleActionComplete(actionId) {
 }
 
 function rejectAction(actionId) {
-    if (confirm('Are you sure you want to reject this action?')) {
-        fetch(`/implement/action/${actionId}/reject/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken'),
-                'X-Requested-With': 'XMLHttpRequest',
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert('Error rejecting action: ' + (data.error || 'Unknown error'));
-            }
-        })
-        .catch(error => {
-            console.error('Error rejecting action:', error);
-            alert('Error rejecting action: ' + error.message);
-        });
+    // Store the action ID for use in the modal
+    window.currentRejectActionId = actionId;
+
+    // Show the rejection reason modal
+    const modal = new bootstrap.Modal(document.getElementById('rejectActionModal'));
+    modal.show();
+}
+
+function submitRejection() {
+    const rejectionReason = document.getElementById('rejectionReason').value.trim();
+
+    if (!rejectionReason) {
+        alert('Please provide a reason for rejection.');
+        return;
     }
+
+    const actionId = window.currentRejectActionId;
+
+    fetch(`/implement/action/${actionId}/reject/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `rejection_reason=${encodeURIComponent(rejectionReason)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Close modal and reload page
+            const modal = bootstrap.Modal.getInstance(document.getElementById('rejectActionModal'));
+            modal.hide();
+            location.reload();
+        } else {
+            alert('Error rejecting action: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error rejecting action:', error);
+        alert('Error rejecting action: ' + error.message);
+    });
+}
+
+function clearRejectModal() {
+    document.getElementById('rejectionReason').value = '';
+    window.currentRejectActionId = null;
 }
 
 function viewActionHistory(actionId) {
@@ -281,6 +334,38 @@ function viewSubActions(actionId) {
 }
 
 // Action Modal Functions (copied from dashboard.html)
+function confirmActionCancel(event) {
+    // Check if form has unsaved changes
+    const form = document.getElementById('editActionForm');
+    const hasChanges = isFormDirty(form);
+
+    if (hasChanges) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (confirm('You will lose the data entered. Do you wish to continue?')) {
+            // Close modal - user clicked OK (wants to continue)
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editActionModal'));
+            if (modal) {
+                modal.hide();
+            }
+        }
+    }
+    // If no changes, let the modal close normally
+}
+
+// Helper function to check if form is dirty (has unsaved changes)
+function isFormDirty(form) {
+    if (!form) return false;
+    const inputs = form.querySelectorAll('input, textarea, select');
+    for (let input of inputs) {
+        if (input.type === 'hidden' || input.name === 'csrfmiddlewaretoken') continue;
+        if (input.value && input.value.trim() !== '' && input.value !== input.defaultValue) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function toggleActionFields() {
     console.log('=== toggleActionFields called ===');
 
@@ -406,5 +491,67 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+// Due Date Filter Function
+function applyDueDateFilter() {
+    const select = document.getElementById('dueDateFilter');
+    const selectedOptions = Array.from(select.selectedOptions).map(option => option.value);
+
+    // Build URL with selected filters
+    const url = new URL(window.location.href);
+    if (selectedOptions.length > 0) {
+        url.searchParams.set('due_date_filter', selectedOptions.join(','));
+    } else {
+        url.searchParams.delete('due_date_filter');
+    }
+
+    // Reload page with new filters
+    window.location.href = url.toString();
+}
 </script>
+
+<!-- Reject Action Modal -->
+<div class="modal fade" id="rejectActionModal" tabindex="-1" aria-labelledby="rejectActionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="rejectActionModalLabel">
+                    <i class="fas fa-times-circle me-2"></i>Reject Action
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="clearRejectModal()"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <h6><i class="fas fa-exclamation-triangle me-2"></i>You are about to reject this action</h6>
+                    <p class="mb-0">Please provide a detailed reason for rejection. This will be visible to the action creator and other stakeholders.</p>
+                </div>
+
+                <div class="mb-3">
+                    <label for="rejectionReason" class="form-label">Reason for Rejection <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="rejectionReason" rows="4" required placeholder="Please provide a detailed reason for rejecting this action..."></textarea>
+                    <div class="form-text">This reason will be visible to the action creator and other stakeholders.</div>
+                </div>
+
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-info-circle me-2"></i>What happens when you reject this action?</h6>
+                    <ul class="mb-0">
+                        <li>The action status will be changed to "Rejected"</li>
+                        <li>The action creator will be notified</li>
+                        <li>The action will appear in rejected actions reports</li>
+                        <li>The action will be reopened for the creator to address</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="clearRejectModal()">
+                    <i class="fas fa-times me-2"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-danger" onclick="submitRejection()">
+                    <i class="fas fa-times-circle me-2"></i>Reject Action
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
 {% endblock %}

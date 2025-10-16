@@ -1,0 +1,99 @@
+{% load l10n %}
+<!-- Project Details Popup Content -->
+<div class="modal-header">
+    <h5 class="modal-title">Project Details: {{ project.project_name }}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<div class="modal-body">
+    <!-- Project Information -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <p><strong>Completion Criteria:</strong><br>{{ project.completion_criteria }}</p>
+        </div>
+        <div class="col-md-6">
+            <p><strong>Responsibility:</strong> {{ project.responsible_user.get_full_name }}</p>
+            <p><strong>Start Date:</strong> {{ project.start_date|date:"M d, Y" }}</p>
+            <p><strong>Due Date:</strong> {{ project.original_due_date|date:"M d, Y" }}</p>
+        </div>
+    </div>
+
+    <!-- Weekly Tasks Grid -->
+    <div class="table-responsive">
+        <table class="table table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th>W1</th>
+                    <th>W2</th>
+                    <th>W3</th>
+                    <th>W4</th>
+                    <th>W5</th>
+                    <th>W6</th>
+                    <th>W7</th>
+                    <th>W8</th>
+                    <th>W9</th>
+                    <th>W10</th>
+                    <th>W11</th>
+                    <th>W12</th>
+                    <th>W13</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    {% for week in weeks %}
+                    <td class="week-cell {{ week.cell_class }}"
+                        style="cursor: pointer; {{ week.cell_style }} vertical-align: top; padding: 8px;"
+                        onclick="openWeekTasksImplement({{ project.id }}, '{{ project_type }}', {{ week.week_number }})"
+                        data-week="{{ week.week_number }}"
+                        data-tasks-count="{{ week.tasks_count }}">
+                        {% if week.tasks_count > 0 %}
+                            <div style="font-size: 11px; line-height: 1.3;">
+                                {% for task in week.tasks %}
+                                    <div class="mb-1" style="{% if task.is_completed %}text-decoration: line-through; opacity: 0.7;{% endif %}">
+                                        <i class="fas fa-{% if task.is_completed %}check-circle text-success{% else %}circle text-muted{% endif %}" style="font-size: 10px;"></i>
+                                        <span style="{% if task.is_completed %}{% elif week.week_number >= current_week and task.action %}{% if task.action.effective_status == 'overdue' %}color: #DC3545; font-weight: bold;{% elif task.action.effective_status == 'danger' %}color: #DC3545; font-weight: bold;{% elif task.action.effective_status == 'at_risk' %}color: #FFC107; font-weight: bold;{% elif task.action.effective_status == 'in_progress' %}color: #28A745; font-weight: bold;{% endif %}{% endif %}">
+                                            {{ task.task_description|truncatewords:5 }}
+                                        </span>
+                                    </div>
+                                {% endfor %}
+                                <div class="text-center mt-2 pt-1" style="border-top: 1px solid #dee2e6;">
+                                    <small class="text-muted">{{ week.completed_count }}/{{ week.tasks_count }}</small>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="text-center text-muted" style="font-size: 11px;">
+                                <small>No tasks</small>
+                            </div>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-3">
+        <h6>Legend:</h6>
+        <div class="row">
+            <div class="col-md-6">
+                <strong>Week Background:</strong>
+                <div class="d-flex flex-column gap-2 mt-2">
+                    <div><span class="badge" style="background-color: #90EE90;">Green</span> - All tasks completed</div>
+                    <div><span class="badge" style="background-color: #FFB6C6;">Light Red</span> - Past week with incomplete tasks</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <strong>Task Text Color (Current/Future Weeks):</strong>
+                <div class="d-flex flex-column gap-2 mt-2">
+                    <div><span style="color: #28A745; font-weight: bold;">Green</span> - On Track</div>
+                    <div><span style="color: #FFC107; font-weight: bold;">Yellow</span> - At Risk</div>
+                    <div><span style="color: #DC3545; font-weight: bold;">Red</span> - Danger / Overdue</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+</div>

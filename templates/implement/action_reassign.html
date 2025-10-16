@@ -69,7 +69,7 @@
                         <button type="submit" class="btn btn-primary" disabled id="reassignBtn">
                             <i class="fas fa-user-edit me-2"></i>Reassign Action
                         </button>
-                        <a href="{% url 'implement:my_todo' %}" class="btn btn-secondary">
+                        <a href="{% url 'implement:my_todo' %}" class="btn btn-secondary" onclick="return confirmReassignPageCancel(event)">
                             <i class="fas fa-times me-2"></i>Cancel
                         </a>
                     </div>
@@ -191,6 +191,13 @@ document.addEventListener('DOMContentLoaded', function() {
         reassignForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
+            // Validate member selection
+            const assignedTo = document.getElementById('assigned_to').value;
+            if (!assignedTo) {
+                alert('Please select Member');
+                return;
+            }
+
             const formData = new FormData(this);
 
             fetch(`/implement/action/{{ action.id|unlocalize }}/reassign/`, {
@@ -217,6 +224,39 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Cancel with confirmation
+function confirmReassignPageCancel(event) {
+    const form = document.getElementById('reassignForm');
+    if (!form) return true;
+
+    const hasChanges = isFormDirty(form);
+
+    if (hasChanges) {
+        if (!confirm('You will lose the data entered. Do you wish to continue?')) {
+            event.preventDefault();
+            return false;
+        }
+    }
+    return true;
+}
+
+// Helper function to check if form is dirty (has unsaved changes)
+function isFormDirty(form) {
+    if (!form) return false;
+    const inputs = form.querySelectorAll('input, textarea, select');
+    for (let input of inputs) {
+        if (input.type === 'hidden' || input.name === 'csrfmiddlewaretoken') continue;
+        if (input.type === 'checkbox') {
+            if (input.checked !== input.defaultChecked) return true;
+        } else {
+            if (input.value && input.value.trim() !== '' && input.value !== input.defaultValue) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 // CSRF token helper
 function getCookie(name) {

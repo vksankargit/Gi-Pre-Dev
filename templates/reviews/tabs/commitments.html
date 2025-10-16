@@ -1,86 +1,120 @@
+{% load l10n %}
 <!-- Commitments Tab Content -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">
-        <i class="fas fa-handshake me-2"></i>Commitments from Previous Reviews
+        <i class="fas fa-handshake me-2"></i>Actions from Previous Reviews
     </h5>
     <button class="btn btn-primary btn-sm" onclick="refreshCommitments()">
         <i class="fas fa-sync-alt me-1"></i>Refresh
     </button>
 </div>
 
-{% if commitments %}
+{% if actions %}
     <div class="table-responsive">
         <table class="table table-hover">
             <thead>
                 <tr>
-                    <th style="width: 10%">S.No</th>
-                    <th style="width: 30%">Action</th>
-                    <th style="width: 15%">Priority</th>
-                    <th style="width: 15%">Due Date</th>
-                    <th style="width: 15%">Status</th>
-                    <th style="width: 15%">Progress</th>
+                    <th style="width: 10%">Team</th>
+                    <th style="width: 12%">Review Meeting Details</th>
+                    <th style="width: 10%">Source</th>
+                    <th style="width: 20%">Action</th>
+                    <th style="width: 8%">Priority</th>
+                    <th style="width: 10%">Assigned To</th>
+                    <th style="width: 10%">Original Due Date</th>
+                    <th style="width: 8%">Status</th>
+                    <th style="width: 10%">Revised Due Date</th>
+                    <th style="width: 2%">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                {% for commitment in commitments %}
-                <tr class="{% if commitment.action.is_overdue %}table-danger{% elif commitment.action.due_date|date:'Y-m-d' == today %}table-warning{% endif %}">
+                {% for action in actions %}
+                <tr class="{% if action.due_date < today and action.status not in 'completed,cancelled' %}table-danger{% elif action.due_date|date:'Y-m-d' == today %}table-warning{% endif %}">
                     <td>
-                        <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                        <small>{{ action.assigned_to_team.name|default:"N/A" }}</small>
+                    </td>
+                    <td>
+                        <small class="text-muted">
+                            {{ action.review_meeting.review_date|date:"M d, Y" }}
+                            <br>
+                            <span class="badge bg-secondary">{{ action.review_meeting.get_review_type_display }}</span>
+                        </small>
+                    </td>
+                    <td>
+                        {% if action.parameter_type %}
+                            <span class="badge bg-{% if action.parameter_type == 'fpi' %}primary{% elif action.parameter_type == 'gpi' %}info{% elif action.parameter_type == 'ppi' %}success{% else %}secondary{% endif %}">
+                                {{ action.get_parameter_type_display }}
+                            </span>
+                            {% if action.get_parameter_name %}
+                                <br><small class="text-muted">{{ action.get_parameter_name|truncatechars:20 }}</small>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-secondary">General</span>
+                        {% endif %}
                     </td>
                     <td>
                         <div>
-                            <strong>{{ commitment.action.action_required|truncatechars:50 }}</strong>
-                            {% if commitment.action.action_required|length > 50 %}
+                            <strong>{{ action.action_description|truncatechars:50 }}</strong>
+                            {% if action.action_description|length > 50 %}
                                 <button class="btn btn-link btn-sm p-0 ms-1"
                                         data-bs-toggle="tooltip"
                                         data-bs-placement="top"
-                                        title="{{ commitment.action.action_required }}">
+                                        title="{{ action.action_description }}">
                                     <i class="fas fa-info-circle"></i>
                                 </button>
                             {% endif %}
-                            <br>
-                            <small class="text-muted">
-                                <i class="fas fa-user me-1"></i>{{ commitment.action.assigned_to.get_full_name|default:commitment.action.assigned_to.username }}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}info{% endif %}">
+                            {{ action.get_priority_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <small>{{ action.assigned_to.get_full_name|default:action.assigned_to.username }}</small>
+                    </td>
+                    <td>
+                        <small>{{ action.due_date|date:"M d, Y" }}</small>
+                        {% if action.due_date < today and action.status not in 'completed,cancelled' %}
+                            <br><small class="text-danger">
+                                <i class="fas fa-exclamation-triangle me-1"></i>Overdue
                             </small>
-                        </div>
+                        {% elif action.due_date|date:'Y-m-d' == today %}
+                            <br><small class="text-warning">
+                                <i class="fas fa-clock me-1"></i>Due Today
+                            </small>
+                        {% endif %}
                     </td>
                     <td>
-                        <span class="badge bg-{% if commitment.action.priority == 'high' %}danger{% elif commitment.action.priority == 'medium' %}warning{% else %}info{% endif %}">
-                            {{ commitment.action.get_priority_display }}
+                        <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% elif action.status == 'cancelled' %}secondary{% else %}warning{% endif %}">
+                            {{ action.get_status_display }}
                         </span>
                     </td>
                     <td>
-                        <div>
-                            {{ commitment.action.due_date|date:"M d, Y" }}
-                            {% if commitment.action.is_overdue %}
-                                <br><small class="text-danger">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>Overdue
-                                </small>
-                            {% elif commitment.action.due_date|date:'Y-m-d' == today %}
-                                <br><small class="text-warning">
-                                    <i class="fas fa-clock me-1"></i>Due Today
-                                </small>
-                            {% endif %}
-                        </div>
+                        <small class="text-muted">N/A</small>
                     </td>
                     <td>
-                        <span class="badge bg-{% if commitment.action.status == 'completed' %}success{% elif commitment.action.status == 'in_progress' %}primary{% elif commitment.action.status == 'on_hold' %}warning{% else %}secondary{% endif %}">
-                            {{ commitment.action.get_status_display }}
-                        </span>
-                    </td>
-                    <td>
-                        <div class="progress mb-1" style="height: 8px;">
-                            <div class="progress-bar
-                                {% if commitment.action.completion_percentage >= 75 %}bg-success
-                                {% elif commitment.action.completion_percentage >= 50 %}bg-info
-                                {% elif commitment.action.completion_percentage >= 25 %}bg-warning
-                                {% else %}bg-danger
-                                {% endif %}"
-                                role="progressbar"
-                                style="width: {{ commitment.action.completion_percentage }}%">
-                            </div>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-warning"
+                                    onclick="reassignCommitmentAction({{ action.id|unlocalize }})"
+                                    title="Reassign">
+                                <i class="fas fa-user-edit"></i>
+                            </button>
+                            <button class="btn btn-outline-success"
+                                    onclick="markCommitmentComplete({{ action.id|unlocalize }})"
+                                    title="Mark Complete">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="btn btn-outline-danger"
+                                    onclick="markCommitmentReject({{ action.id|unlocalize }})"
+                                    title="Mark Reject">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <button class="btn btn-outline-info"
+                                    onclick="viewCommitmentHistory({{ action.id|unlocalize }})"
+                                    title="View History">
+                                <i class="fas fa-history"></i>
+                            </button>
                         </div>
-                        <small class="text-muted">{{ commitment.action.completion_percentage }}%</small>
                     </td>
                 </tr>
                 {% endfor %}
@@ -90,7 +124,15 @@
 
     <!-- Summary Cards -->
     <div class="row mt-4">
-        <div class="col-md-3">
+        <div class="col-md-2">
+            <div class="card text-center border-info">
+                <div class="card-body py-2">
+                    <h5 class="card-title text-info mb-1">{{ summary.total }}</h5>
+                    <small class="text-muted">Total</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
             <div class="card text-center border-success">
                 <div class="card-body py-2">
                     <h5 class="card-title text-success mb-1">{{ summary.completed }}</h5>
@@ -98,7 +140,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card text-center border-primary">
                 <div class="card-body py-2">
                     <h5 class="card-title text-primary mb-1">{{ summary.in_progress }}</h5>
@@ -106,7 +148,15 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
+            <div class="card text-center border-secondary">
+                <div class="card-body py-2">
+                    <h5 class="card-title text-secondary mb-1">{{ summary.pending }}</h5>
+                    <small class="text-muted">Pending</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
             <div class="card text-center border-warning">
                 <div class="card-body py-2">
                     <h5 class="card-title text-warning mb-1">{{ summary.due_today }}</h5>
@@ -114,7 +164,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card text-center border-danger">
                 <div class="card-body py-2">
                     <h5 class="card-title text-danger mb-1">{{ summary.overdue }}</h5>
@@ -126,13 +176,47 @@
 
 {% else %}
     <div class="text-center py-5">
-        <i class="fas fa-handshake fa-4x text-muted mb-3"></i>
-        <h5 class="text-muted mb-3">No Commitments Found</h5>
+        <i class="fas fa-list-check fa-4x text-muted mb-3"></i>
+        <h5 class="text-muted mb-3">No Previous Actions Found</h5>
         <p class="text-muted">
-            No previous commitments found for this team. Commitments from previous review meetings will appear here.
+            No actions from previous review meetings found for this team. Actions created in previous review meetings will appear here.
         </p>
     </div>
 {% endif %}
+
+<!-- Reassign Modal -->
+<div class="modal fade" id="reassignModal" tabindex="-1" aria-labelledby="reassignModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reassignModalLabel">
+                    <i class="fas fa-user-edit me-2"></i>Reassign Action
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="reassignModalContent">
+                <!-- Reassign form loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- History Modal -->
+<div class="modal fade" id="historyModal" tabindex="-1" aria-labelledby="historyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="historyModalLabel">
+                    <i class="fas fa-history me-2"></i>Action History
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="historyModalContent">
+                <!-- History loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 function refreshCommitments() {
@@ -170,6 +254,250 @@ function refreshCommitments() {
                 </div>
             `;
         });
+}
+
+// Action button functions
+function reassignCommitmentAction(actionId) {
+    const modal = new bootstrap.Modal(document.getElementById('reassignModal'));
+    const content = document.getElementById('reassignModalContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading reassign form...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch(`{% url "reviews:action_items" meeting.pk %}?action=reassign&id=${actionId}&t=${Date.now()}`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Initialize the reassign form after loading (scripts in innerHTML don't execute)
+            initializeReassignForm();
+        })
+        .catch(error => {
+            console.error('Error loading reassign form:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading reassign form</p>
+                </div>
+            `;
+        });
+}
+
+function initializeReassignForm() {
+    console.log('Initializing reassign form');
+
+    // Attach team dropdown change event
+    const teamSelect = document.getElementById('reassignTeam');
+    console.log('teamSelect found:', teamSelect);
+    if (teamSelect) {
+        teamSelect.addEventListener('change', function() {
+            loadReassignTeamMembers();
+        });
+        console.log('Change event listener attached to reassignTeam');
+    }
+
+    // Enable reassign button when assignee is selected
+    const assigneeSelect = document.getElementById('reassignMember');
+    if (assigneeSelect) {
+        assigneeSelect.addEventListener('change', function() {
+            const reassignBtn = document.getElementById('reassignBtn');
+            reassignBtn.disabled = !this.value;
+        });
+    }
+
+    // Form submission
+    const reassignForm = document.getElementById('reassignReviewActionForm');
+    if (reassignForm) {
+        reassignForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Validate member selection
+            const assignedTo = document.getElementById('reassignMember').value;
+            if (!assignedTo) {
+                alert('Please select Member');
+                return;
+            }
+
+            const meetingId = this.dataset.meetingId;
+            const actionId = this.dataset.actionId;
+            const actionItemsUrl = `/review/${meetingId}/action-items/`;
+
+            const formData = new FormData();
+            formData.append('action', 'reassign');
+            formData.append('action_id', actionId);
+            formData.append('assigned_to', assignedTo);
+            formData.append('assigned_to_team', document.getElementById('reassignTeam').value);
+            formData.append('reassignment_reason', document.getElementById('reassignReason').value);
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+            fetch(actionItemsUrl, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('reassignModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+
+                    // Refresh commitments
+                    if (typeof refreshCommitments === 'function') {
+                        refreshCommitments();
+                    }
+                } else {
+                    alert(data.error || 'Error reassigning action');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error reassigning action');
+            });
+        });
+    }
+}
+
+function loadReassignTeamMembers() {
+    console.log('loadReassignTeamMembers called');
+    const teamId = document.getElementById('reassignTeam').value;
+    const assigneeSelect = document.getElementById('reassignMember');
+    const reassignBtn = document.getElementById('reassignBtn');
+
+    console.log('Team ID:', teamId);
+
+    if (teamId) {
+        // Show loading state
+        assigneeSelect.innerHTML = '<option value="">Loading...</option>';
+
+        // Fetch team members for reassignment
+        console.log('Fetching from:', `/api/team-members-reassign/${teamId}/`);
+        fetch(`/api/team-members-reassign/${teamId}/`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success && data.members && data.members.length > 0) {
+                    assigneeSelect.innerHTML = '<option value="">Select Member</option>';
+                    data.members.forEach(member => {
+                        const option = document.createElement('option');
+                        option.value = member.id;
+                        option.textContent = `${member.name} (${member.email})`;
+                        assigneeSelect.appendChild(option);
+                    });
+                } else {
+                    assigneeSelect.innerHTML = '<option value="">No members available</option>';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading team members:', error);
+                assigneeSelect.innerHTML = '<option value="">Error loading members</option>';
+            });
+    } else {
+        assigneeSelect.innerHTML = '<option value="">Select team first</option>';
+        reassignBtn.disabled = true;
+    }
+}
+
+function markCommitmentComplete(actionId) {
+    if (!confirm('Are you sure you want to mark this action as complete?')) {
+        return;
+    }
+
+    fetch(`/api/actions/${actionId}/complete/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action_id: actionId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            refreshCommitments();
+        } else {
+            alert(data.error || 'Error marking action as complete');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error marking action as complete');
+    });
+}
+
+function markCommitmentReject(actionId) {
+    const reason = prompt('Please provide a reason for rejecting this action:');
+    if (!reason) {
+        return;
+    }
+
+    fetch(`/api/actions/${actionId}/reject/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action_id: actionId, reason: reason })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            refreshCommitments();
+        } else {
+            alert(data.error || 'Error rejecting action');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error rejecting action');
+    });
+}
+
+function viewCommitmentHistory(actionId) {
+    const modal = new bootstrap.Modal(document.getElementById('historyModal'));
+    const content = document.getElementById('historyModalContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action history...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch(`{% url "reviews:action_items" meeting.pk %}?action=history&id=${actionId}`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading history:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action history</p>
+                </div>
+            `;
+        });
+}
+
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
 }
 
 // Initialize tooltips when content loads

@@ -5,18 +5,15 @@
 {% block title %}Implement - PRE System{% endblock %}
 
 {% block content %}
+<div class="style-3">
 <script>
 console.log('###############################################');
 console.log('DASHBOARD TEMPLATE VERSION: 2025-10-02-04:00');
 console.log('FIXES: Action modal fields, Reassign validation & cancel');
 console.log('###############################################');
 </script>
-<div class="row mt-4">
-    <div class="col-12">
-        <h1 class="h3 mb-4">
-            <i class="fas fa-cogs me-2"></i>Implement
-        </h1>
-    </div>
+<div class="page-header">
+    <h1><i class="fas fa-cogs me-2"></i>Implement</h1>
 </div>
 
 <!-- Tab Navigation -->
@@ -96,7 +93,8 @@ console.log('###############################################');
                                                        value="{{ gpi.last_week_actual|default:'0.00' }}" step="0.01"
                                                        data-gpi-id="{{ gpi.id }}"
                                                        data-field="last_week_actual"
-                                                       onchange="autoSave(this)">
+                                                       onchange="autoSave(this)"
+                                                       {% if gpi.is_locked %}disabled title="Data locked - Weekly review has been saved"{% endif %}>
                                             </td>
                                             <td class="text-end">{{ gpi.current_week_budget|floatformat:2 }}</td>
                                             <td class="text-end">
@@ -104,14 +102,16 @@ console.log('###############################################');
                                                        value="{{ gpi.current_week_plan|default:'0.00' }}" step="0.01"
                                                        data-gpi-id="{{ gpi.id }}"
                                                        data-field="current_week_plan"
-                                                       onchange="autoSave(this)">
+                                                       onchange="autoSave(this)"
+                                                       {% if gpi.is_locked %}disabled title="Data locked - Weekly review has been saved"{% endif %}>
                                             </td>
                                             <td>
                                                 <textarea class="form-control form-control-sm" rows="1"
                                                           data-gpi-id="{{ gpi.id }}"
                                                           data-field="explanation"
                                                           onchange="autoSave(this)"
-                                                          placeholder="Add comments...">{{ gpi.explanation|default:"" }}</textarea>
+                                                          placeholder="Add comments..."
+                                                          {% if gpi.is_locked %}disabled title="Data locked - Weekly review has been saved"{% endif %}>{{ gpi.explanation|default:"" }}</textarea>
                                             </td>
                                             <td>{{ gpi.responsible_user.get_full_name }}</td>
                                             <td>
@@ -152,7 +152,6 @@ console.log('###############################################');
                                 <table class="table table-bordered table-hover">
                                     <thead class="table-dark">
                                         <tr>
-                                            <th>Month</th>
                                             <th>Team</th>
                                             <th>FPI/GPI</th>
                                             <th>Last Month Budget</th>
@@ -168,7 +167,6 @@ console.log('###############################################');
                                     <tbody>
                                         {% for param in monthly_numbers %}
                                         <tr>
-                                            <td>{{ current_month }}</td>
                                             <td>{{ param.quarterly_plan.team.name }}</td>
                                             <td>
                                                 {% if param.main_head %}
@@ -196,7 +194,8 @@ console.log('###############################################');
                                                        data-param-id="{{ param.id }}"
                                                        data-param-type="{% if param.main_head %}fpi{% else %}gpi{% endif %}"
                                                        data-field="last_month_actual"
-                                                       onchange="autoSave(this)">
+                                                       onchange="autoSave(this)"
+                                                       {% if param.is_locked %}disabled title="Data locked - Monthly review has been saved"{% endif %}>
                                             </td>
                                             <td class="text-end">
                                                 {% if param.main_head %}
@@ -211,7 +210,8 @@ console.log('###############################################');
                                                        data-param-id="{{ param.id }}"
                                                        data-param-type="{% if param.main_head %}fpi{% else %}gpi{% endif %}"
                                                        data-field="current_month_plan"
-                                                       onchange="autoSave(this)">
+                                                       onchange="autoSave(this)"
+                                                       {% if param.is_locked %}disabled title="Data locked - Monthly review has been saved"{% endif %}>
                                             </td>
                                             <td>
                                                 <textarea class="form-control form-control-sm" rows="1"
@@ -219,7 +219,8 @@ console.log('###############################################');
                                                           data-param-type="{% if param.main_head %}fpi{% else %}gpi{% endif %}"
                                                           data-field="explanation"
                                                           onchange="autoSave(this)"
-                                                          placeholder="Add comments...">{{ param.explanation|default:"" }}</textarea>
+                                                          placeholder="Add comments..."
+                                                          {% if param.is_locked %}disabled title="Data locked - Monthly review has been saved"{% endif %}>{{ param.explanation|default:"" }}</textarea>
                                             </td>
                                             <td>{{ param.responsible_user.get_full_name }}</td>
                                             <td>
@@ -2081,4 +2082,5 @@ function getCookie(name) {
 <div id="actionIssuesModal"></div>
 
 <!-- Issue and action modal JavaScript is now loaded globally in base.html -->
+</div>
 {% endblock %}

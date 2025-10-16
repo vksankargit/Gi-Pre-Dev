@@ -5,12 +5,14 @@ from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 from django.utils import timezone
+from django.db import models
 import openpyxl
 import os
 import datetime
-from .models import AnnualPlan, QuarterlyPlan, FinancialYear, FPIParameter, GPIParameter, PPIProject, PPITask, FPIMilestone, GPIMilestone
+from .models import AnnualPlan, QuarterlyPlan, FinancialYear, FPIParameter, GPIParameter, PPIProject, PPITask, FPIMilestone, GPIMilestone, AnnualFPIParameter, AnnualGPIParameter, AnnualPPIProject, AnnualPlanUploadHistory, QuarterlyPlanUploadHistory
 from organizations.models import Team
 from django.contrib.auth import get_user_model
+from accounts.utils import get_effective_user
 
 
 class PlanDashboardView(LoginRequiredMixin, TemplateView):
@@ -18,7 +20,7 @@ class PlanDashboardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.request.user
+        user = get_effective_user(self.request)
 
         # Get teams where user is manager or can access based on role
         if user.role == 'general':
@@ -141,9 +143,9 @@ class AnnualPlanUploadView(LoginRequiredMixin, TemplateView):
             True  # For now, always return JSON since this endpoint is only used by JavaScript
         )
 
-        # Get parameters with correct names (JS sends team_id/plan_year_id)
+        # Get parameters with correct names (JS sends team_id/financial_year_id)
         team_id = request.POST.get('team_id') or request.POST.get('team')
-        financial_year_id = request.POST.get('plan_year_id') or request.POST.get('financial_year')
+        financial_year_id = request.POST.get('financial_year_id') or request.POST.get('plan_year_id') or request.POST.get('financial_year')
         uploaded_file = request.FILES.get('file')
 
         # Validation
@@ -209,19 +211,99 @@ class AnnualPlanUploadView(LoginRequiredMixin, TemplateView):
 
         # Process and save the annual plan
         try:
-            annual_plan, created = AnnualPlan.objects.update_or_create(
-                team=team,
-                financial_year=financial_year,
-                defaults={
-                    'file_name': uploaded_file.name,
-                    'file_path': uploaded_file,
-                    'upload_status': 'successful',
-                    'uploaded_by': request.user,
-                    'error_log': ''
-                }
+            # Check if plan already exists for this team/year
+            existing_plan = AnnualPlan.objects.filter(team=team, financial_year=financial_year).first()
+
+            if existing_plan:
+                # Re-upload: Archive the old file by renaming it with timestamp
+                if existing_plan.file_path:
+                    old_path = existing_plan.file_path.path
+                    if os.path.exists(old_path):
+                        # Rename old file with timestamp
+                        timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+                        base_name = os.path.basename(old_path)
+                        name, ext = os.path.splitext(base_name)
+                        new_name = f"{name}_archived_{timestamp}{ext}"
+                        new_path = os.path.join(os.path.dirname(old_path), new_name)
+                        os.rename(old_path, new_path)
+
+                # Update existing plan with new file
+                existing_plan.file_name = uploaded_file.name
+                existing_plan.file_path = uploaded_file
+                existing_plan.upload_status = 'processing'
+                existing_plan.uploaded_by = request.user
+                existing_plan.error_log = ''
+                existing_plan.save()
+                annual_plan = existing_plan
+            else:
+                # Create new plan
+                annual_plan = AnnualPlan.objects.create(
+                    team=team,
+                    financial_year=financial_year,
+                    file_name=uploaded_file.name,
+                    file_path=uploaded_file,
+                    upload_status='processing',
+                    uploaded_by=request.user,
+                    error_log=''
+                )
+
+            # Parse and import data from Excel
+            errors = self._parse_annual_plan(annual_plan, uploaded_file)
+
+            # Count total records
+            total_fpis = AnnualFPIParameter.objects.filter(annual_plan=annual_plan).count()
+            total_gpis = AnnualGPIParameter.objects.filter(annual_plan=annual_plan).count()
+            total_ppis = AnnualPPIProject.objects.filter(annual_plan=annual_plan).count()
+            total_records = total_fpis + total_gpis + total_ppis
+            error_records = len(errors)
+            processed_records = total_records
+
+            if errors:
+                annual_plan.upload_status = 'failed'
+                annual_plan.error_log = '\n'.join(errors)
+                annual_plan.save()
+
+                # Create history record for failed upload
+                AnnualPlanUploadHistory.objects.create(
+                    annual_plan=annual_plan,
+                    file_name=uploaded_file.name,
+                    file_path=annual_plan.file_path,
+                    upload_status='failed',
+                    error_log='\n'.join(errors),
+                    uploaded_by=request.user,
+                    total_records=total_records,
+                    processed_records=processed_records,
+                    error_records=error_records
+                )
+
+                error_message = f'Upload completed with errors: {errors[0]}'
+                if is_ajax:
+                    return JsonResponse({
+                        'success': False,
+                        'error': error_message
+                    })
+                else:
+                    messages.error(request, error_message)
+                    return redirect('plans:dashboard')
+
+            # Mark as successful
+            annual_plan.upload_status = 'successful'
+            annual_plan.save()
+
+            # Create history record for successful upload
+            AnnualPlanUploadHistory.objects.create(
+                annual_plan=annual_plan,
+                file_name=uploaded_file.name,
+                file_path=annual_plan.file_path,
+                upload_status='successful',
+                error_log='',
+                uploaded_by=request.user,
+                total_records=total_records,
+                processed_records=processed_records,
+                error_records=0
             )
 
-            success_message = 'Annual plan uploaded successfully.'
+            success_message = 'Annual plan uploaded and processed successfully.'
             if is_ajax:
                 return JsonResponse({
                     'success': True,
@@ -242,34 +324,239 @@ class AnnualPlanUploadView(LoginRequiredMixin, TemplateView):
                 messages.error(request, error_message)
                 return redirect('plans:dashboard')
 
+    def _parse_annual_plan(self, annual_plan, uploaded_file):
+        """Parse annual plan Excel file and import FPI, GPI, PPI data"""
+        errors = []
+        User = get_user_model()
+
+        try:
+            # Load workbook
+            workbook = openpyxl.load_workbook(uploaded_file, data_only=True)
+
+            # Clear existing data for this annual plan
+            AnnualFPIParameter.objects.filter(annual_plan=annual_plan).delete()
+            AnnualGPIParameter.objects.filter(annual_plan=annual_plan).delete()
+            AnnualPPIProject.objects.filter(annual_plan=annual_plan).delete()
+
+            # Process FPI sheet
+            if 'FPIs' in workbook.sheetnames:
+                fpi_errors = self._process_annual_fpi_sheet(workbook['FPIs'], annual_plan, User)
+                errors.extend(fpi_errors)
+            else:
+                errors.append("Missing FPIs sheet in uploaded file")
+
+            # Process GPI sheet
+            if 'GPIs' in workbook.sheetnames:
+                gpi_errors = self._process_annual_gpi_sheet(workbook['GPIs'], annual_plan, User)
+                errors.extend(gpi_errors)
+            else:
+                errors.append("Missing GPIs sheet in uploaded file")
+
+            # Process PPI sheet
+            if 'PPIs' in workbook.sheetnames:
+                ppi_errors = self._process_annual_ppi_sheet(workbook['PPIs'], annual_plan, User)
+                errors.extend(ppi_errors)
+            else:
+                errors.append("Missing PPIs sheet in uploaded file")
+
+        except Exception as e:
+            errors.append(f"Error reading Excel file: {str(e)}")
+
+        return errors
+
+    def _process_annual_fpi_sheet(self, sheet, annual_plan, User):
+        """Process FPIs sheet: Row 4 headers, data starts at row 5"""
+        errors = []
+
+        # Expected columns: Main Head, Sub-head, Responsibility, 1-year Goals, Q1 Budget, Q2 Budget, Q3 Budget, Q4 Budget
+        for row_num, row in enumerate(sheet.iter_rows(min_row=5, values_only=True), start=5):
+            if not any(row):  # Skip empty rows
+                continue
+
+            try:
+                # Skip the first empty column (template has empty column at start)
+                _, main_head, sub_head, responsibility, annual_goal, q1_budget, q2_budget, q3_budget, q4_budget = row[:9]
+
+                if not main_head or not sub_head:
+                    continue  # Skip rows without main data
+
+                # Find responsible user
+                responsible_user = None
+                if responsibility:
+                    responsible_user = User.objects.filter(
+                        models.Q(username__iexact=responsibility) |
+                        models.Q(first_name__iexact=responsibility) |
+                        models.Q(last_name__iexact=responsibility)
+                    ).first()
+
+                # Map main_head to model choices
+                main_head_mapping = {
+                    'Revenue': 'revenue',
+                    'Variable Cost': 'variable_cost',
+                    'Operating Expenses': 'operating_expenses',
+                    'Other Expenses': 'other_expenses',
+                }
+                main_head_value = main_head_mapping.get(str(main_head).strip(), 'revenue')
+
+                # Create FPI parameter
+                AnnualFPIParameter.objects.create(
+                    annual_plan=annual_plan,
+                    main_head=main_head_value,
+                    sub_head=str(sub_head).strip(),
+                    responsible_user=responsible_user,
+                    annual_goal=self._parse_decimal(annual_goal),
+                    q1_goal=self._parse_decimal(q1_budget),
+                    q2_goal=self._parse_decimal(q2_budget),
+                    q3_goal=self._parse_decimal(q3_budget),
+                    q4_goal=self._parse_decimal(q4_budget)
+                )
+
+            except Exception as e:
+                errors.append(f"FPI Row {row_num}: {str(e)}")
+
+        return errors
+
+    def _process_annual_gpi_sheet(self, sheet, annual_plan, User):
+        """Process GPIs sheet: Row 4 headers, data starts at row 5"""
+        errors = []
+
+        # Expected columns: Goal Progress Indicators, Cumulation Type, Indicator Type, Tracking Type, Responsibility, 1-Year Goals, Q1-Q4 Budgets
+        for row_num, row in enumerate(sheet.iter_rows(min_row=5, values_only=True), start=5):
+            if not any(row):  # Skip empty rows
+                continue
+
+            try:
+                # Skip the first empty column
+                _, name, cumulation_type, indicator_type, tracking_type, responsibility, annual_goal, q1_budget, q2_budget, q3_budget, q4_budget = row[:11]
+
+                if not name:
+                    continue
+
+                # Find responsible user
+                responsible_user = None
+                if responsibility:
+                    responsible_user = User.objects.filter(
+                        models.Q(username__iexact=responsibility) |
+                        models.Q(first_name__iexact=responsibility) |
+                        models.Q(last_name__iexact=responsibility)
+                    ).first()
+
+                # Map values to model choices
+                cumulation_mapping = {'Sum': 'sum', 'Average': 'average', 'NA': 'na'}
+                indicator_mapping = {'Outcome': 'outcome', 'Activity': 'activity'}
+                tracking_mapping = {'Weekly': 'weekly', 'Monthly': 'monthly'}
+
+                cumulation_value = cumulation_mapping.get(str(cumulation_type).strip(), 'na')
+                indicator_value = indicator_mapping.get(str(indicator_type).strip(), 'outcome')
+                tracking_value = tracking_mapping.get(str(tracking_type).strip(), 'monthly')
+
+                # Create GPI parameter
+                AnnualGPIParameter.objects.create(
+                    annual_plan=annual_plan,
+                    name=str(name).strip(),
+                    cumulation_type=cumulation_value,
+                    indicator_type=indicator_value,
+                    tracking_type=tracking_value,
+                    responsible_user=responsible_user,
+                    annual_goal=self._parse_decimal(annual_goal),
+                    q1_goal=self._parse_decimal(q1_budget),
+                    q2_goal=self._parse_decimal(q2_budget),
+                    q3_goal=self._parse_decimal(q3_budget),
+                    q4_goal=self._parse_decimal(q4_budget)
+                )
+
+            except Exception as e:
+                errors.append(f"GPI Row {row_num}: {str(e)}")
+
+        return errors
+
+    def _process_annual_ppi_sheet(self, sheet, annual_plan, User):
+        """Process PPIs sheet: Row 4 headers, data starts at row 5"""
+        errors = []
+
+        # Expected columns: Project Name, Completion Criteria, Responsibility, Start Date, End Date, 1-Year Goals, Q1-Q4 Budgets
+        for row_num, row in enumerate(sheet.iter_rows(min_row=5, values_only=True), start=5):
+            if not any(row):  # Skip empty rows
+                continue
+
+            try:
+                # Skip the first empty column
+                _, project_name, completion_criteria, responsibility, start_date, end_date, annual_goal, q1_goal, q2_goal, q3_goal, q4_goal = row[:11]
+
+                if not project_name:
+                    continue
+
+                # Find responsible user
+                responsible_user = None
+                if responsibility:
+                    responsible_user = User.objects.filter(
+                        models.Q(username__iexact=responsibility) |
+                        models.Q(first_name__iexact=responsibility) |
+                        models.Q(last_name__iexact=responsibility)
+                    ).first()
+
+                # Parse dates
+                start_date_parsed = self._parse_date(start_date)
+                end_date_parsed = self._parse_date(end_date)
+
+                # Create PPI project
+                AnnualPPIProject.objects.create(
+                    annual_plan=annual_plan,
+                    name=str(project_name).strip(),
+                    completion_criteria=str(completion_criteria).strip() if completion_criteria else '',
+                    responsible_user=responsible_user,
+                    start_date=start_date_parsed,
+                    end_date=end_date_parsed,
+                    annual_goal=str(annual_goal).strip() if annual_goal else '',
+                    q1_goal=str(q1_goal).strip() if q1_goal else '',
+                    q2_goal=str(q2_goal).strip() if q2_goal else '',
+                    q3_goal=str(q3_goal).strip() if q3_goal else '',
+                    q4_goal=str(q4_goal).strip() if q4_goal else ''
+                )
+
+            except Exception as e:
+                errors.append(f"PPI Row {row_num}: {str(e)}")
+
+        return errors
+
+    def _parse_decimal(self, value):
+        """Parse decimal value from Excel cell"""
+        if value is None or value == '':
+            return None
+        try:
+            return float(value)
+        except:
+            return None
+
+    def _parse_date(self, value):
+        """Parse date value from Excel cell"""
+        if value is None or value == '':
+            return None
+        if isinstance(value, datetime.date):
+            return value
+        try:
+            return datetime.datetime.strptime(str(value), '%Y-%m-%d').date()
+        except:
+            return None
+
 
 class AnnualPlanTemplateDownloadView(LoginRequiredMixin, TemplateView):
     def get(self, request, *args, **kwargs):
-        # Create a blank Excel template for annual plan
-        workbook = openpyxl.Workbook()
-        
-        # Remove default sheet
-        workbook.remove(workbook.active)
-        
-        # Create FPI sheet
-        fpi_sheet = workbook.create_sheet('FPI')
-        fpi_sheet.append(['Parameter Type', 'Sub Head', 'Annual Goal', 'Q1', 'Q2', 'Q3', 'Q4'])
-        
-        # Create GPI sheet
-        gpi_sheet = workbook.create_sheet('GPI')
-        gpi_sheet.append(['Goal & Progress Indicator', 'Unit of Measure', 'Tracking Type', 'Annual Goal', 'Q1', 'Q2', 'Q3', 'Q4'])
-        
-        # Create PPI sheet
-        ppi_sheet = workbook.create_sheet('PPI')
-        ppi_sheet.append(['Project Name', 'Completion Criteria', 'Start Date', 'End Date'])
-        
-        # Save to response
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = 'attachment; filename="annual_plan_template.xlsx"'
-        workbook.save(response)
-        
+        # Path to the template file
+        template_path = os.path.join(settings.BASE_DIR, 'Annual_Plan_Template.xlsx')
+
+        # Check if template file exists
+        if not os.path.exists(template_path):
+            return HttpResponse("Template file not found", status=404)
+
+        # Read the template file
+        with open(template_path, 'rb') as f:
+            response = HttpResponse(
+                f.read(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename="Annual_Plan_Template.xlsx"'
+
         return response
 
 
@@ -357,6 +644,7 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
         team_id = request.POST.get('team_id') or request.POST.get('team')
         quarter_id = request.POST.get('quarter_id') or request.POST.get('quarter')
         uploaded_file = request.FILES.get('file')
+        confirm_delete = request.POST.get('confirm_delete', 'false') == 'true'
 
         # Validation
         if not all([team_id, quarter_id, uploaded_file]):
@@ -438,6 +726,53 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                 messages.error(request, error_message)
                 return redirect('plans:dashboard')
 
+        # Check if a plan already exists for this quarter
+        existing_plan = QuarterlyPlan.objects.filter(
+            team=team,
+            financial_year=financial_year,
+            quarter=quarter_num
+        ).first()
+
+        # If plan exists and user hasn't confirmed deletion, ask for confirmation
+        if existing_plan and not confirm_delete:
+            return JsonResponse({
+                'success': False,
+                'requires_confirmation': True,
+                'error': f'A quarterly plan already exists for {team.name} - {financial_year.year} Q{quarter_num}. All data (plan & actual) related to the old plan including FPI, GPI, PPI, and all associated actions will be deleted permanently. Do you want to continue?'
+            })
+
+        # If existing plan and confirmed deletion, delete all related data
+        if existing_plan and confirm_delete:
+            from django.db import transaction
+            from implement.models import Action
+
+            with transaction.atomic():
+                # Get all PPI projects for this plan
+                ppi_projects = PPIProject.objects.filter(quarterly_plan=existing_plan)
+
+                # For each PPI project, get all tasks and their associated actions
+                for project in ppi_projects:
+                    tasks = project.tasks.all()
+                    for task in tasks:
+                        # Get the action associated with this task
+                        action = Action.objects.filter(ppi_task=task).first()
+                        if action:
+                            # Delete the action and all its hierarchical sub-actions
+                            # Django will handle cascade deletion of sub_actions
+                            action.delete()
+
+                # Get all FPI parameters and their milestones (will be cascade deleted)
+                FPIParameter.objects.filter(quarterly_plan=existing_plan).delete()
+
+                # Get all GPI parameters and their milestones (will be cascade deleted)
+                GPIParameter.objects.filter(quarterly_plan=existing_plan).delete()
+
+                # Delete all PPI projects and their tasks (will be cascade deleted)
+                ppi_projects.delete()
+
+                # Delete the existing plan itself
+                existing_plan.delete()
+
         # Process and save the quarterly plan
         try:
             quarterly_plan, created = QuarterlyPlan.objects.update_or_create(
@@ -456,10 +791,31 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
             # Process the Excel file to create FPI, GPI, and PPI records
             processing_errors = self._process_quarterly_excel_file(quarterly_plan, uploaded_file)
 
+            # Count total records
+            total_fpis = FPIParameter.objects.filter(quarterly_plan=quarterly_plan).count()
+            total_gpis = GPIParameter.objects.filter(quarterly_plan=quarterly_plan).count()
+            total_ppis = PPIProject.objects.filter(quarterly_plan=quarterly_plan).count()
+            total_records = total_fpis + total_gpis + total_ppis
+            error_records = len(processing_errors)
+            processed_records = total_records
+
             if processing_errors:
                 quarterly_plan.upload_status = 'failed'
                 quarterly_plan.error_log = '\n'.join(processing_errors)
                 quarterly_plan.save()
+
+                # Create history record for failed upload
+                QuarterlyPlanUploadHistory.objects.create(
+                    quarterly_plan=quarterly_plan,
+                    file_name=uploaded_file.name,
+                    file_path=quarterly_plan.file_path,
+                    upload_status='failed',
+                    error_log='\n'.join(processing_errors),
+                    uploaded_by=request.user,
+                    total_records=total_records,
+                    processed_records=processed_records,
+                    error_records=error_records
+                )
 
                 error_message = f'File uploaded but processing failed: {"; ".join(processing_errors[:3])}'
                 if len(processing_errors) > 3:
@@ -477,6 +833,19 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
             else:
                 quarterly_plan.upload_status = 'successful'
                 quarterly_plan.save()
+
+                # Create history record for successful upload
+                QuarterlyPlanUploadHistory.objects.create(
+                    quarterly_plan=quarterly_plan,
+                    file_name=uploaded_file.name,
+                    file_path=quarterly_plan.file_path,
+                    upload_status='successful',
+                    error_log='',
+                    uploaded_by=request.user,
+                    total_records=total_records,
+                    processed_records=processed_records,
+                    error_records=0
+                )
 
                 success_message = 'Quarterly plan uploaded and processed successfully.'
                 if is_ajax:
@@ -659,20 +1028,21 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
         """Process GPI sheet with full weekly/monthly milestone extraction"""
         errors = []
 
-        # Header is at row 6, data starts at row 7
-        for row_num, row in enumerate(sheet.iter_rows(min_row=7, values_only=True), start=7):
+        # Header is at row 4, data starts at row 5
+        for row_num, row in enumerate(sheet.iter_rows(min_row=5, values_only=True), start=5):
             if not any(row):  # Skip empty rows
                 continue
 
             try:
-                # Actual format: ['', 'Goal & Progress Indicators', 'Indicator Type (Goal / Progress)', 'Responsibility', 'Annual Goal', 'YTD till last quarter', 'Next Quarter Budget', 'Next Quarter Goal', 'W1/M1', 'W2/M2', ...]
-                if len(row) < 8:
+                # New format: ['', 'Goal Progress Indicators', 'Cumulation Type', 'Indicator Type', 'Responsibility', 'Annual Goal', 'YTD till last quarter', 'Next Quarter Budget', 'Next Quarter Goal', 'W1/M1', ...]
+                if len(row) < 9:
                     continue
 
                 name = row[1] if len(row) > 1 else ''
-                indicator_type = row[2] if len(row) > 2 else ''
-                responsibility = row[3] if len(row) > 3 else ''
-                quarter_goal = row[7] if len(row) > 7 else 0  # Next Quarter Goal
+                cumulation_type = row[2] if len(row) > 2 else ''
+                indicator_type = row[3] if len(row) > 3 else ''
+                responsibility = row[4] if len(row) > 4 else ''
+                quarter_goal = row[8] if len(row) > 8 else 0  # Next Quarter Goal
 
                 if not name or str(name).strip() == 'None' or str(name).strip() == '':
                     continue  # Skip rows without name
@@ -692,13 +1062,29 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                             errors.append(f"GPI-{tracking_type[0].upper()} Row {row_num}: User '{responsibility_clean}' not found. Available emails: {available_emails}")
                             continue
 
+                # Map cumulation type
+                cumulation_str = str(cumulation_type).lower().strip()
+                if 'sum' in cumulation_str:
+                    cumulation_value = 'sum'
+                elif 'average' in cumulation_str or 'avg' in cumulation_str:
+                    cumulation_value = 'average'
+                else:
+                    cumulation_value = 'na'
+
                 # Map indicator type
-                indicator_type_value = 'goal' if str(indicator_type).lower().strip() == 'goal' else 'progress'
+                indicator_str = str(indicator_type).lower().strip()
+                if 'outcome' in indicator_str:
+                    indicator_type_value = 'outcome'
+                elif 'activity' in indicator_str:
+                    indicator_type_value = 'activity'
+                else:
+                    indicator_type_value = 'outcome'  # Default
 
                 # Create GPI parameter
                 gpi_parameter = GPIParameter.objects.create(
                     quarterly_plan=quarterly_plan,
                     name=str(name).strip(),
+                    cumulation_type=cumulation_value,
                     unit_of_measure='',  # Unit of measure not present in this format
                     tracking_type=tracking_type,
                     indicator_type=indicator_type_value,
@@ -707,11 +1093,11 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                 )
 
                 # Extract weekly/monthly milestone data
-                # W1/M1 starts at index 8 (after Next Quarter Goal)
+                # W1/M1 starts at index 9 (after Next Quarter Goal)
                 if tracking_type == 'weekly':
-                    # Process W1-W13 columns (starting from index 8)
+                    # Process W1-W13 columns (starting from index 9)
                     for week_num in range(1, 14):  # W1 to W13
-                        col_index = 7 + week_num  # W1 is at index 8, so 7 + 1 = 8
+                        col_index = 8 + week_num  # W1 is at index 9, so 8 + 1 = 9
                         if col_index < len(row) and row[col_index] is not None:
                             try:
                                 week_value = float(row[col_index])
@@ -725,9 +1111,9 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                                 pass  # Skip invalid values
 
                 elif tracking_type == 'monthly':
-                    # Process M1-M3 columns (starting from index 8)
+                    # Process M1-M3 columns (starting from index 9)
                     for month_num in range(1, 4):  # Month 1 to Month 3
-                        col_index = 7 + month_num  # M1 is at index 8, so 7 + 1 = 8
+                        col_index = 8 + month_num  # M1 is at index 9, so 8 + 1 = 9
                         if col_index < len(row) and row[col_index] is not None:
                             try:
                                 month_value = float(row[col_index])
@@ -749,14 +1135,22 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
         """Process PPI sheet: ['Project Name', 'Completion Criteria for the quarter', 'Responsibility', 'Start Date', 'End Date', 'Steps', 'W1', 'W2', ...]"""
         errors = []
 
-        # Header is at row 6, data starts at row 7
-        for row_num, row in enumerate(sheet.iter_rows(min_row=7, values_only=True), start=7):
+        # Header is at row 4, data starts at row 5
+        for row_num, row in enumerate(sheet.iter_rows(min_row=5, values_only=True), start=5):
             if not any(row):  # Skip empty rows
                 continue
 
             try:
                 # Format: ['', 'Project Name', 'Completion Criteria for the quarter', 'Responsibility', 'Start Date', 'End Date', 'Steps', 'W1', 'W2', ...]
-                _, project_name, completion_criteria, responsibility, start_date, end_date = row[:6]
+                if len(row) < 7:
+                    continue
+
+                project_name = row[1] if len(row) > 1 else ''
+                completion_criteria = row[2] if len(row) > 2 else ''
+                responsibility = row[3] if len(row) > 3 else ''
+                start_date = row[4] if len(row) > 4 else None
+                end_date = row[5] if len(row) > 5 else None
+                steps = row[6] if len(row) > 6 else ''
 
                 if not project_name or project_name == 'None':
                     continue  # Skip rows without project name
@@ -764,14 +1158,17 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                 # Find responsible user by email
                 responsible_user = None
                 if responsibility:
-                    try:
-                        responsible_user = User.objects.get(email__iexact=responsibility.strip())
-                    except User.DoesNotExist:
+                    # Convert to string first in case it's a number
+                    responsibility_str = str(responsibility).strip() if responsibility else ''
+                    if responsibility_str:
                         try:
-                            responsible_user = User.objects.get(username__iexact=responsibility.strip())
+                            responsible_user = User.objects.get(email__iexact=responsibility_str)
                         except User.DoesNotExist:
-                            errors.append(f"PPI Row {row_num}: User '{responsibility}' not found")
-                            continue
+                            try:
+                                responsible_user = User.objects.get(username__iexact=responsibility_str)
+                            except User.DoesNotExist:
+                                errors.append(f"PPI Row {row_num}: User '{responsibility_str}' not found")
+                                continue
 
                 # Parse dates
                 parsed_start_date = None
@@ -823,6 +1220,7 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
     def _process_weekly_tasks(self, ppi_project, row, row_num, User):
         """Process weekly tasks from PPI row and create PPITask and Action records"""
         errors = []
+        # Filter out numeric values that shouldn't be tasks
 
         try:
             # Weekly tasks start from column 8 (index 7) - W1, W2, W3, etc.
@@ -833,55 +1231,81 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                 if col_index < len(row):
                     weekly_task_content = row[col_index]
 
-                    if weekly_task_content and str(weekly_task_content).strip():
-                        # Split multiple tasks in one cell by common separators
-                        task_separators = ['\n', '\r\n', '•', '–', '-', '|', ';']
-                        tasks = [str(weekly_task_content).strip()]
+                    # Skip None, empty strings, and numeric values (which shouldn't be tasks)
+                    if weekly_task_content is None or weekly_task_content == '':
+                        continue
 
-                        # Split by separators to handle multiple tasks in one cell
-                        for separator in task_separators:
-                            new_tasks = []
-                            for task in tasks:
-                                if separator in task:
-                                    split_tasks = [t.strip() for t in task.split(separator) if t.strip()]
-                                    new_tasks.extend(split_tasks)
-                                else:
-                                    new_tasks.append(task)
-                            tasks = new_tasks
+                    # Convert to string and check if it's meaningful
+                    task_content_str = str(weekly_task_content).strip()
 
-                        # Create PPITask and Action for each task
-                        for task_description in tasks:
-                            if len(task_description.strip()) > 5:  # Only create for meaningful tasks
-                                try:
-                                    # Create PPITask
-                                    ppi_task = PPITask.objects.create(
-                                        project=ppi_project,
-                                        task_description=task_description.strip(),
-                                        week_number=week_num,
-                                        assigned_to=ppi_project.responsible_user
-                                    )
+                    # Skip if empty or if it's just a number (numeric tasks don't make sense)
+                    if not task_content_str or task_content_str.replace('.', '').replace('-', '').isdigit():
+                        continue
 
-                                    # Calculate due date for this week
-                                    # Assume quarter starts from project start_date
-                                    week_due_date = ppi_project.start_date + datetime.timedelta(weeks=week_num-1, days=6)
+                    # Split multiple tasks in one cell by common separators
+                    task_separators = ['\n', '\r\n', '•', '–', '-', '|', ';']
+                    tasks = [task_content_str]
 
-                                    # Create corresponding Action
-                                    from implement.models import Action
-                                    Action.objects.create(
-                                        team=ppi_project.quarterly_plan.team,
-                                        source='ppi',
-                                        ppi_task=ppi_task,
-                                        action=f"[Week {week_num}] {task_description.strip()}",
-                                        priority='medium',
-                                        assigned_to=ppi_project.responsible_user,
-                                        original_due_date=week_due_date,
-                                        status='not_started',
-                                        created_by=ppi_project.responsible_user,
-                                        comments=f"From PPI project: {ppi_project.name}"
-                                    )
+                    # Split by separators to handle multiple tasks in one cell
+                    for separator in task_separators:
+                        new_tasks = []
+                        for task in tasks:
+                            if separator in task:
+                                split_tasks = [t.strip() for t in task.split(separator) if t.strip()]
+                                new_tasks.extend(split_tasks)
+                            else:
+                                new_tasks.append(task)
+                        tasks = new_tasks
 
-                                except Exception as e:
-                                    errors.append(f"PPI Row {row_num}, Week {week_num}: Error creating task - {str(e)}")
+                    # Create PPITask and Action for each task
+                    for task_description in tasks:
+                        # Ensure task_description is a string and has meaningful content
+                        if not isinstance(task_description, str):
+                            task_description = str(task_description)
+
+                        task_description = task_description.strip()
+
+                        # Skip numeric-only tasks and very short tasks
+                        if not task_description or len(task_description) <= 5:
+                            continue
+
+                        # Skip if it's just a number
+                        if task_description.replace('.', '').replace('-', '').isdigit():
+                            continue
+
+                        # Create PPITask and Action for this meaningful task
+                        try:
+                            # Create PPITask
+                            ppi_task = PPITask.objects.create(
+                                project=ppi_project,
+                                task_description=task_description.strip(),
+                                week_number=week_num,
+                                assigned_to=ppi_project.responsible_user
+                            )
+
+                            # Calculate due date for this week based on quarter start date
+                            quarter_start = ppi_project.quarterly_plan.quarter_start_date
+                            week_due_date = quarter_start + datetime.timedelta(weeks=week_num-1, days=6)
+
+                            # Create corresponding Action
+                            from implement.models import Action
+                            Action.objects.create(
+                                team=ppi_project.quarterly_plan.team,
+                                source='ppi',
+                                ppi_task=ppi_task,
+                                action=f"[Week {week_num}] {task_description.strip()}",
+                                priority='medium',
+                                assigned_to=ppi_project.responsible_user,
+                                original_due_date=week_due_date,
+                                status='not_started',
+                                created_by=ppi_project.responsible_user,
+                                comments=f"From PPI project: {ppi_project.name}"
+                            )
+
+                        except Exception as e:
+                            import traceback
+                            tb = traceback.format_exc()
+                            errors.append(f"PPI Row {row_num}, Week {week_num}: Error creating task - {str(e)}\nTraceback: {tb}")
 
         except Exception as e:
             errors.append(f"PPI Row {row_num}: Error processing weekly tasks - {str(e)}")
@@ -891,31 +1315,20 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
 
 class QuarterlyPlanTemplateDownloadView(LoginRequiredMixin, TemplateView):
     def get(self, request, *args, **kwargs):
-        # Create a blank Excel template for quarterly plan
-        workbook = openpyxl.Workbook()
+        # Serve the actual template file from the project folder
+        template_path = os.path.join(settings.BASE_DIR, 'Quarter Plan Template.xlsx')
 
-        # Remove default sheet
-        workbook.remove(workbook.active)
-
-        # Create sheets
-        sheets_data = {
-            'FPI': ['Parameter Type', 'Sub Head', 'Responsibility', 'Quarter Goal', 'Month 1', 'Month 2', 'Month 3'],
-            'GPI-M': ['Goal & Progress Indicator', 'Unit of Measure', 'Responsibility', 'Quarter Goal', 'Month 1', 'Month 2', 'Month 3'],
-            'GPI-W': ['Goal & Progress Indicator', 'Unit of Measure', 'Responsibility', 'Quarter Goal'] + [f'Week {i}' for i in range(1, 14)],
-            'PPI': ['Project Name', 'Completion Criteria', 'Responsibility', 'Start Date', 'End Date'] + [f'Week {i}' for i in range(1, 14)]
-        }
-
-        for sheet_name, headers in sheets_data.items():
-            sheet = workbook.create_sheet(sheet_name)
-            sheet.append(headers)
-
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = 'attachment; filename="quarterly_plan_template.xlsx"'
-        workbook.save(response)
-
-        return response
+        if os.path.exists(template_path):
+            with open(template_path, 'rb') as f:
+                response = HttpResponse(
+                    f.read(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = 'attachment; filename="Quarter Plan Template.xlsx"'
+                return response
+        else:
+            messages.error(request, 'Template file not found.')
+            return redirect('plans:dashboard')
 
 
 class AnnualPlanHistoryView(LoginRequiredMixin, TemplateView):
@@ -932,27 +1345,27 @@ class AnnualPlanHistoryView(LoginRequiredMixin, TemplateView):
     def get_json_response(self):
         user = self.request.user
 
-        # Get plans for teams managed by user or where user is a team member
+        # Get upload history for teams managed by user or where user is a team member
         if user.role == 'general':
-            # For general users, show plans for teams they manage
-            plans = AnnualPlan.objects.filter(
-                team__manager=user
-            ).select_related('team', 'financial_year', 'uploaded_by').order_by('-uploaded_at')
+            # For general users, show history for teams they manage
+            history = AnnualPlanUploadHistory.objects.filter(
+                annual_plan__team__manager=user
+            ).select_related('annual_plan__team', 'annual_plan__financial_year', 'uploaded_by').order_by('-uploaded_at')
         else:
-            # For admin/coordinator, show all plans
-            plans = AnnualPlan.objects.all().select_related('team', 'financial_year', 'uploaded_by').order_by('-uploaded_at')
+            # For admin/coordinator, show all history
+            history = AnnualPlanUploadHistory.objects.all().select_related('annual_plan__team', 'annual_plan__financial_year', 'uploaded_by').order_by('-uploaded_at')
 
-        # Convert plans to JSON format
+        # Convert history to JSON format
         plans_data = []
-        for plan in plans:
+        for record in history:
             plans_data.append({
-                'id': plan.id,
-                'team': plan.team.name,
-                'plan_year': plan.financial_year.year,
-                'file_name': plan.file_name,
-                'uploaded_date': plan.uploaded_at.strftime('%b %d, %Y %H:%M'),
-                'status': plan.get_upload_status_display(),
-                'uploaded_by': plan.uploaded_by.get_full_name() if plan.uploaded_by else 'Unknown'
+                'id': record.id,
+                'team': record.annual_plan.team.name,
+                'plan_year': record.annual_plan.financial_year.year,
+                'file_name': record.file_name,
+                'uploaded_date': record.uploaded_at.strftime('%b %d, %Y %H:%M'),
+                'status': record.get_upload_status_display(),
+                'uploaded_by': record.uploaded_by.get_full_name() if record.uploaded_by else 'Unknown'
             })
 
         return JsonResponse({
@@ -964,15 +1377,15 @@ class AnnualPlanHistoryView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
-        # Get plans for teams managed by user
+        # Get upload history for teams managed by user
         if user.role == 'general':
-            plans = AnnualPlan.objects.filter(
-                team__manager=user
-            ).select_related('team', 'financial_year', 'uploaded_by').order_by('-uploaded_at')
+            history = AnnualPlanUploadHistory.objects.filter(
+                annual_plan__team__manager=user
+            ).select_related('annual_plan__team', 'annual_plan__financial_year', 'uploaded_by').order_by('-uploaded_at')
         else:
-            plans = AnnualPlan.objects.all().select_related('team', 'financial_year', 'uploaded_by').order_by('-uploaded_at')
+            history = AnnualPlanUploadHistory.objects.all().select_related('annual_plan__team', 'annual_plan__financial_year', 'uploaded_by').order_by('-uploaded_at')
 
-        context['plans'] = plans
+        context['plans'] = history
         return context
 
 
@@ -990,31 +1403,31 @@ class QuarterlyPlanHistoryView(LoginRequiredMixin, TemplateView):
     def get_json_response(self):
         user = self.request.user
 
-        # Get plans for teams managed by user or where user is a team member
+        # Get upload history for teams managed by user or where user is a team member
         if user.role == 'general':
-            # For general users, show plans for teams they manage
-            plans = QuarterlyPlan.objects.filter(
-                team__manager=user
-            ).select_related('team', 'financial_year', 'uploaded_by').order_by('-uploaded_at')
+            # For general users, show history for teams they manage
+            history = QuarterlyPlanUploadHistory.objects.filter(
+                quarterly_plan__team__manager=user
+            ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'uploaded_by').order_by('-uploaded_at')
         else:
-            # For admin/coordinator, show all plans
-            plans = QuarterlyPlan.objects.all().select_related('team', 'financial_year', 'uploaded_by').order_by('-uploaded_at')
+            # For admin/coordinator, show all history
+            history = QuarterlyPlanUploadHistory.objects.all().select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'uploaded_by').order_by('-uploaded_at')
 
-        # Convert plans to JSON format
+        # Convert history to JSON format
         plans_data = []
-        for plan in plans:
+        for record in history:
             # Format quarter as "FY XX-XX – QX"
-            fy_start = plan.financial_year.start_date.year
-            fy_str = f'FY {str(fy_start)[2:]}-{str(fy_start + 1)[2:]} – Q{plan.quarter}'
+            fy_start = record.quarterly_plan.financial_year.start_date.year
+            fy_str = f'FY {str(fy_start)[2:]}-{str(fy_start + 1)[2:]} – Q{record.quarterly_plan.quarter}'
 
             plans_data.append({
-                'id': plan.id,
-                'team': plan.team.name,
+                'id': record.id,
+                'team': record.quarterly_plan.team.name,
                 'quarter': fy_str,
-                'file_name': plan.file_name,
-                'uploaded_date': plan.uploaded_at.strftime('%b %d, %Y %H:%M'),
-                'status': plan.get_upload_status_display(),
-                'uploaded_by': plan.uploaded_by.get_full_name() if plan.uploaded_by else 'Unknown'
+                'file_name': record.file_name,
+                'uploaded_date': record.uploaded_at.strftime('%b %d, %Y %H:%M'),
+                'status': record.get_upload_status_display(),
+                'uploaded_by': record.uploaded_by.get_full_name() if record.uploaded_by else 'Unknown'
             })
 
         return JsonResponse({
@@ -1026,15 +1439,15 @@ class QuarterlyPlanHistoryView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
-        # Get plans for teams managed by user
+        # Get upload history for teams managed by user
         if user.role == 'general':
-            plans = QuarterlyPlan.objects.filter(
-                team__manager=user
-            ).select_related('team', 'financial_year', 'uploaded_by').order_by('-uploaded_at')
+            history = QuarterlyPlanUploadHistory.objects.filter(
+                quarterly_plan__team__manager=user
+            ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'uploaded_by').order_by('-uploaded_at')
         else:
-            plans = QuarterlyPlan.objects.all().select_related('team', 'financial_year', 'uploaded_by').order_by('-uploaded_at')
+            history = QuarterlyPlanUploadHistory.objects.all().select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'uploaded_by').order_by('-uploaded_at')
 
-        context['plans'] = plans
+        context['plans'] = history
         return context
 
 
@@ -1043,10 +1456,24 @@ class PlanFileDownloadView(LoginRequiredMixin, TemplateView):
         user = request.user
 
         if plan_type == 'annual':
-            plan = get_object_or_404(AnnualPlan, id=plan_id, team__manager=user)
+            # Allow both team managers and members to download
+            plan = AnnualPlan.objects.filter(id=plan_id).filter(
+                models.Q(team__manager=user) |
+                models.Q(team__members__member=user, team__members__is_active=True)
+            ).first()
+            if not plan:
+                messages.error(request, 'Plan not found or access denied.')
+                return redirect('plans:dashboard')
             file_path = plan.file_path
         else:
-            plan = get_object_or_404(QuarterlyPlan, id=plan_id, team__manager=user)
+            # Allow both team managers and members to download
+            plan = QuarterlyPlan.objects.filter(id=plan_id).filter(
+                models.Q(team__manager=user) |
+                models.Q(team__members__member=user, team__members__is_active=True)
+            ).first()
+            if not plan:
+                messages.error(request, 'Plan not found or access denied.')
+                return redirect('plans:dashboard')
             file_path = plan.file_path
 
         if file_path and os.path.exists(file_path.path):
@@ -1055,6 +1482,45 @@ class PlanFileDownloadView(LoginRequiredMixin, TemplateView):
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
             response['Content-Disposition'] = f'attachment; filename="{plan.file_name}"'
+            return response
+
+        messages.error(request, 'File not found.')
+        return redirect('plans:dashboard')
+
+
+class PlanHistoryFileDownloadView(LoginRequiredMixin, TemplateView):
+    def get(self, request, history_id, plan_type):
+        user = request.user
+
+        if plan_type == 'annual':
+            # Allow both team managers and members to download
+            history = AnnualPlanUploadHistory.objects.filter(id=history_id).filter(
+                models.Q(annual_plan__team__manager=user) |
+                models.Q(annual_plan__team__members__member=user, annual_plan__team__members__is_active=True)
+            ).first()
+            if not history:
+                messages.error(request, 'File not found or access denied.')
+                return redirect('plans:dashboard')
+            file_path = history.file_path
+            file_name = history.file_name
+        else:
+            # Allow both team managers and members to download
+            history = QuarterlyPlanUploadHistory.objects.filter(id=history_id).filter(
+                models.Q(quarterly_plan__team__manager=user) |
+                models.Q(quarterly_plan__team__members__member=user, quarterly_plan__team__members__is_active=True)
+            ).first()
+            if not history:
+                messages.error(request, 'File not found or access denied.')
+                return redirect('plans:dashboard')
+            file_path = history.file_path
+            file_name = history.file_name
+
+        if file_path and os.path.exists(file_path.path):
+            response = HttpResponse(
+                file_path.read(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{file_name}"'
             return response
 
         messages.error(request, 'File not found.')

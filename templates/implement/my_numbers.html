@@ -93,7 +93,7 @@
                 <!-- Weekly Numbers Tab -->
                 <div class="tab-pane fade show active" id="weekly" role="tabpanel">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h4>Weekly Numbers</h4>
+                        <h4>Weekly Numbers - Updated</h4>
                         <div class="btn-group">
                             <button type="button" class="btn btn-info btn-sm" onclick="openNewIssueModal()">
                                 <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
@@ -111,9 +111,9 @@
                                 <th>Parameter</th>
                                 <th>Team</th>
                                 <th>Last Week Budget</th>
-                                <th>Last Week Actual</th>
+                                <th>Last Week Goal</th>
                                 <th>Current Week Budget</th>
-                                <th>Current Week Plan</th>
+                                <th>Current Week Goal</th>
                                 <th>Quarter Goal</th>
                             </tr>
                         </thead>
@@ -167,9 +167,9 @@
                                 <th>Parameter</th>
                                 <th>Team</th>
                                 <th>Last Month Budget</th>
-                                <th>Last Month Actual</th>
+                                <th>Last Month Goal</th>
                                 <th>Current Month Budget</th>
-                                <th>Current Month Plan</th>
+                                <th>Current Month Goal</th>
                                 <th>Quarter Goal</th>
                             </tr>
                         </thead>
@@ -182,7 +182,7 @@
                                     {% else %}
                                         {{ param.name }}
                                     {% endif %}
-                                    <br><small class="text-muted">DEBUG: ID={{ param.id }}, Type={{ param.model_type }}, last_month_actual={{ param.last_month_actual }}, current_month_plan={{ param.current_month_plan }}</small>
+                                    <br><small class="text-muted">DEBUG: ID={{ param.id }}, Type={{ param.model_type }}, last_month_actual={{ param.last_month_actual }}, current_month_plan={{ param.current_month_plan }}, last_month_goal={{ param.last_month_goal }}</small>
                                 </td>
                                 <td>{{ param.quarterly_plan.team.name }}</td>
                                 <td>{{ param.last_month_budget|default:"0" }}</td>
@@ -191,9 +191,9 @@
                                          contenteditable="true"
                                          data-type="{% if param.model_type %}{{ param.model_type }}{% elif param.sub_head %}fpi{% else %}gpi{% endif %}"
                                          data-id="{{ param.id }}"
-                                         data-field="last_month_actual"
-                                         data-original-value="{{ param.last_month_actual|default:'' }}">
-                                        {{ param.last_month_actual|default:"" }}
+                                         data-field="last_month_goal"
+                                         data-original-value="{{ param.last_month_goal|default:'' }}">
+                                        {{ param.last_month_goal|default:"" }}
                                     </div>
                                 </td>
                                 <td>{{ param.current_month_budget|default:"0" }}</td>

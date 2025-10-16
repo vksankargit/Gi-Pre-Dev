@@ -1,0 +1,352 @@
+{% load l10n %}
+<!-- Issues Popup Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="mb-0">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        {% if parameter_type and parameter_id %}
+            Issues - {{ parameter_name|default:"Parameter" }}
+        {% else %}
+            Issues - Review Meeting
+        {% endif %}
+        <span class="badge bg-secondary ms-2">{{ issues|length }} issue{{ issues|length|pluralize }}</span>
+    </h6>
+</div>
+
+{% if parameter_type and parameter_id %}
+<div class="alert alert-info py-2 mb-3">
+    <i class="fas fa-info-circle me-2"></i>
+    <small>Showing issues specific to: <strong>{{ parameter_name|default:"this parameter" }}</strong></small>
+</div>
+{% else %}
+<div class="alert alert-info py-2 mb-3">
+    <i class="fas fa-info-circle me-2"></i>
+    <small>Showing generic review meeting issues. Line item-specific issues are managed separately.</small>
+</div>
+{% endif %}
+
+<!-- Issues Summary Cards -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-primary">{{ issue_summary.total }}</h6>
+                <small class="text-muted">Total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-danger">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-danger">{{ issue_summary.high_priority }}</h6>
+                <small class="text-muted">High Priority</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-warning">{{ issue_summary.open }}</h6>
+                <small class="text-muted">Open</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-success">{{ issue_summary.resolved }}</h6>
+                <small class="text-muted">Resolved</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Existing Issues -->
+<div class="card mb-3">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Current Issues</h6>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" onclick="filterIssues('all')">All</button>
+                <button class="btn btn-outline-danger" onclick="filterIssues('high')">High Priority</button>
+                <button class="btn btn-outline-warning" onclick="filterIssues('open')">Open</button>
+                <button class="btn btn-outline-success" onclick="filterIssues('resolved')">Resolved</button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 5%">S.No</th>
+                        <th style="width: 25%">Title</th>
+                        <th style="width: 10%">Priority</th>
+                        <th style="width: 12%">Required By</th>
+                        <th style="width: 10%">Status</th>
+                        <th style="width: 13%">Reported By</th>
+                        <th style="width: 10%">Actions</th>
+                        <th style="width: 15%">Operations</th>
+                    </tr>
+                </thead>
+                <tbody id="issuesTable">
+                    {% for issue in issues %}
+                    <tr class="issue-row {% if issue.priority == 'high' %}table-warning{% endif %}"
+                        data-priority="{{ issue.priority }}"
+                        data-status="{{ issue.status }}">
+                        <td>
+                            <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                        </td>
+                        <td>
+                            <strong>{{ issue.title|truncatechars:40 }}</strong>
+                        </td>
+                        <td>
+                            <span class="badge bg-{% if issue.priority == 'high' %}danger{% elif issue.priority == 'medium' %}warning{% else %}secondary{% endif %}">
+                                {{ issue.get_priority_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if issue.required_by %}
+                                {{ issue.required_by|date:"M d, Y" }}
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{% if issue.status == 'resolved' %}success{% elif issue.status == 'open' %}secondary{% elif issue.status == 'on_hold' %}warning{% elif issue.status == 'dropped' %}danger{% elif issue.status == 'escalated' %}info{% endif %}">
+                                {{ issue.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <small>{{ issue.reported_by.get_full_name|default:issue.reported_by.username }}</small>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-light text-dark">{{ issue.action_count }}</span>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="addIssueAction({{ issue.id }})" title="Add Action">
+                                    <i class="fas fa-plus-circle"></i>
+                                </button>
+                                {% if issue.status == 'resolved' %}
+                                <button class="btn btn-outline-warning" onclick="revertIssueStatus({{ issue.id }})" title="Undo Resolved">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                                {% else %}
+                                <button class="btn btn-outline-success" onclick="updateIssueStatus({{ issue.id }}, 'resolved')" title="Mark Resolved">
+                                    <i class="fas fa-check-circle"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr id="noIssuesRow">
+                        <td colspan="8" class="text-center text-muted">
+                            No issues found {% if parameter_name %}for <strong>{{ parameter_name }}</strong>{% endif %}.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Inline Add New Issue Form -->
+<div class="card">
+    <div class="card-header bg-light">
+        <h6 class="mb-0">
+            <i class="fas fa-plus-circle me-2"></i>Add New Issue
+        </h6>
+    </div>
+    <div class="card-body">
+        <form id="inlineIssueForm" onsubmit="saveParameterIssue(event)">
+            {% csrf_token %}
+            <input type="hidden" id="parameterType" name="parameter_type" value="{{ parameter_type }}">
+            <input type="hidden" id="parameterId" name="parameter_id" value="{{ parameter_id }}">
+
+            <div class="row mb-2">
+                <div class="col-md-12">
+                    <input type="text" class="form-control" name="title" placeholder="Issue title" required>
+                </div>
+            </div>
+
+            <div class="row mb-2">
+                <div class="col-md-12">
+                    <textarea class="form-control" name="description" rows="2" placeholder="Description (optional)"></textarea>
+                </div>
+            </div>
+
+            <div class="row mb-2">
+                <div class="col-md-3">
+                    <select class="form-select" name="team" id="issueTeamSelect" required>
+                        <option value="">Select Team</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" name="priority" required>
+                        <option value="">Priority</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="date" class="form-control" name="required_by" placeholder="Required By">
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="fas fa-save me-1"></i>Save
+                    </button>
+                </div>
+            </div>
+        </form>
+        <div id="issueFormMessage" class="mt-2"></div>
+    </div>
+</div>
+
+<script>
+// Filter issues by criteria
+function filterIssues(filter) {
+    const rows = document.querySelectorAll('#issuesTable .issue-row');
+
+    rows.forEach(row => {
+        let show = false;
+
+        if (filter === 'all') {
+            show = true;
+        } else if (filter === 'high') {
+            show = row.dataset.priority === 'high';
+        } else if (filter === 'open') {
+            show = row.dataset.status === 'open';
+        } else if (filter === 'resolved') {
+            show = row.dataset.status === 'resolved';
+        }
+
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// Load teams for the inline form
+function loadTeamsForIssue() {
+    fetch('/api/issue-teams/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('issueTeamSelect');
+            if (select && data.teams) {
+                data.teams.forEach(team => {
+                    const option = document.createElement('option');
+                    option.value = team.id;
+                    option.textContent = team.name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => console.error('Error loading teams:', error));
+}
+
+// Save parameter issue function
+function saveParameterIssue(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+
+    fetch('/api/create-issue/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            form.reset();
+            showIssueMessage('Issue created successfully', 'success');
+            // Reload the issues content
+            refreshParameterIssues();
+        } else {
+            showIssueMessage('Error: ' + (data.error || 'Failed to create issue'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving issue:', error);
+        showIssueMessage('Error saving issue', 'danger');
+    });
+}
+
+function showIssueMessage(message, type) {
+    const messageDiv = document.getElementById('issueFormMessage');
+    if (messageDiv) {
+        messageDiv.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+        setTimeout(() => {
+            messageDiv.innerHTML = '';
+        }, 3000);
+    }
+}
+
+function refreshParameterIssues() {
+    const parameterType = document.getElementById('parameterType').value;
+    const parameterId = document.getElementById('parameterId').value;
+    const meetingId = {{ meeting.pk }};
+
+    if (parameterType && parameterId) {
+        fetch(`/review/${meetingId}/issues/?parameter_type=${parameterType}&parameter_id=${parameterId}`)
+            .then(response => response.text())
+            .then(html => {
+                const content = document.getElementById('issuesContent');
+                if (content) {
+                    content.innerHTML = html;
+                    // Re-execute scripts
+                    const scripts = content.querySelectorAll('script');
+                    scripts.forEach(script => {
+                        const newScript = document.createElement('script');
+                        if (script.src) {
+                            newScript.src = script.src;
+                        } else {
+                            newScript.textContent = script.textContent;
+                        }
+                        document.head.appendChild(newScript);
+                        setTimeout(() => {
+                            if (document.head.contains(newScript)) {
+                                document.head.removeChild(newScript);
+                            }
+                        }, 100);
+                    });
+                }
+            })
+            .catch(error => console.error('Error refreshing issues:', error));
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Store parameter context for new issue modal
+{% if parameter_type and parameter_id %}
+window.currentParameterContext = {
+    type: '{{ parameter_type }}',
+    id: {{ parameter_id }}
+};
+{% endif %}
+
+// Load teams when page loads
+document.addEventListener('DOMContentLoaded', loadTeamsForIssue);
+// Also load teams immediately in case DOMContentLoaded already fired
+loadTeamsForIssue();
+</script>

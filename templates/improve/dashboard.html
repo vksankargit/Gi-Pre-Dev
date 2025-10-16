@@ -3,12 +3,9 @@
 {% block title %}Improve - PRE System{% endblock %}
 
 {% block content %}
-<div class="row mt-4">
-    <div class="col-12">
-        <h1 class="h3 mb-4">
-            <i class="fas fa-arrow-trend-up me-2"></i>Improve
-        </h1>
-    </div>
+<div class="style-3">
+<div class="page-header">
+    <h1><i class="fas fa-arrow-trend-up me-2"></i>Improve</h1>
 </div>
 
 
@@ -36,7 +33,7 @@
                         <div class="mb-3">
                             <label class="form-label">Plan Year and Quarter</label>
                             <input type="text" class="form-control" value="{{ current_quarter }}" readonly style="background-color: #f8f9fa;">
-                            <input type="hidden" id="currentQuarter" value="{{ current_quarter }}">
+                            <input type="hidden" id="currentQuarter" value="{{ current_quarter_value }}">
                             <input type="hidden" id="currentFinancialYear" value="{% if financial_years %}{{ financial_years.first.id }}{% endif %}">
                         </div>
                     </div>
@@ -174,4 +171,5 @@ function getCookie(name) {
     return cookieValue;
 }
 </script>
+</div>
 {% endblock %}

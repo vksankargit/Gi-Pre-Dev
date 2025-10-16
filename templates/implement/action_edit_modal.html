@@ -103,73 +103,10 @@
 </div>
 
 <script>
-
-function confirmActionCancel(event) {
-    // Check if form has unsaved changes
-    const form = document.getElementById('editActionForm');
-    const hasChanges = isFormDirty(form);
-
-    if (hasChanges) {
-        event.preventDefault();
-        event.stopPropagation();
-        if (confirm('You will lose the data entered. Do you wish to continue?')) {
-            // Close modal - user clicked OK (wants to continue)
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editActionModal'));
-            modal.hide();
-        }
-    }
-    // If no changes, let the modal close normally
-}
-
-// Helper function to check if form is dirty
-function isFormDirty(form) {
-    if (!form) return false;
-    const inputs = form.querySelectorAll('input, textarea, select');
-    for (let input of inputs) {
-        if (input.type === 'hidden' || input.name === 'csrfmiddlewaretoken') continue;
-        if (input.value && input.value.trim() !== '' && input.value !== input.defaultValue) {
-            return true;
-        }
-    }
-    return false;
-}
+// Note: confirmActionCancel, toggleActionFields, and initializeActionForm are defined in dashboard.html
+// to avoid function redefinition issues with dynamically loaded modals
 
 function viewActionHistory(actionId) {
     window.location.href = `/implement/action/${actionId}/history/`;
 }
-
-// Global functions for action modal (will be called from dashboard.html)
-function toggleActionFields() {
-    const statusElement = document.getElementById('editActionStatus');
-    const revisedDueDateGroup = document.getElementById('revisedDueDateGroup');
-    const challengeGroup = document.getElementById('challengeGroup');
-
-    if (!statusElement || !revisedDueDateGroup || !challengeGroup) return;
-
-    const status = statusElement.value;
-
-    // Hide all conditional fields first
-    revisedDueDateGroup.style.display = 'none';
-    challengeGroup.style.display = 'none';
-
-    // Show fields based on status
-    if (status === 'danger') {
-        revisedDueDateGroup.style.display = 'block';
-        challengeGroup.style.display = 'block';
-    } else if (status === 'at_risk') {
-        challengeGroup.style.display = 'block';
-    }
-}
-
-function initializeActionForm() {
-    const statusElement = document.getElementById('editActionStatus');
-    if (statusElement) {
-        // Set initial visibility based on current status
-        toggleActionFields();
-
-        // Add event listener for status changes
-        statusElement.addEventListener('change', toggleActionFields);
-    }
-}
-
 </script>

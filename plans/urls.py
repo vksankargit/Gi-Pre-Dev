@@ -12,5 +12,6 @@ urlpatterns = [
     path('quarterly/download-template/', views.QuarterlyPlanTemplateDownloadView.as_view(), name='quarterly_template'),
     path('quarterly/history/', views.QuarterlyPlanHistoryView.as_view(), name='quarterly_history'),
     path('download-file/<int:plan_id>/<str:plan_type>/', views.PlanFileDownloadView.as_view(), name='download_file'),
+    path('download-history-file/<int:history_id>/<str:plan_type>/', views.PlanHistoryFileDownloadView.as_view(), name='download_history_file'),
     path('error-log/<int:plan_id>/<str:plan_type>/', views.PlanErrorLogView.as_view(), name='error_log'),
 ]

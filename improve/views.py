@@ -11,6 +11,7 @@ from django.contrib.auth import get_user_model
 from .models import ImprovementUpload, ImprovementProject, ImprovementTask
 from plans.models import FinancialYear
 from organizations.models import Team
+from accounts.utils import get_effective_user
 
 
 class ImproveDashboardView(LoginRequiredMixin, TemplateView):
@@ -18,7 +19,7 @@ class ImproveDashboardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.request.user
+        user = get_effective_user(self.request)
 
         # Get user's teams - only teams where user is manager
         if user.role == 'general':
@@ -39,8 +40,8 @@ class ImproveDashboardView(LoginRequiredMixin, TemplateView):
         total_projects = ImprovementProject.objects.filter(upload__team__in=user_teams).count()
         completed_projects = ImprovementProject.objects.filter(upload__team__in=user_teams, status='completed').count()
 
-        # Get current quarter information
-        current_quarter = self._get_current_quarter()
+        # Get current quarter information (both display and value formats)
+        current_quarter_display, current_quarter_value = self._get_current_quarter()
 
         context.update({
             'recent_uploads': recent_uploads,
@@ -50,14 +51,16 @@ class ImproveDashboardView(LoginRequiredMixin, TemplateView):
             'implemented_suggestions': completed_projects,  # Completed instead of implemented
             'user_teams': user_teams,
             'financial_years': FinancialYear.objects.all().order_by('-start_date'),
-            'current_quarter': current_quarter,
+            'current_quarter': current_quarter_display,
+            'current_quarter_value': current_quarter_value,
         })
 
         return context
 
     def _get_current_quarter(self):
         """
-        Get current financial year and quarter in FY XX-XX – QX format
+        Get current financial year and quarter in both display and value formats
+        Returns: (display_format, value_format) e.g., ("FY 25-26 – Q3", "2025_3")
         """
         current_date = timezone.now().date()
 
@@ -82,7 +85,9 @@ class ImproveDashboardView(LoginRequiredMixin, TemplateView):
 
         # Format as FY 25-26 – Q2
         fy_str = f'FY {str(fy_start_year)[2:]}-{str(fy_end_year)[2:]}'
-        return f'{fy_str} – Q{current_quarter}'
+        display_format = f'{fy_str} – Q{current_quarter}'
+        value_format = f'{fy_start_year}_{current_quarter}'
+        return display_format, value_format
 
 
 class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
@@ -91,7 +96,7 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        
+
         # Get teams and financial years
         if user.role == 'general':
             managed_teams = Team.objects.filter(manager=user, is_active=True)
@@ -99,28 +104,64 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
             # For coordinators and admins, show all teams
             managed_teams = Team.objects.filter(is_active=True)
 
-        financial_years = FinancialYear.objects.all().order_by('-start_date')
-        quarters = [('Q1', 'Q1'), ('Q2', 'Q2'), ('Q3', 'Q3'), ('Q4', 'Q4')]
+        # Generate current quarter option only (unlike Quarterly Plan which shows current and next)
+        current_date = timezone.now().date()
+        quarters = self._get_current_quarter_option(current_date)
 
-        
+        # Debug: Log what we're sending to template
+        print(f"DEBUG get_context_data: quarters = {quarters}")
+
         context.update({
             'managed_teams': managed_teams,
-            'financial_years': financial_years,
             'quarters': quarters,
         })
-        
+
         return context
+
+    def _get_current_quarter_option(self, current_date):
+        """
+        Generate current quarter option in FY XX-XX – QX format based on current date
+        Only shows current quarter (unlike Quarterly Plan which shows current and next)
+        """
+        # Financial year starts April 1st
+        # Determine current financial year
+        if current_date.month >= 4:  # April to December = same year FY
+            fy_start_year = current_date.year
+        else:  # January to March = previous year FY
+            fy_start_year = current_date.year - 1
+
+        fy_end_year = fy_start_year + 1
+        fy_start = datetime.date(fy_start_year, 4, 1)
+
+        # Determine current quarter
+        if fy_start <= current_date <= datetime.date(fy_start_year, 6, 30):
+            current_quarter = 1
+        elif datetime.date(fy_start_year, 7, 1) <= current_date <= datetime.date(fy_start_year, 9, 30):
+            current_quarter = 2
+        elif datetime.date(fy_start_year, 10, 1) <= current_date <= datetime.date(fy_start_year, 12, 31):
+            current_quarter = 3
+        else:  # Jan 1 to Mar 31 of next year
+            current_quarter = 4
+
+        quarters = []
+        current_fy_str = f'FY {str(fy_start_year)[2:]}-{str(fy_end_year)[2:]}'
+        quarters.append((f'{fy_start_year}_{current_quarter}', f'{current_fy_str} – Q{current_quarter}'))
+
+        return quarters
     
     def post(self, request, *args, **kwargs):
         team_id = request.POST.get('team')
-        financial_year_id = request.POST.get('financial_year')
-        quarter = request.POST.get('quarter')
+        quarter_id = request.POST.get('quarter')
         uploaded_file = request.FILES.get('file')
 
         # Check if this is an AJAX request
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
-        if not all([team_id, financial_year_id, quarter, uploaded_file]):
+        # Debug: Log what we received
+        print(f"DEBUG: Received quarter_id = '{quarter_id}'")
+        print(f"DEBUG: POST data = {request.POST}")
+
+        if not all([team_id, quarter_id, uploaded_file]):
             error_msg = 'Please fill all required fields.'
             if is_ajax:
                 return JsonResponse({'success': False, 'error': error_msg})
@@ -135,6 +176,54 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
             messages.error(request, error_msg)
             return self.get(request, *args, **kwargs)
 
+        # Parse quarter information (format: "year_quarter", e.g., "2025_3")
+        try:
+            if '_' in quarter_id:
+                # New format: "2025_3"
+                year_str, quarter_str = quarter_id.split('_')
+                financial_year_start = int(year_str)
+                quarter_num = int(quarter_str)
+            else:
+                # Fallback: Handle unexpected format - extract quarter number and current FY year
+                error_msg = f'Received unexpected quarter format: "{quarter_id}". Please refresh the page (Ctrl+F5) and try again.'
+                print(f"DEBUG: Unexpected quarter format: {quarter_id}")
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error_msg})
+                messages.error(request, error_msg)
+                return self.get(request, *args, **kwargs)
+
+            # Validate quarter number
+            if quarter_num not in [1, 2, 3, 4]:
+                raise ValueError("Invalid quarter number")
+
+            # Get or create the financial year
+            try:
+                financial_year = FinancialYear.objects.get(
+                    start_date__year=financial_year_start,
+                    start_date__month=4,
+                    start_date__day=1
+                )
+            except FinancialYear.DoesNotExist:
+                # Create the financial year if it doesn't exist
+                start_date = datetime.date(financial_year_start, 4, 1)
+                end_date = datetime.date(financial_year_start + 1, 3, 31)
+                financial_year = FinancialYear.objects.create(
+                    year=f'FY {str(financial_year_start)[2:]}-{str(financial_year_start + 1)[2:]}',
+                    start_date=start_date,
+                    end_date=end_date
+                )
+
+            # Convert quarter number to Q format
+            quarter = f'Q{quarter_num}'
+
+        except (ValueError, AttributeError) as e:
+            error_msg = f'Invalid quarter format: {quarter_id}. Expected format: "YYYY_Q" (e.g., "2025_3"). Error: {str(e)}'
+            print(f"DEBUG: Error parsing quarter_id: {e}")
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_msg})
+            messages.error(request, error_msg)
+            return self.get(request, *args, **kwargs)
+
         try:
             # Allow team access based on user role
             if request.user.role == 'general':
@@ -142,10 +231,8 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
             else:
                 # For coordinators and admins, allow access to any active team
                 team = get_object_or_404(Team, id=team_id, is_active=True)
-
-            financial_year = get_object_or_404(FinancialYear, id=financial_year_id)
         except:
-            error_msg = 'Invalid team or financial year selection.'
+            error_msg = 'Invalid team selection.'
             if is_ajax:
                 return JsonResponse({'success': False, 'error': error_msg})
             messages.error(request, error_msg)
@@ -251,8 +338,10 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
             # Clear existing projects for this upload
             ImprovementProject.objects.filter(upload=improvement_upload).delete()
 
-            # Process PPI-style sheet (assume first sheet or named 'Improvements')
-            if 'Improvements' in workbook.sheetnames:
+            # Process PPI-style sheet (assume first sheet or named 'PPI' or 'Improvements')
+            if 'PPI' in workbook.sheetnames:
+                sheet = workbook['PPI']
+            elif 'Improvements' in workbook.sheetnames:
                 sheet = workbook['Improvements']
             else:
                 sheet = workbook.active
@@ -262,7 +351,7 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
             errors.extend(project_errors)
 
             # Count records processed
-            total_records = max(0, len(list(sheet.iter_rows(min_row=7, values_only=True))) - sum(1 for row in sheet.iter_rows(min_row=7, values_only=True) if not any(row)))
+            total_records = max(0, len(list(sheet.iter_rows(min_row=5, values_only=True))) - sum(1 for row in sheet.iter_rows(min_row=5, values_only=True) if not any(row)))
             processed_records = ImprovementProject.objects.filter(upload=improvement_upload).count()
             error_records = len(errors)
 
@@ -278,24 +367,28 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
         return errors
 
     def _process_improvement_sheet(self, sheet, improvement_upload, User):
-        """Process improvement sheet using PPI format: ['', 'Project Name', 'Completion Criteria', 'Responsibility', 'Start Date', 'End Date', 'Steps', 'W1', 'W2', ...]"""
+        """Process improvement sheet using PPI format: ['', 'Project Name', 'Completion Criteria', 'Responsibility', 'Start Date', 'End Date', 'Steps', 'W1 Budget', 'W2 Budget', ...]"""
         errors = []
 
-        # Header is at row 6, data starts at row 7 (like PPI)
-        for row_num, row in enumerate(sheet.iter_rows(min_row=7, values_only=True), start=7):
+        # Row 2: Title "PROJECT PROGRESS INDICATORS"
+        # Row 3: Empty
+        # Row 4: Headers
+        # Row 5+: Data rows
+        for row_num, row in enumerate(sheet.iter_rows(min_row=5, values_only=True), start=5):
             if not any(row):  # Skip empty rows
                 continue
 
             try:
-                # Format: ['', 'Project Name', 'Completion Criteria', 'Responsibility', 'Start Date', 'End Date', 'Steps', 'W1', 'W2', ...]
+                # Format: ['', 'Project Name', 'Completion Criteria', 'Responsibility', 'Start Date', 'End Date', 'Steps', 'W1 Budget', 'W2 Budget', ...]
                 if len(row) < 6:
                     continue
 
                 _, project_name, completion_criteria, responsibility, start_date, end_date = row[:6]
                 steps = row[6] if len(row) > 6 else ''
 
-                if not project_name or project_name == 'None':
-                    continue  # Skip rows without project name
+                # Skip rows without project name or with header-like content
+                if not project_name or project_name == 'None' or str(project_name).strip() == 'Project Name':
+                    continue
 
                 # Find responsible user by email
                 responsible_user = None
@@ -348,7 +441,7 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
                     steps=str(steps).strip() if steps else ''
                 )
 
-                # Process weekly tasks starting from column 8 (W1)
+                # Process weekly tasks starting from column 8 (W1 Budget)
                 week_task_errors = self._process_weekly_improvement_tasks(improvement_project, row, row_num, User)
                 errors.extend(week_task_errors)
 
@@ -362,7 +455,7 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
         errors = []
 
         try:
-            # Weekly tasks start from column 8 (index 7) - W1, W2, W3, ...
+            # Weekly tasks start from column 8 (index 7) - W1 Budget, W2 Budget, W3 Budget, ...
             for week_num in range(1, 14):  # Up to 13 weeks per quarter
                 task_column_index = 6 + week_num  # W1 is at index 7, W2 at 8, etc.
 
@@ -394,9 +487,9 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
                             assigned_to=assigned_user
                         )
 
-                        # Calculate due date for this week
-                        # Assume quarter starts from project start_date
-                        week_due_date = improvement_project.start_date + datetime.timedelta(weeks=week_num-1, days=6)
+                        # Calculate due date for this week based on quarter start date
+                        quarter_start = improvement_project.upload.quarter_start_date
+                        week_due_date = quarter_start + datetime.timedelta(weeks=week_num-1, days=6)
 
                         # Create corresponding Action
                         from implement.models import Action
@@ -421,81 +514,20 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
 
 class ImprovementProjectTemplateDownloadView(LoginRequiredMixin, TemplateView):
     def get(self, request, *args, **kwargs):
-        # Create a blank Excel template for improvement projects using PPI format
-        workbook = openpyxl.Workbook()
+        # Serve the actual IMPROVE template file from the project root
+        template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'IMPROVE - Template.xlsx')
 
-        # Remove default sheet and create improvements sheet
-        workbook.remove(workbook.active)
-        sheet = workbook.create_sheet('Improvements')
-
-        # Add header structure matching PPI format
-        # Row 1-5: Instructions/headers
-        sheet.append(['Improvement Projects Template - Use PPI Format'])
-        sheet.append(['Instructions: Fill in project details starting from row 7'])
-        sheet.append(['Format: Project Name | Completion Criteria | Responsibility (email) | Start Date | End Date | Steps | W1 | W2 | ... | W13'])
-        sheet.append([])  # Empty row
-        sheet.append([])  # Empty row
-
-        # Row 6: Headers (like PPI)
-        headers = ['', 'Project Name', 'Completion Criteria for the quarter', 'Responsibility', 'Start Date', 'End Date', 'Steps']
-        # Add weekly columns W1 through W13
-        headers.extend([f'W{i}' for i in range(1, 14)])
-        sheet.append(headers)
-
-        # Row 7: Example data
-        example_row = [
-            '',  # Empty first column like PPI
-            'Process Optimization',
-            'Reduce processing time by 30% for quarterly reports',
-            'user@example.com',
-            '2024-01-01',
-            '2024-03-31',
-            'Analyze current process, identify bottlenecks, implement automation'
-        ]
-        # Add example weekly tasks
-        example_tasks = [
-            'Analysis phase @user@example.com',
-            'Requirements gathering',
-            'Design new process',
-            'Development start',
-            'Testing phase',
-            'User training',
-            'Pilot rollout',
-            'Full deployment',
-            'Monitor results',
-            'Optimize further',
-            'Documentation',
-            'Final review',
-            'Completion report'
-        ]
-        example_row.extend(example_tasks)
-        sheet.append(example_row)
-
-        # Style the header row (row 6)
-        for cell in sheet[6]:
-            if cell.value:
-                cell.font = openpyxl.styles.Font(bold=True)
-                cell.fill = openpyxl.styles.PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
-
-        # Style the instruction rows
-        for row in range(1, 4):
-            for cell in sheet[row]:
-                if cell.value:
-                    cell.font = openpyxl.styles.Font(italic=True)
-
-        # Adjust column widths
-        column_widths = [5, 25, 40, 20, 12, 12, 30] + [15] * 13  # Weekly columns
-        for idx, width in enumerate(column_widths, 1):
-            sheet.column_dimensions[openpyxl.utils.get_column_letter(idx)].width = width
-
-        # Save to response
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = 'attachment; filename="improvement_projects_template.xlsx"'
-        workbook.save(response)
-
-        return response
+        if os.path.exists(template_path):
+            with open(template_path, 'rb') as f:
+                response = HttpResponse(
+                    f.read(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = 'attachment; filename="IMPROVE - Template.xlsx"'
+                return response
+        else:
+            messages.error(request, 'Template file not found.')
+            return redirect('improve:dashboard')
 
 
 class ImprovementProjectHistoryView(LoginRequiredMixin, TemplateView):
@@ -585,7 +617,7 @@ class IndividualImprovementProjectHistoryView(LoginRequiredMixin, TemplateView):
 
         context.update({
             'project': project,
-            'history': [],  # ImprovementProject doesn't have status history yet, but we maintain consistency
+            'history': project.status_history.all().order_by('-updated_at'),  # Now we have real status history
             'completed_tasks_count': completed_tasks_count,
             'total_tasks_count': total_tasks_count,
         })

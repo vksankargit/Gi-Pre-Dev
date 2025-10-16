@@ -1,0 +1,232 @@
+{% load l10n %}
+<!-- Week Tasks Popup Content -->
+<div class="modal-header">
+    <h5 class="modal-title">Week {{ week_number }} Tasks - {{ project.project_name|default:project.name }}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<div class="modal-body">
+    {% if tasks %}
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 5%;">#</th>
+                    <th style="width: 45%;">Task Description</th>
+                    <th style="width: 15%;">Assigned To</th>
+                    <th style="width: 15%;">Status</th>
+                    <th style="width: 20%;">Completion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in tasks %}
+                <!-- Main Task Row -->
+                <tr class="{% if task.is_completed %}table-success{% elif week_number < current_week %}table-danger{% endif %}">
+                    <td>{{ forloop.counter }}</td>
+                    <td>
+                        <strong>{{ task.task_description }}</strong>
+                        {% if task.comments %}
+                        <br><small class="text-muted">{{ task.comments }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if task.assigned_to %}
+                            {{ task.assigned_to.get_full_name }}
+                        {% else %}
+                            <span class="text-muted">Unassigned</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if task.action %}
+                            {% if task.action.effective_status == 'completed' or task.action.effective_status == 'done' %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check-circle me-1"></i>Completed
+                                </span>
+                            {% elif task.action.effective_status == 'overdue' %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-clock me-1"></i>Overdue
+                                </span>
+                            {% elif task.action.effective_status == 'in_progress' %}
+                                <span class="badge bg-primary">
+                                    <i class="fas fa-spinner me-1"></i>On Track
+                                </span>
+                            {% elif task.action.effective_status == 'at_risk' %}
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-exclamation-circle me-1"></i>At Risk
+                                </span>
+                            {% elif task.action.effective_status == 'danger' %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Danger
+                                </span>
+                            {% elif task.action.status == 'rejected' %}
+                                <span class="badge bg-dark">
+                                    <i class="fas fa-times-circle me-1"></i>Rejected
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-clock me-1"></i>{{ task.action.get_status_display }}
+                                </span>
+                            {% endif %}
+                        {% else %}
+                            {% if task.is_completed %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check-circle me-1"></i>Completed
+                                </span>
+                            {% else %}
+                                {% if week_number < current_week %}
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>Overdue
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-warning">
+                                        <i class="fas fa-clock me-1"></i>Pending
+                                    </span>
+                                {% endif %}
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if task.is_completed %}
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: 100%">
+                                    100%
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar bg-warning" role="progressbar" style="width: 0%">
+                                    0%
+                                </div>
+                            </div>
+                        {% endif %}
+                    </td>
+                </tr>
+
+                <!-- Sub-Actions Rows (with nested tree structure) -->
+                {% if task.sub_actions %}
+                    {% for sub_action in task.sub_actions %}
+                    <tr class="{% if sub_action.status == 'completed' or sub_action.status == 'done' %}table-success{% endif %}" style="background-color: #f8f9fa;">
+                        <td></td>
+                        <td>
+                            {% with indent_px=sub_action.depth_level %}
+                            <div style="padding-left: {% if indent_px == 1 %}20{% elif indent_px == 2 %}40{% elif indent_px == 3 %}60{% elif indent_px == 4 %}80{% elif indent_px == 5 %}100{% else %}120{% endif %}px;">
+                                {% for i in "x"|rjust:sub_action.depth_level %}
+                                    {% if forloop.last %}
+                                        <i class="fas fa-level-up-alt fa-rotate-90 text-muted me-1"></i>
+                                    {% else %}
+                                        <span style="color: #dee2e6;">│</span>&nbsp;&nbsp;
+                                    {% endif %}
+                                {% endfor %}
+                                <strong>{{ sub_action.action }}</strong>
+                                {% if sub_action.comments %}
+                                <br><small class="text-muted">{{ sub_action.comments }}</small>
+                                {% endif %}
+                            </div>
+                            {% endwith %}
+                        </td>
+                        <td>
+                            {% if sub_action.assigned_to %}
+                                {{ sub_action.assigned_to.get_full_name }}
+                            {% else %}
+                                <span class="text-muted">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if sub_action.effective_status == 'completed' or sub_action.effective_status == 'done' %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check-circle me-1"></i>Completed
+                                </span>
+                            {% elif sub_action.effective_status == 'overdue' %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-clock me-1"></i>Overdue
+                                </span>
+                            {% elif sub_action.effective_status == 'in_progress' %}
+                                <span class="badge bg-primary">
+                                    <i class="fas fa-spinner me-1"></i>On Track
+                                </span>
+                            {% elif sub_action.effective_status == 'at_risk' %}
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-exclamation-circle me-1"></i>At Risk
+                                </span>
+                            {% elif sub_action.effective_status == 'danger' %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Danger
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-clock me-1"></i>{{ sub_action.get_status_display }}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if sub_action.status == 'completed' or sub_action.status == 'done' %}
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: 100%">
+                                        100%
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar bg-warning" role="progressbar" style="width: 0%">
+                                        0%
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Task Summary -->
+    <div class="mt-3">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h6 class="text-muted mb-1">Total Tasks</h6>
+                        <h3 class="mb-0">{{ task_summary.total }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h6 class="mb-1">Completed</h6>
+                        <h3 class="mb-0">{{ task_summary.completed }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body text-center">
+                        <h6 class="mb-1">Pending</h6>
+                        <h3 class="mb-0">{{ task_summary.pending }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h6 class="mb-1">Completion</h6>
+                        <h3 class="mb-0">{{ task_summary.completion_percentage }}%</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-tasks fa-3x text-muted mb-3"></i>
+        <p class="text-muted">No tasks scheduled for week {{ week_number }}</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+</div>

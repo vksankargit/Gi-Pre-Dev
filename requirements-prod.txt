@@ -1,0 +1,38 @@
+# Production Requirements for Windows Server IIS Deployment
+
+# Core Django
+Django>=4.2,<5.0
+python-decouple==3.8
+
+# Database
+psycopg2-binary==2.9.9  # PostgreSQL adapter (if using PostgreSQL)
+dj-database-url==2.1.0   # Database URL parsing
+
+# WSGI Server
+gunicorn==21.2.0         # WSGI HTTP Server for production
+waitress==2.1.2          # Alternative WSGI server for Windows
+
+# Static Files
+whitenoise==6.6.0        # Static file serving
+
+# Forms
+django-crispy-forms==2.1
+crispy-bootstrap5==2.0.0
+
+# Utilities
+django-extensions==3.2.3
+
+# Excel Processing
+openpyxl==3.1.2          # Excel file handling
+pandas==2.1.4            # Data processing
+xlrd==2.0.1              # Reading older Excel formats
+
+# Security
+django-cors-headers==4.3.1  # CORS handling (if needed)
+
+# Monitoring and Logging
+sentry-sdk==1.39.1       # Error tracking (optional)
+
+# Performance
+redis==5.0.1             # Redis client for caching (optional)
+django-redis==5.4.0      # Redis cache backend (optional)

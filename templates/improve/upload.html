@@ -48,36 +48,21 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="financial_year" class="form-label">Financial Year <span class="text-danger">*</span></label>
-                                <select class="form-control" id="financial_year" name="financial_year" required>
-                                    <option value="">Select Financial Year</option>
-                                    {% for fy in financial_years %}
-                                    <option value="{{ fy.id }}">{{ fy.year }}</option>
-                                    {% endfor %}
-                                </select>
-                                {% if not financial_years %}
-                                <div class="form-text text-warning">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>
-                                    No financial years available. Contact an administrator to set up financial years.
-                                </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
                                 <label for="quarter" class="form-label">Quarter <span class="text-danger">*</span></label>
-                                <select class="form-control" id="quarter" name="quarter" required>
+                                <select class="form-control" id="quarter" name="quarter" required autocomplete="off">
                                     <option value="">Select Quarter</option>
                                     {% for quarter_value, quarter_label in quarters %}
                                     <option value="{{ quarter_value }}">{{ quarter_label }}</option>
                                     {% endfor %}
                                 </select>
+                                <div class="form-text">Current quarter only</div>
+                                <!-- Debug: quarters = {{ quarters }} -->
                             </div>
                         </div>
-                        <div class="col-md-6">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12">
                             <div class="mb-3">
                                 <label for="file" class="form-label">Excel File <span class="text-danger">*</span></label>
                                 <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls" required>
@@ -87,7 +72,7 @@
                     </div>
 
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary" id="uploadBtn" {% if not managed_teams or not financial_years %}disabled{% endif %}>
+                        <button type="submit" class="btn btn-primary" id="uploadBtn" {% if not managed_teams %}disabled{% endif %}>
                             <i class="fas fa-upload me-2"></i>Upload & Process
                         </button>
                         <a href="{% url 'improve:download_template' %}" class="btn btn-outline-secondary">
@@ -120,8 +105,8 @@
                 <ul class="small">
                     <li>Excel file (.xlsx or .xls)</li>
                     <li>Use PPI format identical to quarterly plans</li>
-                    <li>Headers at row 6, data starts at row 7</li>
-                    <li>Columns: Project Name, Completion Criteria, Responsibility, Start Date, End Date, Steps, W1-W13</li>
+                    <li>Headers at row 4, data starts at row 5</li>
+                    <li>Columns: Project Name, Completion Criteria, Responsibility, Start Date, End Date, Steps, W1 Budget-W13 Budget</li>
                 </ul>
 
                 <h6 class="mt-3">Data Requirements:</h6>
@@ -200,11 +185,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Validate form fields
         const team = document.getElementById('team').value;
-        const financialYear = document.getElementById('financial_year').value;
         const quarter = document.getElementById('quarter').value;
         const file = fileInput.files[0];
 
-        if (!team || !financialYear || !quarter || !file) {
+        if (!team || !quarter || !file) {
             e.preventDefault();
             alert('Please fill in all required fields and select a file.');
             return;

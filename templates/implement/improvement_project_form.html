@@ -46,8 +46,6 @@
                                     <option value="on_track" {% if object.status == 'on_track' %}selected{% endif %}>On Track</option>
                                     <option value="at_risk" {% if object.status == 'at_risk' %}selected{% endif %}>At Risk</option>
                                     <option value="danger" {% if object.status == 'danger' %}selected{% endif %}>Danger</option>
-                                    <option value="completed" {% if object.status == 'completed' %}selected{% endif %}>Completed</option>
-                                    <option value="on_hold" {% if object.status == 'on_hold' %}selected{% endif %}>On Hold</option>
                                 </select>
                             </div>
 
@@ -123,7 +121,7 @@ function isFormDirty(form) {
 }
 
 function viewImprovementProjectHistory(projectId) {
-    window.location.href = `/improve/project/${projectId}/history/`;
+    window.location.href = `/implement/project/${projectId}/history/`;
 }
 
 // Initialize improvement project form
@@ -143,25 +141,71 @@ function initializeImprovementProjectForm() {
 }
 
 function toggleImprovementProjectFields() {
+    console.log('=== toggleImprovementProjectFields called ===');
+
     const statusSelect = document.getElementById('editImprovementProjectStatus');
     const challengeGroup = document.getElementById('improvementChallengeGroup');
     const revisedDueDateGroup = document.getElementById('improvementRevisedDueDateGroup');
+    const challengeInput = document.getElementById('editImprovementProjectChallenge');
+    const revisedDueDateInput = document.getElementById('editImprovementProjectRevisedDueDate');
 
-    if (!statusSelect) return;
+    console.log('Elements found:');
+    console.log('- statusSelect:', statusSelect);
+    console.log('- challengeGroup:', challengeGroup);
+    console.log('- revisedDueDateGroup:', revisedDueDateGroup);
+    console.log('- challengeInput:', challengeInput);
+    console.log('- revisedDueDateInput:', revisedDueDateInput);
+
+    if (!statusSelect) {
+        console.error('Status select not found');
+        return;
+    }
 
     const selectedStatus = statusSelect.value;
+    console.log('Selected status:', selectedStatus);
 
     // Hide all conditional fields first
-    if (challengeGroup) challengeGroup.style.display = 'none';
-    if (revisedDueDateGroup) revisedDueDateGroup.style.display = 'none';
+    if (challengeGroup) {
+        challengeGroup.style.display = 'none';
+        console.log('Set challengeGroup display to none');
+    }
+    if (revisedDueDateGroup) {
+        revisedDueDateGroup.style.display = 'none';
+        console.log('Set revisedDueDateGroup display to none');
+    }
+
+    // Clear required attributes
+    if (challengeInput) challengeInput.removeAttribute('required');
+    if (revisedDueDateInput) revisedDueDateInput.removeAttribute('required');
 
     // Show fields based on status
     if (selectedStatus === 'at_risk') {
-        if (challengeGroup) challengeGroup.style.display = 'block';
+        console.log('=== AT RISK SELECTED ===');
+        if (challengeGroup) {
+            challengeGroup.style.display = 'block';
+            console.log('Set challengeGroup display to block');
+        }
+        if (challengeInput) challengeInput.setAttribute('required', 'required');
     } else if (selectedStatus === 'danger') {
-        if (challengeGroup) challengeGroup.style.display = 'block';
-        if (revisedDueDateGroup) revisedDueDateGroup.style.display = 'block';
+        console.log('=== DANGER SELECTED ===');
+        if (challengeGroup) {
+            challengeGroup.style.display = 'block';
+            console.log('Set challengeGroup display to block');
+        }
+        if (revisedDueDateGroup) {
+            revisedDueDateGroup.style.display = 'block';
+            console.log('Set revisedDueDateGroup display to block');
+        }
+        if (challengeInput) challengeInput.setAttribute('required', 'required');
+        if (revisedDueDateInput) revisedDueDateInput.setAttribute('required', 'required');
+    } else {
+        console.log('Other status selected, fields remain hidden');
     }
+
+    console.log('Final states:');
+    console.log('- challengeGroup display:', challengeGroup ? challengeGroup.style.display : 'null');
+    console.log('- revisedDueDateGroup display:', revisedDueDateGroup ? revisedDueDateGroup.style.display : 'null');
+    console.log('=== End toggleImprovementProjectFields ===');
 }
 
 </script>

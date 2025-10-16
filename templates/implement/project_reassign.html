@@ -41,7 +41,7 @@
                         <select class="form-control" id="team" name="team" required>
                             <option value="">Select Team</option>
                             {% for team in available_teams %}
-                            <option value="{{ team.id }}" {% if team.id == project.quarterly_plan.team.id %}selected{% endif %}>
+                            <option value="{{ team.id }}">
                                 {{ team.name }}
                             </option>
                             {% endfor %}
@@ -84,7 +84,7 @@
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-user-edit me-2"></i>Reassign Project
                         </button>
-                        <a href="{% url 'implement:my_projects' %}" class="btn btn-secondary">
+                        <a href="{% url 'implement:my_projects' %}" class="btn btn-secondary" onclick="return confirmReassignPageCancel(event)">
                             <i class="fas fa-times me-2"></i>Cancel
                         </a>
                     </div>
@@ -101,35 +101,68 @@
             <div class="card-body">
                 <dl class="row">
                     <dt class="col-sm-5">Quarter:</dt>
-                    <dd class="col-sm-7">{{ project.quarterly_plan.quarter }} - {{ project.quarterly_plan.financial_year.year }}</dd>
+                    <dd class="col-sm-7">
+                        {% if project.quarterly_plan %}
+                            {{ project.quarterly_plan.quarter }} - {{ project.quarterly_plan.financial_year.year }}
+                        {% elif project.upload %}
+                            {{ project.upload.quarter }} - {{ project.upload.financial_year.year }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </dd>
 
                     <dt class="col-sm-5">Team:</dt>
-                    <dd class="col-sm-7">{{ project.quarterly_plan.team.name }}</dd>
+                    <dd class="col-sm-7">
+                        {% if project.quarterly_plan %}
+                            {{ project.quarterly_plan.team.name }}
+                        {% elif project.upload %}
+                            {{ project.upload.team.name }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </dd>
 
                     <dt class="col-sm-5">Start Date:</dt>
                     <dd class="col-sm-7">{{ project.start_date|date:"M d, Y" }}</dd>
 
                     <dt class="col-sm-5">Due Date:</dt>
-                    <dd class="col-sm-7">{{ project.due_date|date:"M d, Y" }}</dd>
-
-                    {% with project.status_history.first as latest_status %}
-                    {% if latest_status %}
-                    <dt class="col-sm-5">Status:</dt>
                     <dd class="col-sm-7">
-                        <span class="badge bg-{% if latest_status.status == 'completed' %}success{% elif latest_status.status == 'on_track' %}primary{% elif latest_status.status == 'at_risk' %}warning{% else %}danger{% endif %}">
-                            {{ latest_status.get_status_display }}
-                        </span>
+                        {% if project.due_date %}
+                            {{ project.due_date|date:"M d, Y" }}
+                        {% elif project.end_date %}
+                            {{ project.end_date|date:"M d, Y" }}
+                        {% else %}
+                            N/A
+                        {% endif %}
                     </dd>
 
-                    <dt class="col-sm-5">Progress:</dt>
-                    <dd class="col-sm-7">{{ latest_status.completion_percentage }}%</dd>
+                    {% if project.status_history %}
+                        {% with project.status_history.first as latest_status %}
+                        {% if latest_status %}
+                        <dt class="col-sm-5">Status:</dt>
+                        <dd class="col-sm-7">
+                            <span class="badge bg-{% if latest_status.status == 'completed' %}success{% elif latest_status.status == 'on_track' %}primary{% elif latest_status.status == 'at_risk' %}warning{% else %}danger{% endif %}">
+                                {{ latest_status.get_status_display }}
+                            </span>
+                        </dd>
 
-                    {% if latest_status.challenge %}
-                    <dt class="col-sm-5">Challenges:</dt>
-                    <dd class="col-sm-7"><small>{{ latest_status.challenge|truncatechars:100 }}</small></dd>
+                        <dt class="col-sm-5">Progress:</dt>
+                        <dd class="col-sm-7">{{ latest_status.completion_percentage }}%</dd>
+
+                        {% if latest_status.challenge %}
+                        <dt class="col-sm-5">Challenges:</dt>
+                        <dd class="col-sm-7"><small>{{ latest_status.challenge|truncatechars:100 }}</small></dd>
+                        {% endif %}
+                        {% endif %}
+                        {% endwith %}
+                    {% elif project.status %}
+                        <dt class="col-sm-5">Status:</dt>
+                        <dd class="col-sm-7">
+                            <span class="badge bg-{% if project.status == 'completed' %}success{% elif project.status == 'on_track' %}primary{% elif project.status == 'at_risk' %}warning{% else %}danger{% endif %}">
+                                {{ project.get_status_display }}
+                            </span>
+                        </dd>
                     {% endif %}
-                    {% endif %}
-                    {% endwith %}
                 </dl>
             </div>
         </div>
@@ -169,20 +202,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add event listener for team selection
     teamSelect.addEventListener('change', function() {
-        loadTeamMembers();
+        loadProjectReassignTeamMembers();
     });
 
     // Load initial team members if a team is pre-selected
     if (teamSelect.value) {
-        loadTeamMembers();
+        loadProjectReassignTeamMembers();
     }
 });
 
 // Load team members based on selected team
-function loadTeamMembers() {
+function loadProjectReassignTeamMembers() {
+    console.log('loadTeamMembers called');
     const teamSelect = document.getElementById('team');
     const userSelect = document.getElementById('responsible_user');
     const teamId = teamSelect.value;
+
+    console.log('Team ID selected:', teamId);
 
     // Reset user dropdown
     userSelect.innerHTML = '<option value="">Select Member</option>';
@@ -196,21 +232,27 @@ function loadTeamMembers() {
     // Show loading state
     userSelect.innerHTML = '<option value="">Loading...</option>';
 
-    fetch(`/implement/get-team-members/?team_id=${teamId}`, {
+    console.log('Making AJAX call to:', `/organizations/ajax/get-team-members/${teamId}/`);
+
+    fetch(`/organizations/ajax/get-team-members/${teamId}/`, {
         method: 'GET',
         headers: {
             'X-CSRFToken': getCookie('csrftoken')
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Response status:', response.status);
+        return response.json();
+    })
     .then(data => {
+        console.log('Response data:', data);
         if (data.success) {
             userSelect.innerHTML = '<option value="">Select Member</option>';
 
             data.members.forEach(member => {
                 const option = document.createElement('option');
                 option.value = member.id;
-                option.textContent = `${member.name} (${member.email})`;
+                option.textContent = `${member.name}${member.is_manager ? ' (Manager)' : ''}`;
 
                 // Pre-select current responsible user if in this team
                 {% if project.responsible_user %}
@@ -238,6 +280,13 @@ function loadTeamMembers() {
 document.getElementById('reassignProjectForm').addEventListener('submit', function(e) {
     e.preventDefault();
 
+    // Validate member selection
+    const responsibleUser = document.getElementById('responsible_user').value;
+    if (!responsibleUser) {
+        alert('Please select Member');
+        return;
+    }
+
     const formData = new FormData(this);
 
     fetch(`/implement/project/{{ project.id }}/reassign/`, {
@@ -261,6 +310,39 @@ document.getElementById('reassignProjectForm').addEventListener('submit', functi
         alert('Error reassigning project: ' + error.message);
     });
 });
+
+// Cancel with confirmation
+function confirmReassignPageCancel(event) {
+    const form = document.getElementById('reassignProjectForm');
+    if (!form) return true;
+
+    const hasChanges = isFormDirty(form);
+
+    if (hasChanges) {
+        if (!confirm('You will lose the data entered. Do you wish to continue?')) {
+            event.preventDefault();
+            return false;
+        }
+    }
+    return true;
+}
+
+// Helper function to check if form is dirty (has unsaved changes)
+function isFormDirty(form) {
+    if (!form) return false;
+    const inputs = form.querySelectorAll('input, textarea, select');
+    for (let input of inputs) {
+        if (input.type === 'hidden' || input.name === 'csrfmiddlewaretoken') continue;
+        if (input.type === 'checkbox') {
+            if (input.checked !== input.defaultChecked) return true;
+        } else {
+            if (input.value && input.value.trim() !== '' && input.value !== input.defaultValue) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 // CSRF token helper
 function getCookie(name) {

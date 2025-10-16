@@ -143,9 +143,19 @@ function addReviewNote() {
 }
 
 function cancelAdd() {
+    const titleInput = document.getElementById('newNoteTitle');
+    const contentInput = document.getElementById('newNoteContent');
+
+    // Check if any data has been entered
+    if (titleInput.value.trim() || contentInput.value.trim()) {
+        if (!confirm('You will lose the data entered. Do you wish to continue?')) {
+            return;
+        }
+    }
+
     document.getElementById('addNoteForm').style.display = 'none';
-    document.getElementById('newNoteTitle').value = '';
-    document.getElementById('newNoteContent').value = '';
+    titleInput.value = '';
+    contentInput.value = '';
 }
 
 function createNote(event) {
@@ -199,14 +209,24 @@ function cancelEdit(noteId) {
     const content = noteItem.querySelector('.note-content');
     const editForm = noteItem.querySelector('.note-edit-form');
     const buttons = noteItem.querySelector('.btn-group');
+    const titleInput = editForm.querySelector('input[name=\"title\"]');
+    const textarea = editForm.querySelector('textarea');
+
+    // Check if any changes were made
+    const hasChanges = titleInput.value !== titleInput.defaultValue ||
+                       textarea.value !== textarea.defaultValue;
+
+    if (hasChanges) {
+        if (!confirm('You will lose the data entered. Do you wish to continue?')) {
+            return;
+        }
+    }
 
     content.style.display = 'block';
     editForm.style.display = 'none';
     buttons.style.display = 'flex';
 
     // Reset form fields to original values
-    const titleInput = editForm.querySelector('input[name=\"title\"]');
-    const textarea = editForm.querySelector('textarea');
     const originalTitle = titleInput.defaultValue;
     const originalText = textarea.defaultValue;
     titleInput.value = originalTitle;

@@ -1,0 +1,76 @@
+{% load l10n %}
+<!-- Action History View -->
+<div class="card mb-3">
+    <div class="card-header bg-light">
+        <h6 class="mb-0">Action Details</h6>
+    </div>
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-4">Action:</dt>
+            <dd class="col-sm-8">{{ action.action_description }}</dd>
+
+            <dt class="col-sm-4">Priority:</dt>
+            <dd class="col-sm-8">
+                <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}info{% endif %}">
+                    {{ action.get_priority_display }}
+                </span>
+            </dd>
+
+            <dt class="col-sm-4">Status:</dt>
+            <dd class="col-sm-8">
+                <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% elif action.status == 'cancelled' %}secondary{% else %}warning{% endif %}">
+                    {{ action.get_status_display }}
+                </span>
+            </dd>
+
+            <dt class="col-sm-4">Assigned To:</dt>
+            <dd class="col-sm-8">{{ action.assigned_to.get_full_name|default:action.assigned_to.username }}</dd>
+
+            {% if action.assigned_to_team %}
+            <dt class="col-sm-4">Assigned Team:</dt>
+            <dd class="col-sm-8">{{ action.assigned_to_team.name }}</dd>
+            {% endif %}
+
+            <dt class="col-sm-4">Due Date:</dt>
+            <dd class="col-sm-8">{{ action.due_date|date:"M d, Y" }}</dd>
+
+            <dt class="col-sm-4">Created:</dt>
+            <dd class="col-sm-8">{{ action.created_at|date:"M d, Y H:i" }}</dd>
+
+            <dt class="col-sm-4">Last Updated:</dt>
+            <dd class="col-sm-8">{{ action.updated_at|date:"M d, Y H:i" }}</dd>
+
+            {% if action.completed_at %}
+            <dt class="col-sm-4">Completed At:</dt>
+            <dd class="col-sm-8">{{ action.completed_at|date:"M d, Y H:i" }}</dd>
+            {% endif %}
+
+            {% if action.parameter_type %}
+            <dt class="col-sm-4">Source:</dt>
+            <dd class="col-sm-8">
+                <span class="badge bg-{% if action.parameter_type == 'fpi' %}primary{% elif action.parameter_type == 'gpi' %}info{% elif action.parameter_type == 'ppi' %}success{% endif %}">
+                    {{ action.get_parameter_type_display }}
+                </span>
+                {% if action.get_parameter_name %}
+                    - {{ action.get_parameter_name }}
+                {% endif %}
+            </dd>
+            {% endif %}
+        </dl>
+    </div>
+</div>
+
+{% if action.completion_notes %}
+<div class="card">
+    <div class="card-header bg-light">
+        <h6 class="mb-0">Notes & History</h6>
+    </div>
+    <div class="card-body">
+        <div class="text-muted" style="white-space: pre-wrap;">{{ action.completion_notes }}</div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info mb-0">
+    <i class="fas fa-info-circle me-2"></i>No notes or history available for this action.
+</div>
+{% endif %}

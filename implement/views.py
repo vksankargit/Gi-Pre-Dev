@@ -13,6 +13,7 @@ from plans.models import PPIProject, FPIParameter, GPIParameter, GPIMilestone, F
 from improve.models import ImprovementProject, ImprovementTask
 from organizations.models import Team, TeamMember
 from accounts.utils import get_effective_user
+from reviews.models import ReviewMeeting
 
 
 class ImplementDashboardView(LoginRequiredMixin, TemplateView):
@@ -41,28 +42,77 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         # Get current month name
         current_month = calendar.month_name[today.month]
 
-        # Get Weekly Numbers from GPI Parameters
+        # Calculate current quarter for filtering
+        now = timezone.now()
+        current_month_num = now.month
+
+        # Determine quarter based on month (financial year starts April 1)
+        if 4 <= current_month_num <= 6:
+            current_quarter_num = 1
+            fy_start_year = now.year
+        elif 7 <= current_month_num <= 9:
+            current_quarter_num = 2
+            fy_start_year = now.year
+        elif 10 <= current_month_num <= 12:
+            current_quarter_num = 3
+            fy_start_year = now.year
+        else:  # Jan-Mar
+            current_quarter_num = 4
+            fy_start_year = now.year - 1
+
+        # Format the financial year string to match database format (e.g., "FY 25-26")
+        fy_end_year = fy_start_year + 1
+        current_fy_string = f"FY {fy_start_year % 100:02d}-{fy_end_year % 100:02d}"
+        current_financial_year = FinancialYear.objects.filter(year=current_fy_string).first()
+
+        # Calculate current week number within quarter (for My Numbers tracking)
+        # Quarter start month mapping
+        quarter_start_months = {1: 4, 2: 7, 3: 10, 4: 1}  # Apr, Jul, Oct, Jan
+        quarter_start_month = quarter_start_months[current_quarter_num]
+
+        # Calculate quarter start date
+        if current_quarter_num == 4:  # Jan-Mar quarter
+            quarter_start_year = fy_start_year + 1  # Next calendar year
+        else:
+            quarter_start_year = fy_start_year
+
+        quarter_start_date = date(quarter_start_year, quarter_start_month, 1)
+        days_into_quarter = (today - quarter_start_date).days
+        current_week_in_quarter = (days_into_quarter // 7) + 1  # Week 1-13
+
+        # Calculate current month number within quarter (1-3)
+        current_month_in_quarter = ((current_month_num - quarter_start_month) % 12) // 1 + 1
+        if current_month_in_quarter > 3:
+            current_month_in_quarter = ((current_month_num - quarter_start_month + 12) % 12) // 1 + 1
+
+        # Get Weekly Numbers from GPI Parameters - filter by current quarter
         weekly_numbers = GPIParameter.objects.filter(
             responsible_user=user,
-            tracking_type='weekly'
-        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones')
+            tracking_type='weekly',
+            quarterly_plan__quarter=current_quarter_num,
+            quarterly_plan__financial_year=current_financial_year
+        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones') if current_financial_year else GPIParameter.objects.none()
 
-        # Get Monthly Numbers from FPI and GPI Parameters
+        # Get Monthly Numbers from FPI and GPI Parameters - filter by current quarter
         monthly_fpi = FPIParameter.objects.filter(
-            responsible_user=user
-        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones')
+            responsible_user=user,
+            quarterly_plan__quarter=current_quarter_num,
+            quarterly_plan__financial_year=current_financial_year
+        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones') if current_financial_year else FPIParameter.objects.none()
 
         monthly_gpi = GPIParameter.objects.filter(
             responsible_user=user,
-            tracking_type='monthly'
-        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones')
+            tracking_type='monthly',
+            quarterly_plan__quarter=current_quarter_num,
+            quarterly_plan__financial_year=current_financial_year
+        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones') if current_financial_year else GPIParameter.objects.none()
 
         # Convert querysets to lists and combine monthly numbers
         monthly_numbers = list(monthly_fpi) + list(monthly_gpi)
 
-        # Get summary statistics
+        # Get summary statistics (exclude carry_forward actions)
         context.update({
-            'my_actions_count': Action.objects.filter(assigned_to=user, status__in=['not_started', 'in_progress', 'at_risk', 'danger']).count(),
+            'my_actions_count': Action.objects.filter(assigned_to=user, status__in=['not_started', 'in_progress', 'at_risk', 'danger']).exclude(status='carry_forward').count(),
             'my_projects_count': PPIProject.objects.filter(responsible_user=user).count() + ImprovementProject.objects.filter(responsible_user=user).count(),
             'pending_numbers': weekly_numbers.count() + monthly_fpi.count() + monthly_gpi.count(),
             'today': today,
@@ -70,28 +120,66 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             'current_month': current_month,
             'current_week_num': week_num,
             'current_year': year,
+            'current_week_in_quarter': current_week_in_quarter,
+            'current_month_in_quarter': current_month_in_quarter,
         })
 
 
-        # Actions
-        actions = Action.objects.filter(
+        # Actions (exclude carry_forward actions)
+        # Calculate date ranges for My To Do filtering
+        current_week_start = today - timedelta(days=today.weekday())  # Monday
+        current_week_end = current_week_start + timedelta(days=6)  # Sunday
+        next_week_start = current_week_end + timedelta(days=1)  # Next Monday
+        next_week_end = next_week_start + timedelta(days=6)  # Next Sunday
+
+        # Get all actions first
+        all_actions = Action.objects.filter(
             assigned_to=user
+        ).exclude(
+            status='carry_forward'
         ).select_related('team', 'created_by').order_by('original_due_date', '-created_at')
+
+        # Get filter parameter from request (default: overdue,current_week)
+        filter_param = self.request.GET.get('due_date_filter', 'overdue,current_week')
+        filters = [f.strip() for f in filter_param.split(',') if f.strip()]
+
+        # Apply filtering based on selected options
+        if filters:
+            filter_query = Q()
+
+            if 'overdue' in filters:
+                # Overdue: due date before today and not completed
+                filter_query |= Q(original_due_date__lt=today) & ~Q(status__in=['completed', 'done'])
+
+            if 'current_week' in filters:
+                # Current week: due date between current week start and end
+                filter_query |= Q(original_due_date__gte=current_week_start, original_due_date__lte=current_week_end)
+
+            if 'next_week' in filters:
+                # Next week: due date between next week start and end
+                filter_query |= Q(original_due_date__gte=next_week_start, original_due_date__lte=next_week_end)
+
+            if 'later' in filters:
+                # Later: due date after next week end
+                filter_query |= Q(original_due_date__gt=next_week_end)
+
+            actions = all_actions.filter(filter_query)
+        else:
+            # No filters selected, show all actions
+            actions = all_actions
 
         # Actions are filtered and ready to be passed to template
 
         # Enhance weekly numbers with budget data
         enhanced_weekly_numbers = []
         for gpi in weekly_numbers:
-            # Calculate which Excel week corresponds to current calendar weeks
-            # Week 37 = W11, Week 38 = W12 (assuming quarter starts at week 27)
-
-            current_excel_week = week_num - 26  # Convert calendar week to Excel week (W1 = week 27)
-            last_excel_week = current_excel_week - 1
+            # Use the already calculated current_week_in_quarter (1-13)
+            # This matches the period_number in GPIMilestone
+            last_week_in_quarter = current_week_in_quarter - 1 if current_week_in_quarter > 1 else 0
 
             # Get milestone values for last week and current week
-            last_week_milestone = gpi.milestones.filter(period_number=last_excel_week).first()
-            current_week_milestone = gpi.milestones.filter(period_number=current_excel_week).first()
+            last_week_milestone = gpi.milestones.filter(period_number=last_week_in_quarter).first()
+            current_week_milestone = gpi.milestones.filter(period_number=current_week_in_quarter).first()
 
             # Add budget values to the GPI object
             gpi.last_week_budget = last_week_milestone.budget_value if last_week_milestone else 0
@@ -100,13 +188,13 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             enhanced_weekly_numbers.append(gpi)
 
         # Enhance monthly numbers with budget data
-        current_month = timezone.now().month
-        last_month = current_month - 1 if current_month > 1 else 12
-        next_month = current_month + 1 if current_month < 12 else 1
+        month_num = timezone.now().month
+        last_month = month_num - 1 if month_num > 1 else 12
+        next_month = month_num + 1 if month_num < 12 else 1
 
         # Calculate quarterly month numbers (1-3 within quarter)
-        quarter_start_month = ((current_month - 1) // 3) * 3 + 1  # Jan=1, Apr=4, Jul=7, Oct=10
-        current_quarter_month = current_month - quarter_start_month + 1  # 1-3
+        quarter_start_month = ((month_num - 1) // 3) * 3 + 1  # Jan=1, Apr=4, Jul=7, Oct=10
+        current_quarter_month = month_num - quarter_start_month + 1  # 1-3
         last_quarter_month = current_quarter_month - 1 if current_quarter_month > 1 else 3
 
         enhanced_monthly_numbers = []
@@ -131,46 +219,20 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         from organizations.models import Team
         user_teams = Team.objects.filter(manager=user)
 
-        # Calculate current quarter display
-        now = timezone.now()
-        current_year = now.year
-        current_month = now.month
-
-        # Determine quarter based on month (financial year starts April 1)
-        if 4 <= current_month <= 6:
-            quarter = "Q1"
-            fy_start = current_year
-        elif 7 <= current_month <= 9:
-            quarter = "Q2"
-            fy_start = current_year
-        elif 10 <= current_month <= 12:
-            quarter = "Q3"
-            fy_start = current_year
-        else:  # Jan-Mar
-            quarter = "Q4"
-            fy_start = current_year - 1
-
-        fy_end = fy_start + 1
-        current_quarter_display = f"{quarter} of FY {fy_start:02d}–{fy_end:02d}"
-
-        # Filter projects by current quarter and financial year
-        from plans.models import FinancialYear
-        # Format the financial year string to match database format (e.g., "FY 25-26")
-        # Use last 2 digits of the year
-        fy_string = f"FY {fy_start % 100:02d}-{fy_end % 100:02d}"
-        current_fy = FinancialYear.objects.filter(year=fy_string).first()
+        # Calculate current quarter display using already calculated values
+        quarter = f"Q{current_quarter_num}"
+        current_quarter_display = f"{quarter} of FY {fy_start_year:02d}–{fy_end_year:02d}"
 
         # Get both PPI projects and Improvement projects
         ppi_projects = []
         improvement_projects = []
 
-        if current_fy:
-            # Convert quarter format from "Q1" to "1" to match database format
-            quarter_number = quarter.replace("Q", "")
+        if current_financial_year:
+            # Use current_quarter_num which is already calculated
             ppi_projects = PPIProject.objects.filter(
                 responsible_user=user,
-                quarterly_plan__quarter=quarter_number,
-                quarterly_plan__financial_year=current_fy
+                quarterly_plan__quarter=current_quarter_num,
+                quarterly_plan__financial_year=current_financial_year
             ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('status_history')
 
             # Get improvement projects for the same quarter and financial year
@@ -179,7 +241,7 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                 responsible_user=user,
                 upload__quarter__icontains=quarter
             ).filter(
-                upload__quarter__icontains=fy_string
+                upload__quarter__icontains=current_fy_string
             ).select_related('upload__team', 'upload__financial_year').prefetch_related('tasks')
         else:
             # Fallback if no financial year found - show all projects
@@ -294,6 +356,50 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
 
             enhanced_projects.append(ProjectWrapper(imp_project))
 
+        # Check for saved review meetings to determine if data entry should be disabled
+        # Get all teams for the user's parameters
+        user_teams_for_params = set()
+        for param in weekly_numbers:
+            user_teams_for_params.add(param.quarterly_plan.team.id)
+        for param in enhanced_monthly_numbers:
+            if hasattr(param, 'quarterly_plan'):
+                user_teams_for_params.add(param.quarterly_plan.team.id)
+
+        # Check weekly review meetings for current week
+        weekly_review_locked = {}
+        for team_id in user_teams_for_params:
+            # Check if a weekly review meeting exists for current week (any status except 'cancelled')
+            # Once a review meeting is created, data entry should be locked
+            review_exists = ReviewMeeting.objects.filter(
+                team_id=team_id,
+                financial_year=current_financial_year,
+                meeting_type='weekly',
+                week_number=current_week_in_quarter
+            ).exclude(status='cancelled').exists()
+            weekly_review_locked[team_id] = review_exists
+
+        # Check monthly review meetings for current month
+        monthly_review_locked = {}
+        for team_id in user_teams_for_params:
+            # Check if a monthly review meeting exists for current month (any status except 'cancelled')
+            review_exists = ReviewMeeting.objects.filter(
+                team_id=team_id,
+                financial_year=current_financial_year,
+                meeting_type='monthly',
+                month_number=current_month_in_quarter
+            ).exclude(status='cancelled').exists()
+            monthly_review_locked[team_id] = review_exists
+
+        # Add locked status to each parameter
+        for param in enhanced_weekly_numbers:
+            param.is_locked = weekly_review_locked.get(param.quarterly_plan.team.id, False)
+
+        for param in enhanced_monthly_numbers:
+            if hasattr(param, 'quarterly_plan'):
+                param.is_locked = monthly_review_locked.get(param.quarterly_plan.team.id, False)
+            else:
+                param.is_locked = False
+
         context.update({
             'weekly_numbers': enhanced_weekly_numbers,
             'monthly_numbers': enhanced_monthly_numbers,
@@ -301,6 +407,11 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             'actions': actions,
             'user_teams': user_teams,
             'current_quarter_display': current_quarter_display,
+            'current_week_start': current_week_start,
+            'current_week_end': current_week_end,
+            'next_week_start': next_week_start,
+            'next_week_end': next_week_end,
+            'selected_filters': filters,
         })
 
         return context
@@ -473,9 +584,11 @@ class ReassignParameterView(LoginRequiredMixin, View):
 
 class ReassignTaskView(LoginRequiredMixin, View):
     def post(self, request):
-        print("*" * 80)
-        print("REASSIGN TASK VIEW POST METHOD CALLED")
-        print("*" * 80)
+        import sys
+        sys.stderr.write("=" * 80 + "\n")
+        sys.stderr.write("REASSIGN TASK VIEW POST METHOD CALLED\n")
+        sys.stderr.write("=" * 80 + "\n")
+        sys.stderr.flush()
 
         import logging
         logger = logging.getLogger(__name__)
@@ -484,7 +597,8 @@ class ReassignTaskView(LoginRequiredMixin, View):
             task_id = request.POST.get('entity_id')
             member_id = request.POST.get('member_id')
 
-            print(f"task_id={task_id}, member_id={member_id}, user={request.user.get_full_name()}")
+            sys.stderr.write(f"task_id={task_id}, member_id={member_id}, user={request.user.get_full_name()}\n")
+            sys.stderr.flush()
 
             logger.info(f"=== REASSIGN TASK START === task_id={task_id}, member_id={member_id}, user={request.user.get_full_name()}")
 
@@ -609,29 +723,79 @@ class MyProjectsView(LoginRequiredMixin, RedirectView):
 
 class MyTodoView(LoginRequiredMixin, TemplateView):
     template_name = 'implement/my_todo.html'
-
+    # Added due date filter: Overdue, Current Week, Next Week, Later
     def get_context_data(self, **kwargs):
         from django.db.models import Q
+        from datetime import date, timedelta
         context = super().get_context_data(**kwargs)
         user = get_effective_user(self.request)
+
+        # Calculate date ranges for filtering
+        today = date.today()
+
+        # Current week: Monday to Sunday of this week
+        current_week_start = today - timedelta(days=today.weekday())  # Monday
+        current_week_end = current_week_start + timedelta(days=6)  # Sunday
+
+        # Next week: Monday to Sunday of next week
+        next_week_start = current_week_end + timedelta(days=1)  # Next Monday
+        next_week_end = next_week_start + timedelta(days=6)  # Next Sunday
 
         # Get actions assigned to user OR created by user OR owned via project
         # This includes:
         # 1. Actions assigned to the user
         # 2. Actions created by the user (delegated tasks)
         # 3. Actions linked to PPI tasks where user owns the project
-        actions = Action.objects.filter(
+        # Use .distinct() to avoid duplicates when an action matches multiple conditions
+        # Exclude carry_forward actions from the todo list
+        all_actions = Action.objects.filter(
             Q(assigned_to=user) |
             Q(created_by=user) |
             Q(ppi_task__project__responsible_user=user) |
             Q(improvement_task__project__responsible_user=user)
-        ).distinct().select_related('team', 'created_by', 'assigned_to', 'ppi_task__project', 'improvement_task__project').order_by('original_due_date', '-created_at')
+        ).exclude(
+            status='carry_forward'
+        ).select_related(
+            'team', 'created_by', 'assigned_to', 'ppi_task__project', 'improvement_task__project'
+        ).distinct().order_by('original_due_date', '-created_at')
 
-        # Actions are filtered and ready for My To Do template
+        # Get filter parameter from request (default: overdue,current_week)
+        filter_param = self.request.GET.get('due_date_filter', 'overdue,current_week')
+        filters = [f.strip() for f in filter_param.split(',') if f.strip()]
+
+        # Apply filtering based on selected options
+        if filters:
+            filter_query = Q()
+
+            if 'overdue' in filters:
+                # Overdue: due date before today and not completed
+                filter_query |= Q(original_due_date__lt=today) & ~Q(status__in=['completed', 'done'])
+
+            if 'current_week' in filters:
+                # Current week: due date between current week start and end
+                filter_query |= Q(original_due_date__gte=current_week_start, original_due_date__lte=current_week_end)
+
+            if 'next_week' in filters:
+                # Next week: due date between next week start and end
+                filter_query |= Q(original_due_date__gte=next_week_start, original_due_date__lte=next_week_end)
+
+            if 'later' in filters:
+                # Later: due date after next week end
+                filter_query |= Q(original_due_date__gt=next_week_end)
+
+            actions = all_actions.filter(filter_query)
+        else:
+            # No filters selected, show all actions
+            actions = all_actions
 
         context.update({
             'actions': actions,
-            'today': timezone.now().date(),
+            'today': today,
+            'current_week_start': current_week_start,
+            'current_week_end': current_week_end,
+            'next_week_start': next_week_start,
+            'next_week_end': next_week_end,
+            'selected_filters': filters,
         })
 
         return context
@@ -1432,6 +1596,196 @@ class ProjectHistoryView(LoginRequiredMixin, TemplateView):
             'history': project.status_history.all().order_by('-updated_at'),
             'completed_tasks_count': completed_tasks_count,
             'total_tasks_count': total_tasks_count,
+        })
+
+        return context
+
+
+class ProjectDetailsView(LoginRequiredMixin, TemplateView):
+    """Display project details with weekly task breakdown"""
+    template_name = 'implement/popups/project_details.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        project_id = self.kwargs['pk']
+        project_type = self.request.GET.get('project_type', 'PPI')
+
+        from datetime import datetime, timedelta
+
+        # Get current week based on quarter start date
+        today = datetime.now().date()
+
+        if project_type == 'PPI':
+            from plans.models import PPIProject
+            project = PPIProject.objects.get(id=project_id)
+            tasks = project.tasks.all()
+            # Get quarter start date from the project's quarterly plan
+            quarter_start_date = project.quarterly_plan.quarter_start_date if project.quarterly_plan else None
+        else:  # Improvement
+            from improve.models import ImprovementProject
+            project = ImprovementProject.objects.get(id=project_id)
+            tasks = project.tasks.all()
+            # Get quarter start date from the project's upload (improvement upload)
+            quarter_start_date = project.upload.quarter_start_date if project.upload else None
+
+        # Calculate current week based on quarter start date
+        if quarter_start_date:
+            days_diff = (today - quarter_start_date).days
+            current_week = (days_diff // 7) + 1
+        else:
+            current_week = 1
+
+        # Build weekly task data
+        weeks = []
+        for week_num in range(1, 14):  # 13 weeks
+            week_tasks = list(tasks.filter(week_number=week_num))
+            tasks_count = len(week_tasks)
+            completed_count = sum(1 for task in week_tasks if task.is_completed)
+
+            # Attach action to each task for status display
+            for task in week_tasks:
+                action = Action.objects.filter(
+                    ppi_task=task if project_type == 'PPI' else None,
+                    improvement_task=task if project_type == 'Improvement' else None
+                ).first()
+                task.action = action
+
+            # Determine cell style and class (background only for completed/overdue weeks)
+            cell_class = ''
+            cell_style = ''
+
+            if tasks_count == 0:
+                # No tasks - default styling
+                cell_class = 'bg-light'
+            elif completed_count == tasks_count:
+                # All tasks completed - green background
+                cell_style = 'background-color: #90EE90;'
+            elif week_num < current_week:
+                # Past week with incomplete tasks - light red background
+                cell_style = 'background-color: #FFB6C6;'
+
+            weeks.append({
+                'week_number': week_num,
+                'tasks': week_tasks,
+                'tasks_count': tasks_count,
+                'completed_count': completed_count,
+                'cell_class': cell_class,
+                'cell_style': cell_style,
+            })
+
+        # Adapt project object to match review template expectations
+        # Add aliases for field names that differ between models
+        project.project_name = project.name
+        project.original_due_date = project.end_date
+
+        context.update({
+            'project': project,
+            'project_type': project_type,
+            'weeks': weeks,
+            'current_week': current_week,
+        })
+
+        return context
+
+
+class WeekTasksView(LoginRequiredMixin, TemplateView):
+    """Display tasks for a specific week of a project"""
+    template_name = 'implement/popups/week_tasks.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        project_id = self.kwargs['pk']
+        project_type = self.request.GET.get('project_type', 'PPI')
+        week_number = int(self.request.GET.get('week'))
+
+        from datetime import datetime
+
+        # Get current week based on quarter start date
+        today = datetime.now().date()
+
+        if project_type == 'PPI':
+            from plans.models import PPIProject
+            project = PPIProject.objects.get(id=project_id)
+            # Get quarter start date from the project's quarterly plan
+            quarter_start_date = project.quarterly_plan.quarter_start_date if project.quarterly_plan else None
+        else:  # Improvement
+            from improve.models import ImprovementProject
+            project = ImprovementProject.objects.get(id=project_id)
+            # Get quarter start date from the project's upload (improvement upload)
+            quarter_start_date = project.upload.quarter_start_date if project.upload else None
+
+        # Calculate current week based on quarter start date
+        if quarter_start_date:
+            days_diff = (today - quarter_start_date).days
+            current_week = (days_diff // 7) + 1
+        else:
+            current_week = 1
+
+        # Get tasks for this week with their related actions and sub-actions
+        tasks = project.tasks.filter(week_number=week_number).order_by('id')
+
+        # Helper function to recursively get all sub-actions with depth level
+        def get_nested_sub_actions(action, depth=1):
+            """Recursively get all sub-actions with their depth level for tree display"""
+            result = []
+            sub_actions = action.sub_actions.all().order_by('created_at')
+
+            for sub_action in sub_actions:
+                # Add depth level to sub_action for template rendering
+                sub_action.depth_level = depth
+                result.append(sub_action)
+
+                # Recursively get sub-actions of this sub-action
+                nested = get_nested_sub_actions(sub_action, depth + 1)
+                result.extend(nested)
+
+            return result
+
+        # Attach action and all nested sub-actions to each task
+        for task in tasks:
+            try:
+                # Get the action associated with this task
+                action = Action.objects.filter(
+                    ppi_task=task if project_type == 'PPI' else None,
+                    improvement_task=task if project_type == 'Improvement' else None
+                ).first()
+
+                if action:
+                    task.action = action
+                    # Get all nested sub-actions recursively
+                    task.sub_actions = get_nested_sub_actions(action)
+                else:
+                    task.action = None
+                    task.sub_actions = []
+            except:
+                task.action = None
+                task.sub_actions = []
+
+        # Calculate task summary
+        total_tasks = tasks.count()
+        completed_tasks = tasks.filter(is_completed=True).count()
+        pending_tasks = total_tasks - completed_tasks
+        completion_percentage = round((completed_tasks / total_tasks * 100), 1) if total_tasks > 0 else 0
+
+        task_summary = {
+            'total': total_tasks,
+            'completed': completed_tasks,
+            'pending': pending_tasks,
+            'completion_percentage': completion_percentage
+        }
+
+        # Adapt project object to match template expectations
+        project.project_name = project.name
+
+        context.update({
+            'project': project,
+            'project_type': project_type,
+            'week_number': week_number,
+            'tasks': tasks,
+            'current_week': current_week,
+            'task_summary': task_summary,
         })
 
         return context

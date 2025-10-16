@@ -63,22 +63,42 @@
         padding: 0.625rem 1.25rem;
         font-weight: 500;
         transition: all 0.3s ease;
+        border: none;
     }
     .style-1 .btn-primary {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border: none;
+        color: white;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
     }
     .style-1 .btn-primary:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+        background: linear-gradient(135deg, #5568d3 0%, #6a3f8c 100%);
+    }
+    .style-1 .btn-success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
     }
     .style-1 .btn-success:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+        box-shadow: 0 6px 25px rgba(17, 153, 142, 0.5);
+        background: linear-gradient(135deg, #0e8073 0%, #2dd66a 100%);
+    }
+    .style-1 .btn-secondary {
+        background: linear-gradient(135deg, #868f96 0%, #596164 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
     }
     .style-1 .btn-secondary:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4);
+        box-shadow: 0 6px 25px rgba(108, 117, 125, 0.5);
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    }
+    .style-1 .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none !important;
     }
 
     /* Style Option 2: Clean Minimal */
@@ -144,6 +164,39 @@
         text-transform: uppercase;
         font-size: 0.875rem;
         letter-spacing: 0.5px;
+        border: 2px solid;
+        transition: all 0.3s ease;
+    }
+    .style-2 .btn-primary {
+        background: #212529;
+        border-color: #212529;
+        color: white;
+    }
+    .style-2 .btn-primary:hover {
+        background: white;
+        color: #212529;
+    }
+    .style-2 .btn-success {
+        background: white;
+        border-color: #28a745;
+        color: #28a745;
+    }
+    .style-2 .btn-success:hover {
+        background: #28a745;
+        color: white;
+    }
+    .style-2 .btn-secondary {
+        background: white;
+        border-color: #6c757d;
+        color: #6c757d;
+    }
+    .style-2 .btn-secondary:hover {
+        background: #6c757d;
+        color: white;
+    }
+    .style-2 .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
     }
 
     /* Style Option 3: Corporate Blue */
@@ -196,13 +249,51 @@
         border-color: #1976d2;
         box-shadow: 0 0 0 0.2rem rgba(25, 118, 210, 0.25);
     }
+    .style-3 .btn {
+        border-radius: 4px;
+        padding: 0.625rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        font-size: 0.875rem;
+        letter-spacing: 0.3px;
+    }
     .style-3 .btn-primary {
         background: #1976d2;
-        border-color: #1976d2;
+        border: 2px solid #1976d2;
+        color: white;
+        box-shadow: 0 2px 10px rgba(25, 118, 210, 0.3);
     }
     .style-3 .btn-primary:hover {
         background: #0d47a1;
         border-color: #0d47a1;
+        box-shadow: 0 4px 15px rgba(13, 71, 161, 0.4);
+    }
+    .style-3 .btn-success {
+        background: #2e7d32;
+        border: 2px solid #2e7d32;
+        color: white;
+        box-shadow: 0 2px 10px rgba(46, 125, 50, 0.3);
+    }
+    .style-3 .btn-success:hover {
+        background: #1b5e20;
+        border-color: #1b5e20;
+        box-shadow: 0 4px 15px rgba(27, 94, 32, 0.4);
+    }
+    .style-3 .btn-secondary {
+        background: #616161;
+        border: 2px solid #616161;
+        color: white;
+        box-shadow: 0 2px 10px rgba(97, 97, 97, 0.3);
+    }
+    .style-3 .btn-secondary:hover {
+        background: #424242;
+        border-color: #424242;
+        box-shadow: 0 4px 15px rgba(66, 66, 66, 0.4);
+    }
+    .style-3 .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 
     /* Style Option 4: Dark Mode */
@@ -260,13 +351,49 @@
     .style-4 .form-text {
         color: #999;
     }
+    .style-4 .btn {
+        border-radius: 8px;
+        padding: 0.625rem 1.25rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        border: 2px solid;
+    }
     .style-4 .btn-primary {
         background: #4fc3f7;
-        border: none;
+        border-color: #4fc3f7;
         color: #1a1a1a;
+        box-shadow: 0 4px 15px rgba(79, 195, 247, 0.4);
     }
     .style-4 .btn-primary:hover {
         background: #29b6f6;
+        border-color: #29b6f6;
+        box-shadow: 0 6px 20px rgba(41, 182, 246, 0.5);
+        transform: translateY(-2px);
+    }
+    .style-4 .btn-success {
+        background: transparent;
+        border-color: #66bb6a;
+        color: #66bb6a;
+    }
+    .style-4 .btn-success:hover {
+        background: #66bb6a;
+        color: #1a1a1a;
+        box-shadow: 0 4px 15px rgba(102, 187, 106, 0.4);
+    }
+    .style-4 .btn-secondary {
+        background: transparent;
+        border-color: #78909c;
+        color: #78909c;
+    }
+    .style-4 .btn-secondary:hover {
+        background: #78909c;
+        color: #1a1a1a;
+        box-shadow: 0 4px 15px rgba(120, 144, 156, 0.4);
+    }
+    .style-4 .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none !important;
     }
 
     /* Style Option 5: Soft Pastel */
@@ -323,70 +450,52 @@
     }
     .style-5 .btn {
         border-radius: 12px;
+        padding: 0.625rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
     }
     .style-5 .btn-primary {
         background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-        border: none;
         color: #5a3e36;
-        font-weight: 600;
+        box-shadow: 0 4px 15px rgba(252, 182, 159, 0.4);
+    }
+    .style-5 .btn-primary:hover {
+        background: linear-gradient(135deg, #ffd9b8 0%, #fb9f87 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(252, 182, 159, 0.5);
+    }
+    .style-5 .btn-success {
+        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        color: #5a3e36;
+        box-shadow: 0 4px 15px rgba(168, 237, 234, 0.4);
+    }
+    .style-5 .btn-success:hover {
+        background: linear-gradient(135deg, #8fded9 0%, #fdc5d7 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(168, 237, 234, 0.5);
+    }
+    .style-5 .btn-secondary {
+        background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+        color: #5a3e36;
+        box-shadow: 0 4px 15px rgba(224, 195, 252, 0.4);
+    }
+    .style-5 .btn-secondary:hover {
+        background: linear-gradient(135deg, #d0b0ec 0%, #7eb5ec 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(224, 195, 252, 0.5);
+    }
+    .style-5 .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none !important;
     }
 
-    /* Style Selector */
-    .style-selector {
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        background: white;
-        border-radius: 12px;
-        padding: 1rem;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-        z-index: 1000;
-    }
-    .style-selector h6 {
-        margin-bottom: 0.75rem;
-        font-weight: 600;
-        font-size: 0.875rem;
-        color: #495057;
-    }
-    .style-option {
-        width: 40px;
-        height: 40px;
-        border-radius: 8px;
-        margin: 0.25rem;
-        cursor: pointer;
-        border: 2px solid transparent;
-        transition: all 0.3s ease;
-        display: inline-block;
-    }
-    .style-option:hover {
-        transform: scale(1.1);
-    }
-    .style-option.active {
-        border-color: #212529;
-        box-shadow: 0 0 0 3px rgba(33, 37, 41, 0.2);
-    }
-    .style-option-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .style-option-2 { background: #f8f9fa; border: 2px solid #dee2e6; }
-    .style-option-3 { background: #0d47a1; }
-    .style-option-4 { background: #1a1a1a; }
-    .style-option-5 { background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Style Selector -->
-<div class="style-selector">
-    <h6><i class="fas fa-palette me-2"></i>UI Style</h6>
-    <div class="d-flex flex-wrap" style="max-width: 140px;">
-        <div class="style-option style-option-1 active" onclick="changeStyle(1)" title="Modern Gradient"></div>
-        <div class="style-option style-option-2" onclick="changeStyle(2)" title="Clean Minimal"></div>
-        <div class="style-option style-option-3" onclick="changeStyle(3)" title="Corporate Blue"></div>
-        <div class="style-option style-option-4" onclick="changeStyle(4)" title="Dark Mode"></div>
-        <div class="style-option style-option-5" onclick="changeStyle(5)" title="Soft Pastel"></div>
-    </div>
-</div>
-
-<div id="mainContent" class="style-1">
+<div class="style-3">
     <div class="page-header">
         <h1>
             <i class="fas fa-clipboard-list me-2"></i>Plan
@@ -539,27 +648,6 @@
 </div>
 
 <script>
-function changeStyle(styleNum) {
-    // Remove all style classes
-    const mainContent = document.getElementById('mainContent');
-    mainContent.className = 'style-' + styleNum;
-
-    // Update active state
-    document.querySelectorAll('.style-option').forEach(opt => opt.classList.remove('active'));
-    document.querySelector('.style-option-' + styleNum).classList.add('active');
-
-    // Save preference to localStorage
-    localStorage.setItem('planPageStyle', styleNum);
-}
-
-// Load saved style preference
-document.addEventListener('DOMContentLoaded', function() {
-    const savedStyle = localStorage.getItem('planPageStyle');
-    if (savedStyle) {
-        changeStyle(parseInt(savedStyle));
-    }
-});
-
 // Enable upload button when all required fields are filled
 document.getElementById('annualFile').addEventListener('change', checkAnnualUpload);
 document.getElementById('annualTeam').addEventListener('change', checkAnnualUpload);
@@ -639,7 +727,7 @@ function uploadAnnualPlan() {
     });
 }
 
-function uploadQuarterlyPlan() {
+function uploadQuarterlyPlan(confirmDelete = false) {
     const formData = new FormData();
     const fileInput = document.getElementById('quarterlyFile');
     const teamId = document.getElementById('quarterlyTeam').value;
@@ -648,6 +736,10 @@ function uploadQuarterlyPlan() {
     formData.append('file', fileInput.files[0]);
     formData.append('team_id', teamId);
     formData.append('quarter_id', quarterId);
+
+    if (confirmDelete) {
+        formData.append('confirm_delete', 'true');
+    }
 
     const statusDiv = document.getElementById('quarterlyUploadStatus');
     statusDiv.style.display = 'block';
@@ -668,6 +760,14 @@ function uploadQuarterlyPlan() {
             statusDiv.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + data.message;
             fileInput.value = '';
             document.getElementById('uploadQuarterlyBtn').disabled = true;
+        } else if (data.requires_confirmation) {
+            // Show confirmation dialog
+            statusDiv.className = 'alert alert-warning';
+            statusDiv.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>' + data.error +
+                '<div class="mt-3">' +
+                '<button class="btn btn-danger me-2" onclick="uploadQuarterlyPlan(true)">Yes, Delete and Upload</button>' +
+                '<button class="btn btn-secondary" onclick="document.getElementById(\'quarterlyUploadStatus\').style.display=\'none\'">Cancel</button>' +
+                '</div>';
         } else {
             statusDiv.className = 'alert alert-danger';
             statusDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>' + data.error;
@@ -680,22 +780,9 @@ function uploadQuarterlyPlan() {
 }
 
 function viewHistory(type) {
-    const modal = new bootstrap.Modal(document.getElementById('historyModal'));
-    const content = document.getElementById('historyContent');
-
-    content.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
-    modal.show();
-
+    // Navigate to the full page instead of showing in modal
     const url = type === 'annual' ? '{% url "plans:annual_history" %}' : '{% url "plans:quarterly_history" %}';
-
-    fetch(url)
-        .then(response => response.text())
-        .then(html => {
-            content.innerHTML = html;
-        })
-        .catch(error => {
-            content.innerHTML = '<div class="alert alert-danger">Failed to load history</div>';
-        });
+    window.location.href = url;
 }
 </script>
 {% endblock %}

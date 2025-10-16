@@ -13,61 +13,435 @@
     </div>
 </div>
 
+<style>
+.editable-cell {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 8px;
+    cursor: text;
+    min-height: 32px;
+    width: 100px;
+}
+
+.editable-cell:hover {
+    background-color: #e9ecef;
+}
+
+.editable-cell:focus {
+    background-color: white;
+    outline: 2px solid #007bff;
+    border-color: #007bff;
+}
+
+.saving {
+    background-color: #fff3cd !important;
+    border-color: #ffeaa7 !important;
+}
+
+.saved {
+    background-color: #d4edda !important;
+    border-color: #c3e6cb !important;
+}
+
+.error {
+    background-color: #f8d7da !important;
+    border-color: #f5c6cb !important;
+}
+
+.action-buttons {
+    white-space: nowrap;
+}
+
+.calculated-section {
+    background-color: #28a745 !important; /* Green for calculated sections */
+    color: white !important;
+}
+
+.calculated-section td {
+    color: white !important;
+    font-weight: bold;
+}
+
+
+.numbers-table {
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.numbers-table th,
+.numbers-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.numbers-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+</style>
+
 {% if fpi_by_head %}
-    <!-- P&L Format Display -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h6 class="mb-0">Financial Performance Indicators - {{ meeting.team.name }}</h6>
-                    <small>Period: {{ previous_month|date:"M Y" }}</small>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-sm mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th style="width: 30%">Parameter</th>
-                                    <th style="width: 15%">Sub Head</th>
-                                    <th style="width: 15%" class="text-end">Last Month Budget</th>
-                                    <th style="width: 15%" class="text-end">Last Month Actual</th>
-                                    <th style="width: 15%" class="text-end">Next Month Plan</th>
-                                    <th style="width: 10%">Responsible</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for main_head, parameters in fpi_by_head.items %}
-                                    <!-- Main Head Section -->
-                                    <tr class="table-primary">
-                                        <td colspan="6"><strong>{{ main_head }}</strong></td>
-                                    </tr>
-                                    {% for param_data in parameters %}
-                                    <tr>
-                                        <td class="ps-4">{{ param_data.parameter.parameter_name }}</td>
-                                        <td>{{ param_data.sub_head }}</td>
-                                        <td class="text-end">₹{{ param_data.last_month_budget|floatformat:0 }}</td>
-                                        <td class="text-end">₹{{ param_data.last_month_actual|floatformat:0 }}</td>
-                                        <td class="text-end">₹{{ param_data.next_month_plan|floatformat:0 }}</td>
-                                        <td>
-                                            <small>{{ param_data.responsible_user.get_full_name|default:param_data.responsible_user.username|default:"Unassigned" }}</small>
-                                        </td>
-                                    </tr>
-                                    {% if param_data.explanation %}
-                                    <tr>
-                                        <td colspan="6" class="ps-5 text-muted">
-                                            <small><em>{{ param_data.explanation }}</em></small>
-                                        </td>
-                                    </tr>
-                                    {% endif %}
-                                    {% endfor %}
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>Financial Performance Indicators</h4>
     </div>
+
+    <table class="numbers-table table">
+        <thead>
+            <tr>
+                <th>Parameter</th>
+                <th>Last Month Budget</th>
+                <th>Last Month Goal</th>
+                <th>Last Month Actual</th>
+                <th>Current Month Budget</th>
+                <th>Current Month Goal</th>
+                <th>Comments</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Revenue Section -->
+            {% if fpi_by_head.Revenue %}
+                <tr class="table-primary">
+                    <td class="ps-2">
+                        <button class="btn btn-sm p-1 me-2"
+                                style="background-color: #004085; border: 1px solid #003d82; color: white;"
+                                onclick="toggleSection('revenue')" id="revenue-toggle">
+                            <i class="fas fa-chevron-right" id="revenue-icon" style="font-size: 12px;"></i>
+                        </button>
+                        <strong>Revenue</strong>
+                    </td>
+                    <td><strong>{{ fpi_by_head.Revenue.0.totals.last_month_budget|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Revenue.0.totals.last_month_goal|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Revenue.0.totals.last_month_actual|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Revenue.0.totals.current_month_budget|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Revenue.0.totals.current_month_plan|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td colspan="2"></td>
+                </tr>
+                {% for param_data in fpi_by_head.Revenue %}
+                <tr class="revenue-details" style="display: none;">
+                    <td class="ps-4">{{ param_data.parameter.sub_head }}</td>
+                    <td>{{ param_data.parameter.last_month_budget|default:"0" }}</td>
+                    <td>{{ param_data.parameter.last_month_goal|default:"" }}</td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="last_month_actual"
+                             data-original-value="{{ param_data.parameter.last_month_actual|default:'' }}">
+                            {{ param_data.parameter.last_month_actual|default:"" }}
+                        </div>
+                    </td>
+                    <td>{{ param_data.parameter.current_month_budget|default:"0" }}</td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="current_month_plan"
+                             data-original-value="{{ param_data.parameter.current_month_plan|default:'' }}">
+                            {{ param_data.parameter.current_month_plan|default:"" }}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="explanation"
+                             data-original-value="{{ param_data.parameter.explanation|default:'' }}">
+                            {{ param_data.parameter.explanation|default:"" }}
+                        </div>
+                    </td>
+                    <td class="action-buttons">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-info btn-sm"
+                                    onclick="viewDetails('fpi', {{ param_data.parameter.id }})"
+                                    title="Details View">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-outline-success btn-sm"
+                                    onclick="addFPIAction('fpi', {{ param_data.parameter.id }})"
+                                    title="Action Items">
+                                <i class="fas fa-plus-circle"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm"
+                                    onclick="addFPIIssue('fpi', {{ param_data.parameter.id }})"
+                                    title="Issues">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Variable Cost Section -->
+            {% if fpi_by_head.Variable_Cost %}
+                <tr class="table-primary">
+                    <td class="ps-2">
+                        <button class="btn btn-sm p-1 me-2"
+                                style="background-color: #004085; border: 1px solid #003d82; color: white;"
+                                onclick="toggleSection('variable-cost')" id="variable-cost-toggle">
+                            <i class="fas fa-chevron-right" id="variable-cost-icon" style="font-size: 12px;"></i>
+                        </button>
+                        <strong>Variable Cost</strong>
+                    </td>
+                    <td><strong>{{ fpi_by_head.Variable_Cost.0.totals.last_month_budget|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Variable_Cost.0.totals.last_month_goal|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Variable_Cost.0.totals.last_month_actual|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Variable_Cost.0.totals.current_month_budget|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Variable_Cost.0.totals.current_month_plan|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td colspan="2"></td>
+                </tr>
+                {% for param_data in fpi_by_head.Variable_Cost %}
+                <tr class="variable-cost-details" style="display: none;">
+                    <td class="ps-4">{{ param_data.parameter.sub_head }}</td>
+                    <td>{{ param_data.parameter.last_month_budget|default:"0" }}</td>
+                    <td>{{ param_data.parameter.last_month_goal|default:"" }}</td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="last_month_actual"
+                             data-original-value="{{ param_data.parameter.last_month_actual|default:'' }}">
+                            {{ param_data.parameter.last_month_actual|default:"" }}
+                        </div>
+                    </td>
+                    <td>{{ param_data.parameter.current_month_budget|default:"0" }}</td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="current_month_plan"
+                             data-original-value="{{ param_data.parameter.current_month_plan|default:'' }}">
+                            {{ param_data.parameter.current_month_plan|default:"" }}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="explanation"
+                             data-original-value="{{ param_data.parameter.explanation|default:'' }}">
+                            {{ param_data.parameter.explanation|default:"" }}
+                        </div>
+                    </td>
+                    <td class="action-buttons">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-info btn-sm"
+                                    onclick="viewDetails('fpi', {{ param_data.parameter.id }})"
+                                    title="Details View">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-outline-success btn-sm"
+                                    onclick="addFPIAction('fpi', {{ param_data.parameter.id }})"
+                                    title="Action Items">
+                                <i class="fas fa-plus-circle"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm"
+                                    onclick="addFPIIssue('fpi', {{ param_data.parameter.id }})"
+                                    title="Issues">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Gross Profit (Calculated) -->
+            <tr style="background-color: #28a745; color: white; font-weight: bold;">
+                <td><strong>Gross Profit</strong></td>
+                <td><strong>{{ calculated_sections.Gross_Profit.last_month_budget|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.Gross_Profit.last_month_goal|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.Gross_Profit.last_month_actual|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.Gross_Profit.current_month_budget|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.Gross_Profit.current_month_plan|floatformat:2 }}</strong></td>
+                <td colspan="2"></td>
+            </tr>
+
+            <!-- Operating Expenses Section -->
+            {% if fpi_by_head.Operating_Expenses %}
+                <tr class="table-primary">
+                    <td class="ps-2">
+                        <button class="btn btn-sm p-1 me-2"
+                                style="background-color: #004085; border: 1px solid #003d82; color: white;"
+                                onclick="toggleSection('operating-expenses')" id="operating-expenses-toggle">
+                            <i class="fas fa-chevron-right" id="operating-expenses-icon" style="font-size: 12px;"></i>
+                        </button>
+                        <strong>Operating Expenses</strong>
+                    </td>
+                    <td><strong>{{ fpi_by_head.Operating_Expenses.0.totals.last_month_budget|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Operating_Expenses.0.totals.last_month_goal|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Operating_Expenses.0.totals.last_month_actual|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Operating_Expenses.0.totals.current_month_budget|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Operating_Expenses.0.totals.current_month_plan|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td colspan="2"></td>
+                </tr>
+                {% for param_data in fpi_by_head.Operating_Expenses %}
+                <tr class="operating-expenses-details" style="display: none;">
+                    <td class="ps-4">{{ param_data.parameter.sub_head }}</td>
+                    <td>{{ param_data.parameter.last_month_budget|default:"0" }}</td>
+                    <td>{{ param_data.parameter.last_month_goal|default:"" }}</td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="last_month_actual"
+                             data-original-value="{{ param_data.parameter.last_month_actual|default:'' }}">
+                            {{ param_data.parameter.last_month_actual|default:"" }}
+                        </div>
+                    </td>
+                    <td>{{ param_data.parameter.current_month_budget|default:"0" }}</td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="current_month_plan"
+                             data-original-value="{{ param_data.parameter.current_month_plan|default:'' }}">
+                            {{ param_data.parameter.current_month_plan|default:"" }}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="explanation"
+                             data-original-value="{{ param_data.parameter.explanation|default:'' }}">
+                            {{ param_data.parameter.explanation|default:"" }}
+                        </div>
+                    </td>
+                    <td class="action-buttons">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-info btn-sm"
+                                    onclick="viewDetails('fpi', {{ param_data.parameter.id }})"
+                                    title="Details View">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-outline-success btn-sm"
+                                    onclick="addFPIAction('fpi', {{ param_data.parameter.id }})"
+                                    title="Action Items">
+                                <i class="fas fa-plus-circle"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm"
+                                    onclick="addFPIIssue('fpi', {{ param_data.parameter.id }})"
+                                    title="Issues">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endif %}
+
+            <!-- EBITDA (Calculated) -->
+            <tr style="background-color: #28a745; color: white; font-weight: bold;">
+                <td><strong>EBITDA</strong></td>
+                <td><strong>{{ calculated_sections.EBITDA.last_month_budget|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.EBITDA.last_month_goal|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.EBITDA.last_month_actual|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.EBITDA.current_month_budget|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.EBITDA.current_month_plan|floatformat:2 }}</strong></td>
+                <td colspan="2"></td>
+            </tr>
+
+            <!-- Other Expenses Section -->
+            {% if fpi_by_head.Other_Expenses %}
+                <tr class="table-primary">
+                    <td class="ps-2">
+                        <button class="btn btn-sm p-1 me-2"
+                                style="background-color: #004085; border: 1px solid #003d82; color: white;"
+                                onclick="toggleSection('other-expenses')" id="other-expenses-toggle">
+                            <i class="fas fa-chevron-right" id="other-expenses-icon" style="font-size: 12px;"></i>
+                        </button>
+                        <strong>Other Expenses</strong>
+                    </td>
+                    <td><strong>{{ fpi_by_head.Other_Expenses.0.totals.last_month_budget|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Other_Expenses.0.totals.last_month_goal|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Other_Expenses.0.totals.last_month_actual|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Other_Expenses.0.totals.current_month_budget|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td><strong>{{ fpi_by_head.Other_Expenses.0.totals.current_month_plan|default:"0.00"|floatformat:2 }}</strong></td>
+                    <td colspan="2"></td>
+                </tr>
+                {% for param_data in fpi_by_head.Other_Expenses %}
+                <tr class="other-expenses-details" style="display: none;">
+                    <td class="ps-4">{{ param_data.parameter.sub_head }}</td>
+                    <td>{{ param_data.parameter.last_month_budget|default:"0" }}</td>
+                    <td>{{ param_data.parameter.last_month_goal|default:"" }}</td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="last_month_actual"
+                             data-original-value="{{ param_data.parameter.last_month_actual|default:'' }}">
+                            {{ param_data.parameter.last_month_actual|default:"" }}
+                        </div>
+                    </td>
+                    <td>{{ param_data.parameter.current_month_budget|default:"0" }}</td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="current_month_plan"
+                             data-original-value="{{ param_data.parameter.current_month_plan|default:'' }}">
+                            {{ param_data.parameter.current_month_plan|default:"" }}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="editable-cell"
+                             contenteditable="true"
+                             data-type="fpi"
+                             data-id="{{ param_data.parameter.id }}"
+                             data-field="explanation"
+                             data-original-value="{{ param_data.parameter.explanation|default:'' }}">
+                            {{ param_data.parameter.explanation|default:"" }}
+                        </div>
+                    </td>
+                    <td class="action-buttons">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-info btn-sm"
+                                    onclick="viewDetails('fpi', {{ param_data.parameter.id }})"
+                                    title="Details View">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-outline-success btn-sm"
+                                    onclick="addFPIAction('fpi', {{ param_data.parameter.id }})"
+                                    title="Action Items">
+                                <i class="fas fa-plus-circle"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm"
+                                    onclick="addFPIIssue('fpi', {{ param_data.parameter.id }})"
+                                    title="Issues">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Net Profit (Calculated) -->
+            <tr style="background-color: #28a745; color: white; font-weight: bold;">
+                <td><strong>Net Profit</strong></td>
+                <td><strong>{{ calculated_sections.Net_Profit.last_month_budget|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.Net_Profit.last_month_goal|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.Net_Profit.last_month_actual|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.Net_Profit.current_month_budget|floatformat:2 }}</strong></td>
+                <td><strong>{{ calculated_sections.Net_Profit.current_month_plan|floatformat:2 }}</strong></td>
+                <td colspan="2"></td>
+            </tr>
+        </tbody>
+    </table>
 
     <!-- Summary Section -->
     <div class="row mt-4">
@@ -133,6 +507,631 @@
 </div>
 
 <script>
+// Initialize editable cells for FPI - called when tab content loads
+(function initializeFPIEditableCells() {
+    console.log('🔧 Initializing FPI editable cells');
+    const editableCells = document.querySelectorAll('.editable-cell[data-type="fpi"]');
+    console.log(`Found ${editableCells.length} FPI editable cells`);
+
+    editableCells.forEach(cell => {
+        // Store original value when cell gets focus
+        cell.addEventListener('focus', function() {
+            this.dataset.originalValue = this.textContent.trim();
+        });
+
+        // Auto-save when cell loses focus (tab out)
+        cell.addEventListener('blur', function() {
+            const newValue = this.textContent.trim();
+            const originalValue = this.dataset.originalValue || '';
+
+            // Only save if value changed
+            if (newValue !== originalValue) {
+                console.log(`💾 Saving FPI cell - Field: ${this.dataset.field}, Value: ${newValue}`);
+                saveFPICell(this, newValue);
+            }
+        });
+
+        // Save on Enter key
+        cell.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.blur(); // Trigger blur event to save
+            }
+        });
+    });
+})();
+
+function saveFPICell(cell, value) {
+    const type = cell.dataset.type;
+    const id = cell.dataset.id;
+    const field = cell.dataset.field;
+
+    // Visual feedback
+    cell.classList.add('saving');
+    cell.classList.remove('saved', 'error');
+
+    // Get meeting ID from the tab content element
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        console.error('Meeting ID not found');
+        cell.classList.remove('saving');
+        cell.classList.add('error');
+        return;
+    }
+
+    // Prepare data
+    const data = {
+        type: type,
+        id: id,
+        field: field,
+        value: value,
+        csrfmiddlewaretoken: getCsrfToken()
+    };
+
+    // AJAX save - use reviews save endpoint
+    fetch(`/review/${meetingId}/save-fpi-data/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': data.csrfmiddlewaretoken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        cell.classList.remove('saving');
+        if (data.success) {
+            cell.classList.add('saved');
+            cell.dataset.originalValue = value; // Update original value
+            console.log('Save success:', data.message || 'Data saved successfully');
+            setTimeout(() => cell.classList.remove('saved'), 2000);
+        } else {
+            cell.classList.add('error');
+            console.error('Save error:', data.error);
+            setTimeout(() => cell.classList.remove('error'), 3000);
+        }
+    })
+    .catch(error => {
+        cell.classList.remove('saving');
+        cell.classList.add('error');
+        console.error('Network error:', error);
+        setTimeout(() => cell.classList.remove('error'), 3000);
+    });
+}
+
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
+}
+
+function viewDetails(type, id) {
+    console.log(`Opening details view for ${type} parameter ID: ${id}`);
+
+    // Get or create the FPI details modal
+    let modal = document.getElementById('fpiDetailsModal');
+    if (!modal) {
+        // Create modal if it doesn't exist
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'fpiDetailsModal';
+        modal.setAttribute('tabindex', '-1');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content" id="fpiDetailsContent">
+                    <div class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                        <p class="text-muted mt-2">Loading details...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const content = document.getElementById('fpiDetailsContent');
+
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading FPI details...</p>
+        </div>
+    `;
+
+    // Show the modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    // Fetch FPI parameter details
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        content.innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+        return;
+    }
+    fetch(`/review/${meetingId}/fpi-details/?parameter_id=${id}`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.body.appendChild(newScript);
+                setTimeout(() => {
+                    if (newScript.parentNode) {
+                        newScript.parentNode.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading FPI details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading details</p>
+                    <button class="btn btn-outline-primary" onclick="viewDetails('${type}', ${id})">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+function createIssue(type, id) {
+    // Open create issue modal with pre-filled parameter info
+    console.log(`Creating issue for ${type} parameter ID: ${id}`);
+
+    // Check if the global issue modal functions exist (from My Numbers page)
+    if (typeof openNewIssueModal === 'function') {
+        openNewIssueModal();
+        // You could pre-fill the form with parameter information here
+    } else {
+        alert(`Create issue functionality will be integrated with the existing issue modal system`);
+    }
+}
+
+// Make sure the function is globally accessible to avoid any scope issues
+window.addFPIAction = function(type, id) {
+    // Open the main Action Items popup with parameter context
+    console.log(`🎯 FPI addFPIAction called for ${type} parameter ID: ${id}`);
+    console.log('Available functions:', {
+        openActionItems: typeof openActionItems,
+        loadActionItems: typeof loadActionItems,
+        openNewActionModal: typeof openNewActionModal
+    });
+
+    // Store the parameter context for the modal
+    window.currentParameterContext = {
+        type: type,
+        id: id
+    };
+
+    // Always use the direct approach to ensure it works
+    openParameterActionItemsDirectly(type, id);
+};
+
+window.addFPIIssue = function(type, id) {
+    // Open the main Issues popup with parameter context
+    console.log(`🎯 FPI addFPIIssue called for ${type} parameter ID: ${id}`);
+
+    // Store the parameter context for the modal
+    window.currentParameterContext = {
+        type: type,
+        id: id
+    };
+
+    // Use the direct approach to open issues modal
+    openParameterIssuesDirectly(type, id);
+};
+
+function openParameterIssuesDirectly(type, id) {
+    console.log(`Opening Issues popup directly for ${type} parameter ID: ${id}`);
+
+    // Get the existing issues modal - it should already exist in the main meeting template
+    const modal = document.getElementById('issuesModal');
+    const content = document.getElementById('issuesContent');
+
+    if (!modal) {
+        console.error('issuesModal not found! The modal should exist in the main meeting template.');
+        alert('Error: Issues modal not found. Please refresh the page and try again.');
+        return;
+    }
+
+    if (!content) {
+        console.error('issuesContent not found!');
+        alert('Error: Issues content area not found. Please refresh the page and try again.');
+        return;
+    }
+
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading issues...</p>
+        </div>
+    `;
+
+    // Show the modal
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+
+    // Load issues with parameter context
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        content.innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+        return;
+    }
+    const issuesUrl = `/review/${meetingId}/issues/?parameter_type=${type}&parameter_id=${id}`;
+
+    fetch(issuesUrl)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.head.appendChild(newScript);
+                setTimeout(() => {
+                    if (document.head.contains(newScript)) {
+                        document.head.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading issues:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading issues</p>
+                    <button class="btn btn-outline-primary" onclick="openParameterIssuesDirectly('${type}', '${id}')">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+
+    // Clear parameter context when modal is closed
+    modal.addEventListener('hidden.bs.modal', function () {
+        console.log('Issues modal closed, clearing parameter context');
+        window.currentParameterContext = null;
+    }, { once: true });
+}
+
+function openParameterActionItemsDirectly(type, id) {
+    console.log(`Opening Action Items popup directly for ${type} parameter ID: ${id}`);
+
+    // Try to use the main openActionItems function if it exists
+    if (typeof openActionItems === 'function') {
+        console.log('Using existing openActionItems function');
+
+        // Set up a temporary override for the action items URL to include parameter context
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options) {
+            if (url.includes('/action-items/') && !url.includes('parameter_type')) {
+                const separator = url.includes('?') ? '&' : '?';
+                url = `${url}${separator}parameter_type=${type}&parameter_id=${id}`;
+                console.log('Modified action items URL:', url);
+            }
+            return originalFetch.call(this, url, options);
+        };
+
+        // Call the main function
+        openActionItems();
+
+        // Restore original fetch after a short delay
+        setTimeout(() => {
+            window.fetch = originalFetch;
+        }, 2000);
+    } else {
+        console.log('openActionItems function not found, using fallback');
+
+        // Get the existing action items modal - it should already exist in the main template
+        const modal = document.getElementById('actionItemsModal');
+        const content = document.getElementById('actionItemsContent');
+
+        if (!modal) {
+            console.error('actionItemsModal not found! The modal should exist in the main meeting template.');
+            alert('Error: Action Items modal not found. Please refresh the page and try again.');
+            return;
+        }
+
+        if (!content) {
+            console.error('actionItemsContent not found!');
+            alert('Error: Action Items content area not found. Please refresh the page and try again.');
+            return;
+        }
+
+        // Show loading state
+        content.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                <p class="text-muted mt-2">Loading action items...</p>
+            </div>
+        `;
+
+        // Show the modal
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+
+        // Load action items with parameter context
+        const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+        if (!meetingId) {
+            content.innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+            return;
+        }
+        const actionItemsUrl = `/review/${meetingId}/action-items/?parameter_type=${type}&parameter_id=${id}`;
+
+        fetch(actionItemsUrl)
+            .then(response => response.text())
+            .then(html => {
+                content.innerHTML = html;
+
+                // Execute any script tags in the loaded content
+                const scripts = content.querySelectorAll('script');
+                scripts.forEach(script => {
+                    const newScript = document.createElement('script');
+                    if (script.src) {
+                        newScript.src = script.src;
+                    } else {
+                        newScript.textContent = script.textContent;
+                    }
+                    document.head.appendChild(newScript);
+                    setTimeout(() => {
+                        if (document.head.contains(newScript)) {
+                            document.head.removeChild(newScript);
+                        }
+                    }, 100);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading action items:', error);
+                content.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                        <p class="text-danger mt-2">Error loading action items</p>
+                        <button class="btn btn-outline-primary" onclick="openParameterActionItemsDirectly('${type}', '${id}')">
+                            <i class="fas fa-redo me-1"></i>Try Again
+                        </button>
+                    </div>
+                `;
+            });
+    }
+
+    // Clear parameter context when modal is closed
+    const modal = document.getElementById('actionItemsModal');
+    if (modal) {
+        modal.addEventListener('hidden.bs.modal', function () {
+            console.log('Action Items modal closed, clearing parameter context');
+            window.currentParameterContext = null;
+        }, { once: true }); // Use { once: true } to ensure the listener is only added once
+    }
+}
+
+function openMainActionItemsModal() {
+    console.log('Opening Action Items modal as fallback');
+
+    // Create a basic modal that loads the action items content
+    const modalHtml = `
+        <div class="modal fade" id="fallbackActionItemsModal" tabindex="-1" aria-labelledby="fallbackActionItemsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="fallbackActionItemsModalLabel">
+                            <i class="fas fa-tasks me-2"></i>Action Items
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="fallbackActionItemsContent">
+                            <div class="text-center py-4">
+                                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                                <p class="text-muted mt-2">Loading action items...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing fallback modal if any
+    const existingModal = document.getElementById('fallbackActionItemsModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Add modal to DOM
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Show modal
+    const fallbackModal = new bootstrap.Modal(document.getElementById('fallbackActionItemsModal'));
+    fallbackModal.show();
+
+    // Load action items content with parameter context if available
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        document.getElementById('fallbackActionItemsContent').innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+        return;
+    }
+    let actionItemsUrl = `/review/${meetingId}/action-items/`;
+    if (window.currentParameterContext) {
+        actionItemsUrl += `?parameter_type=${window.currentParameterContext.type}&parameter_id=${window.currentParameterContext.id}`;
+    }
+
+    fetch(actionItemsUrl)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('fallbackActionItemsContent').innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading action items:', error);
+            document.getElementById('fallbackActionItemsContent').innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action items</p>
+                </div>
+            `;
+        });
+
+    // Clear parameter context when modal is closed
+    const fallbackModalElement = document.getElementById('fallbackActionItemsModal');
+    if (fallbackModalElement) {
+        fallbackModalElement.addEventListener('hidden.bs.modal', function () {
+            console.log('Action Items modal closed, clearing parameter context');
+            window.currentParameterContext = null;
+        });
+    }
+}
+
+function openParameterActionModal(type, id) {
+    console.log(`Opening parameter action modal for ${type} ID: ${id}`);
+
+    // Get parameter name for display
+    const parameterElement = document.querySelector(`[data-type="${type}"][data-id="${id}"]`);
+    let parameterName = 'Parameter';
+
+    if (parameterElement) {
+        // Try to find the parameter name from the row
+        const row = parameterElement.closest('tr');
+        if (row) {
+            const nameCell = row.querySelector('td:first-child');
+            if (nameCell) {
+                parameterName = nameCell.textContent.trim();
+            }
+        }
+    }
+
+    // Create modal HTML
+    const modalHtml = `
+        <div class="modal fade" id="parameterActionModal" tabindex="-1" aria-labelledby="parameterActionModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="parameterActionModalLabel">
+                            <i class="fas fa-tasks me-2"></i>Action Items - ${parameterName}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="parameterActionContent">
+                            <div class="text-center py-4">
+                                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                                <p class="text-muted mt-2">Loading action items...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existingModal = document.getElementById('parameterActionModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Add modal to DOM
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('parameterActionModal'));
+    modal.show();
+
+    // Load parameter-specific action items
+    loadParameterActionItems(type, id);
+}
+
+function loadParameterActionItems(type, id) {
+    console.log(`Loading action items for ${type} parameter ID: ${id}`);
+
+    const content = document.getElementById('parameterActionContent');
+
+    // Make request to load parameter-specific actions
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        content.innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+        return;
+    }
+    fetch(`/review/${meetingId}/parameter-actions/?type=${type}&id=${id}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.head.appendChild(newScript);
+                setTimeout(() => {
+                    if (document.head.contains(newScript)) {
+                        document.head.removeChild(newScript);
+                    }
+                }, 100);
+            });
+
+            console.log('Parameter action items loaded successfully');
+        })
+        .catch(error => {
+            console.error('Error loading parameter action items:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action items</p>
+                    <p class="text-muted">This feature is not yet implemented for parameter-specific actions.</p>
+                    <button class="btn btn-outline-primary" onclick="loadParameterActionItems('${type}', '${id}')">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+// Global functions for Create Issue and Add Action buttons
+function openNewIssueModal() {
+    console.log('Opening new issue modal from FPI tab');
+    // This should integrate with the existing issue modal system
+    alert('Issue creation modal would open here');
+}
+
+function openNewActionModal() {
+    console.log('Opening new action modal from FPI tab');
+    // This should integrate with the existing action modal system
+    alert('Action creation modal would open here');
+}
+
 function refreshFPI() {
     const fpiContent = document.getElementById('fpi-content');
 
@@ -145,7 +1144,12 @@ function refreshFPI() {
     `;
 
     // Reload FPI data
-    fetch('{% url "reviews:fpi" meeting.pk %}')
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        fpiContent.innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+        return;
+    }
+    fetch(`/review/${meetingId}/meeting/fpi/`)
         .then(response => response.text())
         .then(html => {
             fpiContent.innerHTML = html;
@@ -178,7 +1182,12 @@ function showFPIDetails() {
     modal.show();
 
     // Load detailed FPI view
-    fetch('{% url "reviews:fpi" meeting.pk %}?detailed=true')
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        content.innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+        return;
+    }
+    fetch(`/review/${meetingId}/meeting/fpi/?detailed=true`)
         .then(response => response.text())
         .then(html => {
             content.innerHTML = html;
@@ -193,4 +1202,8 @@ function showFPIDetails() {
             `;
         });
 }
+
+// FPI-specific functionality is now handled in the main meeting template
+// This ensures the toggleSection function is always available
+console.log('📋 FPI Tab JavaScript: Toggle functionality is handled by main template');
 </script>

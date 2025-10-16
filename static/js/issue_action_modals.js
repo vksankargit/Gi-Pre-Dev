@@ -4,20 +4,33 @@
  */
 
 // Global variables
-let userTeams = [];
-let currentModal = null;
+let userTeams = []; // For actions - teams where user is manager
+let issueTeams = []; // For issues - teams where user is manager or member
+window.currentModal = null; // Make it explicitly global so other scripts can access it
 
 // Initialize modal functionality
 document.addEventListener('DOMContentLoaded', function() {
-    loadUserTeams();
+    // Only load teams if we're on a page that needs modals
+    if (document.getElementById('newIssueModal') || document.getElementById('newActionModal')) {
+        console.log('Modal elements detected, loading teams...');
+        // Load teams for both modals if both exist
+        if (document.getElementById('newActionModal')) {
+            loadUserTeams(); // For action modal - manager only
+        }
+        if (document.getElementById('newIssueModal')) {
+            loadIssueTeams(); // For issue modal - manager or member
+        }
+    } else {
+        console.log('No modal elements found, skipping teams API call');
+    }
     setupModalEventHandlers();
 });
 
 /**
- * Load user's teams from the server
+ * Load user's teams from the server (for Add Action modal - manager only)
  */
 function loadUserTeams() {
-    console.log('Loading user teams from API...');
+    console.log('Loading user teams (manager only) from API...');
     fetch('/api/user-teams/', {
         method: 'GET',
         headers: {
@@ -27,6 +40,9 @@ function loadUserTeams() {
     })
     .then(response => {
         console.log('API response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         return response.json();
     })
     .then(data => {
@@ -34,43 +50,81 @@ function loadUserTeams() {
         if (data.success) {
             userTeams = data.teams;
             console.log('User teams loaded:', userTeams.length, 'teams');
-            populateTeamDropdowns();
+            populateActionTeamDropdown();
         } else {
             console.error('API returned error:', data.error || 'Unknown error');
         }
     })
     .catch(error => {
         console.error('Error loading user teams:', error);
+        // Gracefully handle the error by using empty teams array
+        userTeams = [];
+        console.log('Continuing with empty teams array...');
     });
 }
 
 /**
- * Populate team dropdowns in both modals
+ * Load teams for issue creation (manager or member)
  */
-function populateTeamDropdowns() {
-    console.log('Populating team dropdowns with', userTeams.length, 'teams');
+function loadIssueTeams() {
+    console.log('Loading issue teams (manager or member) from API...');
+    fetch('/api/issue-teams/', {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => {
+        console.log('API response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('API response data:', data);
+        if (data.success) {
+            issueTeams = data.teams;
+            console.log('Issue teams loaded:', issueTeams.length, 'teams');
+            populateIssueTeamDropdown();
+        } else {
+            console.error('API returned error:', data.error || 'Unknown error');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading issue teams:', error);
+        // Gracefully handle the error by using empty teams array
+        issueTeams = [];
+        console.log('Continuing with empty teams array...');
+    });
+}
+
+/**
+ * Populate issue team dropdown
+ */
+function populateIssueTeamDropdown() {
     const issueTeamSelect = document.getElementById('issueTeam');
-    const actionTeamSelect = document.getElementById('actionTeam');
 
     if (issueTeamSelect) {
         issueTeamSelect.innerHTML = '<option value="">Select</option>';
-        userTeams.forEach(team => {
-            console.log('Adding team to issue dropdown:', team.name);
+        issueTeams.forEach(team => {
             issueTeamSelect.innerHTML += `<option value="${team.id}">${team.name}</option>`;
         });
-        console.log('Issue team dropdown now has', issueTeamSelect.options.length, 'options');
-    } else {
-        console.error('Issue team select element not found');
     }
+}
+
+/**
+ * Populate action team dropdown
+ */
+function populateActionTeamDropdown() {
+    const actionTeamSelect = document.getElementById('actionTeam');
 
     if (actionTeamSelect) {
         actionTeamSelect.innerHTML = '<option value="">Select</option>';
         userTeams.forEach(team => {
             actionTeamSelect.innerHTML += `<option value="${team.id}">${team.name}</option>`;
         });
-        console.log('Action team dropdown now has', actionTeamSelect.options.length, 'options');
-    } else {
-        console.error('Action team select element not found');
     }
 }
 
@@ -104,8 +158,14 @@ function setupModalEventHandlers() {
  * Load team members when a team is selected for action
  */
 function loadTeamMembers() {
-    const teamId = document.getElementById('actionTeam').value;
+    const actionTeamSelect = document.getElementById('actionTeam');
     const memberSelect = document.getElementById('actionMember');
+
+    if (!actionTeamSelect || !memberSelect) {
+        return;
+    }
+
+    const teamId = actionTeamSelect.value;
 
     if (!teamId) {
         memberSelect.innerHTML = '<option value="">Select</option>';
@@ -138,8 +198,8 @@ function loadTeamMembers() {
  */
 function openNewIssueModal() {
     resetIssueForm();
-    currentModal = new bootstrap.Modal(document.getElementById('newIssueModal'));
-    currentModal.show();
+    window.currentModal = new bootstrap.Modal(document.getElementById('newIssueModal'));
+    window.currentModal.show();
 }
 
 /**
@@ -147,8 +207,8 @@ function openNewIssueModal() {
  */
 function openNewActionModal() {
     resetActionForm();
-    currentModal = new bootstrap.Modal(document.getElementById('newActionModal'));
-    currentModal.show();
+    window.currentModal = new bootstrap.Modal(document.getElementById('newActionModal'));
+    window.currentModal.show();
 }
 
 /**
@@ -192,7 +252,9 @@ function saveIssue() {
         if (data.success) {
             showSuccessMessage('Issue created successfully!', 'issue');
             setTimeout(() => {
-                currentModal.hide();
+                if (window.currentModal) {
+                    window.currentModal.hide();
+                }
                 // Refresh page to show new issue in lists
                 location.reload();
             }, 1500);
@@ -258,7 +320,9 @@ function saveAction() {
         if (data.success) {
             showSuccessMessage('Action created successfully!', 'action');
             setTimeout(() => {
-                currentModal.hide();
+                if (window.currentModal) {
+                    window.currentModal.hide();
+                }
                 // Refresh page to show new action in lists
                 location.reload();
             }, 1500);
@@ -444,8 +508,42 @@ function getCookie(name) {
     return cookieValue;
 }
 
+/**
+ * Open issue modal for a specific parameter (GPI/FPI)
+ * @param {string} paramType - 'gpi' or 'fpi'
+ * @param {number} paramId - ID of the parameter
+ */
+function openNewIssueModalForParameter(paramType, paramId) {
+    console.log(`Opening issue modal for ${paramType} parameter ${paramId}`);
+
+    // Populate the hidden fields in the form
+    document.getElementById('issueParameterType').value = paramType;
+    document.getElementById('issueParameterId').value = paramId;
+
+    // Open the regular issue modal
+    openNewIssueModal();
+}
+
+/**
+ * Open action modal for a specific parameter (GPI/FPI)
+ * @param {string} paramType - 'gpi' or 'fpi'
+ * @param {number} paramId - ID of the parameter
+ */
+function openNewActionModalForParameter(paramType, paramId) {
+    console.log(`Opening action modal for ${paramType} parameter ${paramId}`);
+
+    // Populate the hidden fields in the form
+    document.getElementById('actionParameterType').value = paramType;
+    document.getElementById('actionParameterId').value = paramId;
+
+    // Open the regular action modal
+    openNewActionModal();
+}
+
 // Expose global functions for compatibility with existing code
 window.createIssue = openNewIssueModal;
 window.addAction = openNewActionModal;
 window.openNewIssueModal = openNewIssueModal;
 window.openNewActionModal = openNewActionModal;
+window.openNewIssueModalForParameter = openNewIssueModalForParameter;
+window.openNewActionModalForParameter = openNewActionModalForParameter;

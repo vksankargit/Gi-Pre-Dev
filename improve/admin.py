@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ImprovementUpload, ImprovementProject, ImprovementTask
+from .models import ImprovementUpload, ImprovementProject, ImprovementTask, ImprovementProjectStatus
 
 
 @admin.register(ImprovementUpload)
@@ -24,3 +24,12 @@ class ImprovementTaskAdmin(admin.ModelAdmin):
     list_filter = ('is_completed', 'week_number')
     search_fields = ('task_description', 'project__name')
     ordering = ('project', 'week_number')
+
+
+@admin.register(ImprovementProjectStatus)
+class ImprovementProjectStatusAdmin(admin.ModelAdmin):
+    list_display = ('project', 'status', 'completion_percentage', 'updated_by', 'updated_at')
+    list_filter = ('status', 'updated_at')
+    search_fields = ('project__name', 'challenge', 'comments')
+    ordering = ('-updated_at',)
+    readonly_fields = ('updated_at',)

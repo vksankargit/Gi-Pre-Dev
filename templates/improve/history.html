@@ -55,14 +55,31 @@
                                     </td>
                                     <td>
                                         {% if upload.file_path %}
-                                        <button class="btn btn-sm btn-outline-primary" onclick="downloadFile('{{ upload.id }}')">
+                                        <a href="{% url 'improve:download_file' upload.id %}" class="btn btn-sm btn-outline-primary">
                                             <i class="fas fa-download me-1"></i>Download
-                                        </button>
+                                        </a>
                                         {% endif %}
-                                        {% if upload.upload_status == 'failed' %}
-                                        <button class="btn btn-sm btn-outline-danger ms-1" onclick="viewErrorLog('{{ upload.id }}')">
+                                        {% if upload.upload_status == 'failed' and upload.error_log %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger ms-1" data-bs-toggle="modal" data-bs-target="#errorModal{{ upload.id }}">
                                             <i class="fas fa-exclamation-triangle me-1"></i>Errors
                                         </button>
+                                        <!-- Error Modal -->
+                                        <div class="modal fade" id="errorModal{{ upload.id }}" tabindex="-1">
+                                            <div class="modal-dialog modal-lg">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">Upload Errors - {{ upload.file_name }}</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <pre style="white-space: pre-wrap;">{{ upload.error_log }}</pre>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -89,16 +106,4 @@
         </div>
     </div>
 </div>
-
-<script>
-function downloadFile(uploadId) {
-    // Implement file download functionality
-    window.location.href = `/improve/download-file/${uploadId}/`;
-}
-
-function viewErrorLog(uploadId) {
-    // Implement error log viewing functionality
-    window.location.href = `/improve/error-log/${uploadId}/`;
-}
-</script>
 {% endblock %}

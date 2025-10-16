@@ -145,6 +145,41 @@ class NewReviewView(LoginRequiredMixin, TemplateView):
             team = get_object_or_404(Team, id=team_id)
             print(f"Found team: {team}")
 
+            # Calculate week/month number for the review based on review date
+            meeting_date = review_datetime.date()
+            current_month = meeting_date.month
+
+            # Determine financial year and quarter
+            if current_month >= 4:
+                fy_start_year = meeting_date.year
+                current_quarter_num = ((current_month - 4) // 3) + 1
+            else:
+                fy_start_year = meeting_date.year - 1
+                current_quarter_num = 4
+
+            # Get financial year
+            fy_end_year = fy_start_year + 1
+            current_fy_string = f"FY {fy_start_year % 100:02d}-{fy_end_year % 100:02d}"
+            financial_year = FinancialYear.objects.filter(year=current_fy_string).first()
+            if not financial_year:
+                financial_year = FinancialYear.objects.first()
+
+            # Calculate week/month number within quarter
+            quarter_start_months = {1: 4, 2: 7, 3: 10, 4: 1}
+            quarter_start_month = quarter_start_months[current_quarter_num]
+
+            if current_quarter_num == 4:
+                quarter_start_year = fy_start_year + 1
+            else:
+                quarter_start_year = fy_start_year
+
+            quarter_start_date = meeting_date.replace(year=quarter_start_year, month=quarter_start_month, day=1)
+            days_into_quarter = (meeting_date - quarter_start_date).days
+            week_in_quarter = (days_into_quarter // 7) + 1
+            month_in_quarter = ((current_month - quarter_start_month) % 12) + 1
+            if month_in_quarter > 3:
+                month_in_quarter = ((current_month - quarter_start_month + 12) % 12) + 1
+
             meeting = ReviewMeeting.objects.create(
                 # New columns
                 team=team,
@@ -157,13 +192,18 @@ class NewReviewView(LoginRequiredMixin, TemplateView):
                 meeting_type=review_type,
                 meeting_date=review_datetime.date(),
                 conducted_by=request.user,
-                financial_year=FinancialYear.objects.first(),
+                financial_year=financial_year,
                 status='scheduled',
                 summary='',
                 key_decisions='',
                 next_steps='',
                 created_at=timezone.now(),
-                updated_at=timezone.now()
+                updated_at=timezone.now(),
+
+                # Add week/month/quarter numbers
+                week_number=week_in_quarter if review_type == 'weekly' else None,
+                month_number=month_in_quarter if review_type == 'monthly' else None,
+                quarter_number=current_quarter_num
             )
             print(f"Created meeting: {meeting}")
 
@@ -209,37 +249,39 @@ class ReviewMeetingView(LoginRequiredMixin, TemplateView):
 
 
 class CommitmentsTabView(LoginRequiredMixin, TemplateView):
-    """Commitments tab - shows pending actions from previous meetings"""
+    """Commitments tab - shows all actions from previous review meetings for this team"""
     template_name = 'reviews/tabs/commitments.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         meeting = get_object_or_404(ReviewMeeting, pk=kwargs['pk'])
 
-        # Get all commitments from previous meetings for this team
-        commitments = ReviewCommitment.objects.filter(
+        # Get all actions from previous review meetings for this team
+        previous_actions = ReviewActionItem.objects.filter(
             review_meeting__team=meeting.team,
             review_meeting__review_date__lt=meeting.review_date
-        ).select_related('committed_by', 'review_meeting').order_by('-review_meeting__review_date')
+        ).select_related('assigned_to', 'assigned_to_team', 'review_meeting').order_by('-review_meeting__review_date', '-created_at')
 
         # Calculate summary statistics
-        total_commitments = commitments.count()
-        completed = commitments.filter(status='completed').count()
-        in_progress = commitments.filter(status='in_progress').count()
-        overdue = commitments.filter(target_date__lt=timezone.now().date(), status__in=['pending', 'in_progress']).count()
-        due_today = commitments.filter(target_date=timezone.now().date(), status__in=['pending', 'in_progress']).count()
+        total_actions = previous_actions.count()
+        completed = previous_actions.filter(status='completed').count()
+        in_progress = previous_actions.filter(status='in_progress').count()
+        pending = previous_actions.filter(status='pending').count()
+        overdue = previous_actions.filter(due_date__lt=timezone.now().date(), status__in=['pending', 'in_progress']).count()
+        due_today = previous_actions.filter(due_date=timezone.now().date(), status__in=['pending', 'in_progress']).count()
 
         summary = {
-            'total': total_commitments,
+            'total': total_actions,
             'completed': completed,
             'in_progress': in_progress,
+            'pending': pending,
             'overdue': overdue,
             'due_today': due_today,
         }
 
         context.update({
             'meeting': meeting,
-            'commitments': commitments[:20],  # Limit to recent 20 commitments
+            'actions': previous_actions,
             'summary': summary,
             'today': timezone.now().date().strftime('%Y-%m-%d'),
         })
@@ -643,11 +685,11 @@ class PPITabView(LoginRequiredMixin, TemplateView):
 
             # Get improvement projects for this team, quarter, and FY
             # The quarter field contains both FY and quarter like "FY 25-26 – Q2"
+            from django.db.models import Q
             improvement_projects = ImprovementProject.objects.filter(
-                upload__team=meeting.team,
-                upload__quarter__icontains=quarter_string
-            ).filter(
-                upload__quarter__icontains=fy_string
+                Q(upload__team=meeting.team) &
+                Q(upload__quarter__icontains=quarter_string) &
+                Q(upload__quarter__icontains=fy_string)
             ).select_related(
                 'upload__team',
                 'upload__financial_year',
@@ -944,11 +986,39 @@ class ActionSummaryTabView(LoginRequiredMixin, TemplateView):
         meeting = get_object_or_404(ReviewMeeting, pk=kwargs['pk'])
 
         # Get action items created during this review meeting
-        meeting_actions = meeting.review_action_items.all()
+        action_items = meeting.review_action_items.all()
+
+        # Calculate summary statistics
+        total = action_items.count()
+        completed = action_items.filter(status='completed').count()
+        in_progress = action_items.filter(status='in_progress').count()
+        pending = action_items.filter(status='pending').count()
+        overdue = action_items.filter(due_date__lt=timezone.now().date(), status__in=['pending', 'in_progress']).count()
+        completion_rate = (completed / total * 100) if total > 0 else 0
+
+        # Group by category (parameter_type)
+        by_category = {
+            'commitments': action_items.filter(parameter_type__isnull=True).count(),
+            'review_items': action_items.filter(parameter_type='fpi').count() + action_items.filter(parameter_type='gpi').count() + action_items.filter(parameter_type='ppi').count(),
+            'issues': 0,  # Not tracked separately yet
+            'improvements': 0,  # Not tracked separately yet
+        }
+
+        action_summary = {
+            'total': total,
+            'completed': completed,
+            'in_progress': in_progress,
+            'pending': pending,
+            'overdue': overdue,
+            'completion_rate': completion_rate,
+            'by_category': by_category,
+        }
 
         context.update({
             'meeting': meeting,
-            'meeting_actions': meeting_actions,
+            'action_items': action_items,
+            'action_summary': action_summary,
+            'today': timezone.now().date().strftime('%Y-%m-%d'),
         })
         return context
 
@@ -995,8 +1065,15 @@ class ReviewNotesView(LoginRequiredMixin, TemplateView):
                 note.content = note_text
                 note.title = note_title
                 note.save()
+                return JsonResponse({
+                    'success': True,
+                    'note': {
+                        'review_note': note.content,
+                        'title': note.title
+                    }
+                })
             except ReviewNote.DoesNotExist:
-                pass
+                return JsonResponse({'success': False, 'error': 'Note not found'})
 
         elif action == 'delete':
             note_id = request.POST.get('note_id')
@@ -1182,7 +1259,8 @@ class DecisionsView(LoginRequiredMixin, TemplateView):
                             decision.save()
 
                             # Shift all decisions with serial < original_serial down by 1
-                            for d in decisions[:current_index]:
+                            # Process in reverse order to avoid UNIQUE constraint violations
+                            for d in reversed(decisions[:current_index]):
                                 d.serial_number += 1
                                 d.save()
 
@@ -1223,9 +1301,46 @@ class ActionItemPopupView(LoginRequiredMixin, TemplateView):
     """Action Item popup as per PRD"""
     template_name = 'reviews/popups/action_items.html'
 
+    def get_template_names(self):
+        # Check if this is an edit, reassign, or history request
+        action = self.request.GET.get('action')
+        if action == 'edit':
+            return ['reviews/popups/edit_action_item.html']
+        elif action == 'reassign':
+            return ['reviews/popups/reassign_action.html']
+        elif action == 'history':
+            return ['reviews/popups/action_history.html']
+        return [self.template_name]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         meeting = get_object_or_404(ReviewMeeting, pk=kwargs['pk'])
+
+        # Check if this is an edit, reassign, or history request
+        action = self.request.GET.get('action')
+        action_id = self.request.GET.get('id')
+
+        if action in ['edit', 'reassign', 'history'] and action_id:
+            # Load action for editing/reassigning
+            action_item = get_object_or_404(ReviewActionItem, id=action_id)
+
+            # Get team members and available teams
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            team_members = User.objects.filter(is_active=True).order_by('first_name', 'last_name')
+
+            available_teams = Team.objects.filter(
+                is_active=True,
+                manager=self.request.user
+            ).order_by('name')
+
+            context.update({
+                'meeting': meeting,
+                'action': action_item,
+                'team_members': team_members,
+                'available_teams': available_teams,
+            })
+            return context
 
         # Check if parameter context is provided
         parameter_type = self.request.GET.get('parameter_type')
@@ -1355,7 +1470,50 @@ class ActionItemPopupView(LoginRequiredMixin, TemplateView):
 
         elif action == 'edit':
             # Handle edit action
-            pass
+            action_id = request.POST.get('action_id')
+            action_text = request.POST.get('action_description')
+            priority = request.POST.get('priority')
+            due_date = request.POST.get('due_date')
+            assigned_to_id = request.POST.get('assigned_to')
+            assigned_to_team_id = request.POST.get('assigned_to_team')
+            status = request.POST.get('status')
+            completion_notes = request.POST.get('completion_notes', '')
+
+            try:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+
+                action_item = ReviewActionItem.objects.get(id=action_id, review_meeting=meeting)
+
+                # Store old status before updating
+                old_status = action_item.status
+
+                # Update fields
+                action_item.action_description = action_text
+                action_item.priority = priority
+                action_item.due_date = datetime.strptime(due_date, '%Y-%m-%d').date()
+                action_item.assigned_to = User.objects.get(id=assigned_to_id)
+                action_item.status = status
+
+                if assigned_to_team_id:
+                    action_item.assigned_to_team = Team.objects.get(id=assigned_to_team_id)
+                else:
+                    action_item.assigned_to_team = None
+
+                # Set completed_at timestamp if status changed to completed
+                if status == 'completed' and old_status != 'completed':
+                    action_item.completed_at = timezone.now()
+                elif status != 'completed':
+                    action_item.completed_at = None
+
+                action_item.save()
+
+                return JsonResponse({'success': True})
+
+            except ReviewActionItem.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'Action not found'})
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)})
 
         elif action == 'delete':
             item_id = request.POST.get('item_id')
@@ -1364,6 +1522,75 @@ class ActionItemPopupView(LoginRequiredMixin, TemplateView):
                 item.delete()
             except ReviewActionItem.DoesNotExist:
                 pass
+
+        elif action == 'update_status':
+            # Handle status updates (complete/reject)
+            action_id = request.POST.get('action_id')
+            new_status = request.POST.get('status')
+            reason = request.POST.get('reason', '')
+
+            try:
+                action_item = ReviewActionItem.objects.get(id=action_id)
+
+                # Update status
+                action_item.status = new_status
+
+                # Set completed_at if marking as completed
+                if new_status == 'completed':
+                    action_item.completed_at = timezone.now()
+
+                # Add reason to completion notes if provided
+                if reason:
+                    if action_item.completion_notes:
+                        action_item.completion_notes += f"\n\nRejection reason: {reason}"
+                    else:
+                        action_item.completion_notes = f"Rejection reason: {reason}"
+
+                action_item.save()
+
+                return JsonResponse({'success': True})
+
+            except ReviewActionItem.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'Action not found'})
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)})
+
+        elif action == 'reassign':
+            # Handle reassignment
+            action_id = request.POST.get('action_id')
+            assigned_to_id = request.POST.get('assigned_to')
+            assigned_to_team_id = request.POST.get('assigned_to_team')
+            reassignment_reason = request.POST.get('reassignment_reason', '')
+
+            try:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+
+                action_item = ReviewActionItem.objects.get(id=action_id)
+
+                # Update assigned_to
+                action_item.assigned_to = User.objects.get(id=assigned_to_id)
+
+                # Update assigned_to_team if provided
+                if assigned_to_team_id:
+                    action_item.assigned_to_team = Team.objects.get(id=assigned_to_team_id)
+
+                # Add reassignment note to completion_notes
+                if reassignment_reason:
+                    reassignment_note = f"\n\nReassigned: {reassignment_reason} (at {timezone.now().strftime('%Y-%m-%d %H:%M')})"
+                    if action_item.completion_notes:
+                        action_item.completion_notes += reassignment_note
+                    else:
+                        action_item.completion_notes = reassignment_note.strip()
+
+                action_item.save()
+
+                return JsonResponse({'success': True})
+
+            except ReviewActionItem.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'Action not found'})
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)})
 
         return JsonResponse({'success': True})
 
@@ -1494,6 +1721,92 @@ class ParameterActionItemsView(LoginRequiredMixin, TemplateView):
                 return JsonResponse({'success': False, 'error': 'All required fields must be provided'})
 
         return JsonResponse({'success': False, 'error': 'Invalid action'})
+
+
+class ParameterIssuesView(LoginRequiredMixin, TemplateView):
+    """Parameter-specific Issues popup for FPI/GPI/PPI line items"""
+    template_name = 'reviews/popups/issues.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        meeting = get_object_or_404(ReviewMeeting, pk=kwargs['pk'])
+
+        # Get parameter type and ID from request
+        parameter_type = self.request.GET.get('parameter_type')
+        parameter_id = self.request.GET.get('parameter_id')
+        parameter_name = None
+
+        # Get the parameter name if parameter context is provided
+        if parameter_type and parameter_id:
+            from plans.models import FPIParameter, GPIParameter, PPIProject
+            from improve.models import ImprovementProject
+            try:
+                if parameter_type == 'fpi':
+                    param = FPIParameter.objects.get(id=parameter_id)
+                    parameter_name = param.sub_head
+                elif parameter_type == 'gpi':
+                    param = GPIParameter.objects.get(id=parameter_id)
+                    parameter_name = param.name
+                elif parameter_type == 'ppi':
+                    param = PPIProject.objects.get(id=parameter_id)
+                    parameter_name = param.project_name
+                elif parameter_type == 'improvement':
+                    param = ImprovementProject.objects.get(id=parameter_id)
+                    parameter_name = param.name
+            except Exception as e:
+                print(f"Error fetching parameter name: {e}")
+
+        # Get issues for this parameter
+        issues = Issue.objects.filter(team=meeting.team)
+
+        if parameter_type and parameter_id:
+            # Filter by parameter type
+            if parameter_type == 'fpi':
+                issues = issues.filter(fpi_parameter_id=parameter_id)
+            elif parameter_type == 'gpi':
+                issues = issues.filter(gpi_parameter_id=parameter_id)
+            elif parameter_type == 'ppi':
+                issues = issues.filter(ppi_project_id=parameter_id)
+            elif parameter_type == 'improvement':
+                issues = issues.filter(improvement_project_id=parameter_id)
+
+        issues = issues.select_related('reported_by', 'escalated_to_team').prefetch_related('related_actions')
+
+        # Add action counts to each issue
+        issues_with_counts = []
+        for issue in issues:
+            total_actions = issue.related_actions.count()
+            completed_actions = issue.related_actions.filter(status='completed').count()
+            issue.action_count = f"{completed_actions}/{total_actions}" if total_actions > 0 else "0/0"
+            issues_with_counts.append(issue)
+
+        # Calculate issue summary statistics
+        issue_summary = {
+            'total': issues.count(),
+            'high_priority': issues.filter(priority='high').count(),
+            'open': issues.filter(status='open').count(),
+            'resolved': issues.filter(status='resolved').count(),
+        }
+
+        # Get teams where user is a member (for escalation)
+        from django.db.models import Q
+        user_teams = Team.objects.filter(
+            Q(manager=self.request.user) |
+            Q(members__member=self.request.user, members__is_active=True),
+            is_active=True
+        ).distinct().exclude(id=meeting.team.id)
+
+        context.update({
+            'meeting': meeting,
+            'issues': issues_with_counts,
+            'issue_summary': issue_summary,
+            'available_teams': user_teams,
+            'parameter_type': parameter_type,
+            'parameter_id': parameter_id,
+            'parameter_name': parameter_name,
+            'today': timezone.now().date().strftime('%Y-%m-%d'),
+        })
+        return context
 
 
 class SaveFPIDataView(LoginRequiredMixin, TemplateView):
@@ -1815,67 +2128,62 @@ class ProjectDetailsView(LoginRequiredMixin, TemplateView):
 
         from datetime import datetime, timedelta
 
-        # Get current week
-        today = datetime.now().date()
-        current_fy = meeting.financial_year
-        if current_fy:
-            start_date = current_fy.start_date
-            days_diff = (today - start_date).days
-            current_week = (days_diff // 7) + 1
-        else:
-            current_week = 1
-
+        # Get project and tasks first
         if project_type == 'PPI':
             from plans.models import PPIProject
             project = PPIProject.objects.get(id=project_id)
             tasks = project.tasks.all()
+            # Get quarter start date from the project's quarterly plan
+            quarter_start_date = project.quarterly_plan.quarter_start_date if project.quarterly_plan else None
         else:  # Improvement
             from improve.models import ImprovementProject
             project = ImprovementProject.objects.get(id=project_id)
             tasks = project.tasks.all()
+            # Get quarter start date from the project's upload (improvement upload)
+            quarter_start_date = project.upload.quarter_start_date if project.upload else None
+
+        # Calculate current week based on quarter start date
+        today = datetime.now().date()
+        if quarter_start_date:
+            days_diff = (today - quarter_start_date).days
+            current_week = (days_diff // 7) + 1
+        else:
+            current_week = 1
 
         # Build weekly task data
         weeks = []
         for week_num in range(1, 14):  # 13 weeks
-            week_tasks = tasks.filter(week_number=week_num)
-            tasks_count = week_tasks.count()
-            completed_count = week_tasks.filter(is_completed=True).count()
+            week_tasks = list(tasks.filter(week_number=week_num))
+            tasks_count = len(week_tasks)
+            completed_count = sum(1 for task in week_tasks if task.is_completed)
 
-            # Determine cell style and class
+            # Attach action to each task for status display
+            from implement.models import Action
+            for task in week_tasks:
+                action = Action.objects.filter(
+                    ppi_task=task if project_type == 'PPI' else None,
+                    improvement_task=task if project_type == 'Improvement' else None
+                ).first()
+                task.action = action
+
+            # Determine cell style and class (background colors only for past weeks)
             cell_class = ''
             cell_style = ''
 
             if tasks_count == 0:
                 # No tasks - default styling
                 cell_class = 'bg-light'
-            elif completed_count == tasks_count:
-                # All tasks completed - green
-                cell_style = 'background-color: #90EE90;'
             elif week_num < current_week:
-                # Past week with incomplete tasks - light red
-                cell_style = 'background-color: #FFB6C6;'
-            else:
-                # Future week - check task statuses
-                danger_count = 0
-                at_risk_count = 0
-                on_track_count = 0
-
-                for task in week_tasks:
-                    # You might need to add status field to tasks or infer from completion
-                    # For now, using simple logic based on completion
-                    if task.is_completed:
-                        on_track_count += 1
-                    else:
-                        # Check if task is overdue or at risk
-                        # This is simplified - adjust based on your task model
-                        at_risk_count += 1
-
-                if danger_count > 0:
-                    cell_style = 'color: #DC3545; font-weight: bold;'  # Red text
-                elif at_risk_count > 0:
-                    cell_style = 'color: #FFC107; font-weight: bold;'  # Yellow text
+                # Past week
+                if completed_count == tasks_count:
+                    # All tasks completed - green background
+                    cell_style = 'background-color: #90EE90;'
                 else:
-                    cell_style = 'color: #28A745; font-weight: bold;'  # Green text
+                    # Incomplete tasks - pink background
+                    cell_style = 'background-color: #FFB6C6;'
+            elif completed_count == tasks_count:
+                # Current/future week with all tasks completed - green background
+                cell_style = 'background-color: #90EE90;'
 
             weeks.append({
                 'week_number': week_num,
@@ -1919,6 +2227,45 @@ class WeekTasksView(LoginRequiredMixin, TemplateView):
             from improve.models import ImprovementProject
             project = ImprovementProject.objects.get(id=project_id)
             tasks = project.tasks.filter(week_number=week_number)
+
+        # Helper function to recursively get all sub-actions with depth level
+        def get_nested_sub_actions(action, depth=1):
+            """Recursively get all sub-actions with their depth level for tree display"""
+            from implement.models import Action
+            result = []
+            sub_actions = action.sub_actions.all().order_by('created_at')
+
+            for sub_action in sub_actions:
+                # Add depth level to sub_action for template rendering
+                sub_action.depth_level = depth
+                result.append(sub_action)
+
+                # Recursively get sub-actions of this sub-action
+                nested = get_nested_sub_actions(sub_action, depth + 1)
+                result.extend(nested)
+
+            return result
+
+        # Attach action and all nested sub-actions to each task
+        from implement.models import Action
+        for task in tasks:
+            try:
+                # Get the action associated with this task
+                action = Action.objects.filter(
+                    ppi_task=task if project_type == 'PPI' else None,
+                    improvement_task=task if project_type == 'Improvement' else None
+                ).first()
+
+                if action:
+                    task.action = action
+                    # Get all nested sub-actions recursively
+                    task.sub_actions = get_nested_sub_actions(action)
+                else:
+                    task.action = None
+                    task.sub_actions = []
+            except:
+                task.action = None
+                task.sub_actions = []
 
         # Get all action items related to this project from the meeting
         action_items = meeting.review_action_items.filter(
@@ -2291,31 +2638,84 @@ class UpdateIssueStatusView(LoginRequiredMixin, View):
 @method_decorator(csrf_exempt, name='dispatch')
 class RevertIssueStatusView(LoginRequiredMixin, View):
     """Revert issue to previous status"""
-    
+
     def post(self, request, pk):
         try:
             data = json.loads(request.body)
             issue_id = data.get('issue_id')
-            
+
             issue = get_object_or_404(Issue, id=issue_id)
-            
+
             # Revert to previous status or open if no previous status
             new_status = issue.previous_status if issue.previous_status else 'open'
             issue.status = new_status
             issue.previous_status = ''  # Clear previous status
-            
+
             # Clear escalation if reverting from escalated
             if issue.escalated_to_team:
                 issue.escalated_to_team = None
-            
+
             issue.save()
-            
+
             return JsonResponse({
                 'success': True,
                 'message': f'Issue status reverted to {new_status}',
                 'new_status': new_status
             })
-            
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class DeleteActionView(LoginRequiredMixin, View):
+    """Delete action item and remove it from associated parameter"""
+
+    def post(self, request, pk):
+        try:
+            action_id = request.GET.get('action_id')
+
+            # Get the action item
+            action = get_object_or_404(ReviewActionItem, id=action_id)
+
+            # Check if user has permission to delete (should be part of the team, team manager, or admin)
+            meeting = get_object_or_404(ReviewMeeting, pk=pk)
+
+            # Check if user is a member of the team or the team manager
+            from organizations.models import TeamMember
+            is_team_member = TeamMember.objects.filter(
+                team=meeting.team,
+                member=request.user,
+                is_active=True
+            ).exists()
+            is_team_manager = meeting.team.manager == request.user
+
+            if not (is_team_member or is_team_manager or request.user.is_superuser):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'You do not have permission to delete this action'
+                }, status=403)
+
+            # Store parameter information before deletion
+            parameter_type = action.parameter_type
+            parameter_id = action.parameter_id
+
+            # Delete the action
+            action.delete()
+
+            # Note: Since ReviewActionItem uses parameter_type and parameter_id
+            # to link to parameters, and there's no reverse foreign key,
+            # the deletion of the action automatically removes it from the parameter's view.
+            # No additional cleanup is needed on the parameter side.
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Action deleted successfully'
+            })
+
         except Exception as e:
             return JsonResponse({
                 'success': False,

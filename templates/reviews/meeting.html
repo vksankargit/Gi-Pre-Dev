@@ -4,17 +4,12 @@
 {% block title %}Review Meeting - PRE System{% endblock %}
 
 {% block content %}
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h3">
-                <i class="fas fa-calendar-alt me-2"></i>Review Meeting: {{ meeting.team.name }}
-            </h1>
-            <a href="{% url 'reviews:dashboard' %}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to Reviews
-            </a>
-        </div>
-    </div>
+<div class="style-3">
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1><i class="fas fa-calendar-alt me-2"></i>Review Meeting: {{ meeting.team.name }}</h1>
+    <a href="{% url 'reviews:dashboard' %}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Reviews
+    </a>
 </div>
 
 <!-- Meeting Info Header -->
@@ -57,7 +52,10 @@
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openDecisions()">
                 <i class="fas fa-gavel me-1"></i>Decisions
             </button>
-            <button type="button" class="btn btn-outline-info btn-sm" onclick="openActionItems()">
+            <button type="button" class="btn btn-outline-warning btn-sm" onclick="openNewIssueModal()">
+                <i class="fas fa-exclamation-triangle me-1"></i>Create Issue
+            </button>
+            <button type="button" class="btn btn-outline-info btn-sm" onclick="loadActionItems()">
                 <i class="fas fa-tasks me-1"></i>Action Items
             </button>
         </div>
@@ -78,8 +76,8 @@
                         </button>
                     </li>
 
-                    <!-- FPI Tab - Visible for Monthly and Weekly -->
-                    {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
+                    <!-- FPI Tab - Visible for Monthly only -->
+                    {% if meeting.review_type == 'monthly' %}
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="fpi-tab" data-bs-toggle="tab"
                                 data-bs-target="#fpi" type="button" role="tab">
@@ -98,8 +96,8 @@
                     </li>
                     {% endif %}
 
-                    <!-- PPI Tab - Visible for Monthly and Weekly -->
-                    {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
+                    <!-- PPI Tab - Visible for Weekly only -->
+                    {% if meeting.review_type == 'weekly' %}
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="ppi-tab" data-bs-toggle="tab"
                                 data-bs-target="#ppi" type="button" role="tab">
@@ -108,11 +106,11 @@
                     </li>
                     {% endif %}
 
-                    <!-- Issues Tab - Always visible -->
+                    <!-- Issue Log Tab - Always visible -->
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="issues-tab" data-bs-toggle="tab"
                                 data-bs-target="#issues" type="button" role="tab">
-                            <i class="fas fa-exclamation-triangle me-2"></i>Issues
+                            <i class="fas fa-exclamation-triangle me-2"></i>Issue Log
                         </button>
                     </li>
 
@@ -125,7 +123,7 @@
                     </li>
                 </ul>
             </div>
-            <div class="card-body">
+            <div class="card-body" data-meeting-id="{{ meeting.pk }}">
                 <div class="tab-content" id="reviewMeetingTabContent">
                     <!-- Commitments Tab Content -->
                     <div class="tab-pane fade show active" id="commitments" role="tabpanel">
@@ -138,8 +136,8 @@
                         </div>
                     </div>
 
-                    <!-- FPI Tab Content -->
-                    {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
+                    <!-- FPI Tab Content - Monthly only -->
+                    {% if meeting.review_type == 'monthly' %}
                     <div class="tab-pane fade" id="fpi" role="tabpanel">
                         <div id="fpi-content">
                             <!-- This will be loaded via AJAX -->
@@ -151,7 +149,7 @@
                     </div>
                     {% endif %}
 
-                    <!-- GPI Tab Content -->
+                    <!-- GPI Tab Content - Monthly and Weekly -->
                     {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
                     <div class="tab-pane fade" id="gpi" role="tabpanel">
                         <div id="gpi-content">
@@ -164,8 +162,8 @@
                     </div>
                     {% endif %}
 
-                    <!-- PPI Tab Content -->
-                    {% if meeting.review_type == 'monthly' or meeting.review_type == 'weekly' %}
+                    <!-- PPI Tab Content - Weekly only -->
+                    {% if meeting.review_type == 'weekly' %}
                     <div class="tab-pane fade" id="ppi" role="tabpanel">
                         <div id="ppi-content">
                             <!-- This will be loaded via AJAX -->
@@ -255,9 +253,148 @@
     </div>
 </div>
 
+<!-- Issues Modal -->
+<div class="modal fade" id="issuesModal" tabindex="-1" aria-labelledby="issuesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="issuesModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Issues
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="issuesContent">
+                <!-- Content loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include standard modals -->
+{% include 'includes/new_issue_modal.html' %}
+{% include 'includes/new_action_modal.html' %}
+
+<!-- SEPARATE SCRIPT FOR TOGGLE FUNCTIONALITY -->
 <script>
+console.log('🔥 SEPARATE TOGGLE SCRIPT LOADED');
+
+window.toggleFPISection = function(sectionName) {
+    console.log('🔄 toggleFPISection called for:', sectionName);
+
+    const details = document.querySelectorAll('.' + sectionName + '-details');
+    const icon = document.getElementById(sectionName + '-icon');
+
+    console.log('Found details:', details.length, 'Found icon:', icon ? 'yes' : 'no');
+
+    if (details.length > 0) {
+        const isHidden = details[0].style.display === 'none' || details[0].style.display === '';
+        const newDisplay = isHidden ? 'table-row' : 'none';
+
+        details.forEach(row => {
+            row.style.display = newDisplay;
+        });
+
+        if (icon) {
+            if (isHidden) {
+                icon.classList.remove('fa-chevron-right');
+                icon.classList.add('fa-chevron-down');
+            } else {
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-right');
+            }
+        }
+
+        console.log('✅ Toggled', details.length, 'rows to', newDisplay);
+        return 'Success: Toggled ' + details.length + ' rows to ' + newDisplay;
+    } else {
+        console.log('❌ No detail rows found for section:', sectionName);
+        return 'Error: No rows found for ' + sectionName;
+    }
+};
+
+// Add event delegation for all buttons with onclick="toggleFPISection(...)"
+document.addEventListener('click', function(e) {
+    // Check if the clicked element or its parent is a button with an id ending in '-toggle'
+    const button = e.target.closest('[id$="-toggle"]');
+    if (button) {
+        console.log('🖱️ Button clicked via event delegation:', button.id);
+
+        // Extract section name from button id
+        const sectionName = button.id.replace('-toggle', '');
+        console.log('📝 Extracted section name:', sectionName);
+
+        // Call the toggle function
+        window.toggleFPISection(sectionName);
+
+        // Prevent default behavior
+        e.preventDefault();
+        e.stopPropagation();
+    }
+});
+
+console.log('✅ toggleFPISection function registered');
+console.log('✅ Event delegation set up for all toggle buttons');
+console.log('Function type:', typeof window.toggleFPISection);
+</script>
+
+<script>
+// Immediate test to see if JavaScript executes
+console.log('🚨 JAVASCRIPT IS EXECUTING - MEETING TEMPLATE');
+window.basicTest = function() { return 'BASIC TEST WORKS'; };
+
+// GLOBAL TOGGLE FUNCTION - DEFINED IMMEDIATELY
+window.directToggleSection = function(sectionName) {
+    console.log('🔄 Direct toggle called for:', sectionName);
+
+    const details = document.querySelectorAll(`.${sectionName}-details`);
+    const icon = document.getElementById(`${sectionName}-icon`);
+
+    console.log('Found details:', details.length, 'Found icon:', icon ? 'yes' : 'no');
+
+    if (details.length > 0) {
+        const isHidden = details[0].style.display === 'none' || details[0].style.display === '';
+        const newDisplay = isHidden ? 'table-row' : 'none';
+
+        details.forEach(row => {
+            row.style.display = newDisplay;
+        });
+
+        if (icon) {
+            if (isHidden) {
+                icon.classList.remove('fa-chevron-right');
+                icon.classList.add('fa-chevron-down');
+            } else {
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-right');
+            }
+        }
+
+        console.log(`✅ Toggled ${details.length} rows to ${newDisplay}`);
+        return `Toggled ${details.length} rows to ${newDisplay}`;
+    } else {
+        console.log('❌ No rows found');
+        return 'No rows found';
+    }
+};
+
+window.testToggle = function() {
+    console.log('🧪 Testing toggle functionality...');
+    console.log('directToggleSection available:', typeof window.directToggleSection);
+    const buttons = document.querySelectorAll('[id$="-toggle"]');
+    console.log('Found toggle buttons:', buttons.length);
+    buttons.forEach(btn => console.log('Button:', btn.id));
+
+    if (buttons.length > 0) {
+        console.log('🎯 Testing click on first button:', buttons[0].id);
+        buttons[0].click();
+    }
+    return 'Test function executed';
+};
+
+console.log('✅ GLOBAL FUNCTIONS REGISTERED');
+
 document.addEventListener('DOMContentLoaded', function() {
-    const meetingId = {{ meeting.pk }};
+    const meetingId = {{ meeting.pk|default:"null" }};
 
     // Load initial content for active tab
     loadTabContent('commitments');
@@ -291,6 +428,9 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(html => {
                 contentDiv.innerHTML = html;
                 contentDiv.dataset.loaded = 'true';
+
+                // Execute scripts for dynamically loaded content
+                executeScriptsInElement(contentDiv, tabId);
             })
             .catch(error => {
                 console.error('Error loading tab content:', error);
@@ -306,96 +446,548 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    // Function to execute scripts in dynamically loaded content
+    function executeScriptsInElement(element, tabId) {
+        console.log(`🔧 Executing scripts for tab: ${tabId}`);
+
+        // Find all script tags in the loaded content
+        const scripts = element.querySelectorAll('script');
+        console.log(`📜 Found ${scripts.length} script tags`);
+
+        scripts.forEach((script, index) => {
+            console.log(`⚡ Executing script ${index + 1}`);
+
+            // Create a new script element
+            const newScript = document.createElement('script');
+
+            // Copy attributes
+            Array.from(script.attributes).forEach(attr => {
+                newScript.setAttribute(attr.name, attr.value);
+            });
+
+            // Copy script content
+            newScript.textContent = script.textContent;
+
+            // Replace the old script with the new one to execute it
+            script.parentNode.replaceChild(newScript, script);
+        });
+
+        // Special handling for FPI tab
+        if (tabId === 'fpi') {
+            console.log('🎯 FPI content loaded - expansion buttons should now work');
+        }
+    }
+
+    // Use event delegation for expansion buttons - this works regardless of when content loads
+    document.addEventListener('click', function(e) {
+        // Check if clicked element is an expansion button
+        if (e.target.closest('[id$="-toggle"]')) {
+            e.preventDefault();
+
+            const button = e.target.closest('[id$="-toggle"]');
+            const buttonId = button.id;
+            const sectionName = buttonId.replace('-toggle', '');
+
+            console.log('🖱️ Event delegation: Button clicked:', buttonId, 'section:', sectionName);
+            window.toggleSection(sectionName);
+        }
+    });
+
+    // Global toggleSection function - MOVED TO MAIN TEMPLATE
+    window.toggleSection = function(sectionName) {
+        console.log('🔄 toggleSection called with:', sectionName);
+
+        const details = document.querySelectorAll(`.${sectionName}-details`);
+        const icon = document.getElementById(`${sectionName}-icon`);
+
+        console.log('📊 Found elements:', {
+            details: details.length,
+            icon: icon ? 'found' : 'not found'
+        });
+
+        if (details.length > 0) {
+            const isHidden = details[0].style.display === 'none' || details[0].style.display === '';
+            console.log('👁️ Current state - isHidden:', isHidden);
+
+            details.forEach((row, index) => {
+                const newDisplay = isHidden ? 'table-row' : 'none';
+                row.style.display = newDisplay;
+                console.log(`📝 Row ${index + 1} display set to:`, newDisplay);
+            });
+
+            // Toggle icon
+            if (icon) {
+                if (isHidden) {
+                    icon.classList.remove('fa-chevron-right');
+                    icon.classList.add('fa-chevron-down');
+                    console.log('⬇️ Icon changed to down');
+                } else {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-right');
+                    console.log('➡️ Icon changed to right');
+                }
+            }
+        } else {
+            console.log('❌ No detail rows found for section:', sectionName);
+        }
+    };
+
     // Global function for loading tab content (accessible from retry buttons)
     window.loadTabContent = loadTabContent;
+
+    // Test function to verify toggle functionality
+    window.testToggle = function() {
+        console.log('🧪 Testing toggle functionality...');
+        console.log('toggleSection function available:', typeof window.toggleSection);
+        const buttons = document.querySelectorAll('[id$="-toggle"]');
+        console.log('Found toggle buttons:', buttons.length);
+        buttons.forEach(btn => console.log('Button:', btn.id));
+
+        // Test clicking the first button
+        if (buttons.length > 0) {
+            console.log('🎯 Testing click on first button:', buttons[0].id);
+            buttons[0].click();
+        }
+    };
+
+    // Immediate debug logs
+    console.log('🚀 Meeting template JavaScript loaded');
+    console.log('📋 Available functions:', Object.keys(window).filter(key => key.includes('test') || key.includes('toggle')));
 });
+
+// Duplicate functions removed - using the global ones defined at top of script
 
 // Popup functions
 function openReviewNotes() {
-    const modal = new bootstrap.Modal(document.getElementById('reviewNotesModal'));
-    const content = document.getElementById('reviewNotesContent');
+    console.log('openReviewNotes called');
+    try {
+        const modalElement = document.getElementById('reviewNotesModal');
+        const content = document.getElementById('reviewNotesContent');
 
-    content.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-            <p class="text-muted mt-2">Loading review notes...</p>
-        </div>
-    `;
+        if (!modalElement) {
+            console.error('reviewNotesModal element not found');
+            return;
+        }
 
-    modal.show();
+        if (!content) {
+            console.error('reviewNotesContent element not found');
+            return;
+        }
 
-    fetch('{% url "reviews:review_notes" meeting.pk %}')
-        .then(response => response.text())
-        .then(html => {
-            content.innerHTML = html;
-        })
-        .catch(error => {
-            console.error('Error loading review notes:', error);
-            content.innerHTML = `
-                <div class="text-center py-4">
-                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
-                    <p class="text-danger mt-2">Error loading review notes</p>
-                </div>
-            `;
-        });
+        // Check if Bootstrap is available
+        if (typeof bootstrap === 'undefined') {
+            console.error('Bootstrap is not loaded');
+            // Fallback to jQuery if available
+            if (typeof $ !== 'undefined') {
+                console.log('Using jQuery fallback');
+                $('#reviewNotesModal').modal('show');
+            } else {
+                // Manual fallback - add Bootstrap classes
+                modalElement.style.display = 'block';
+                modalElement.classList.add('show');
+                document.body.classList.add('modal-open');
+
+                // Add backdrop
+                const backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop fade show';
+                document.body.appendChild(backdrop);
+            }
+        } else {
+            console.log('Using Bootstrap modal');
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+        }
+
+        content.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                <p class="text-muted mt-2">Loading review notes...</p>
+            </div>
+        `;
+
+        fetch('{% url "reviews:review_notes" meeting.pk %}')
+            .then(response => {
+                console.log('Fetch response status:', response.status);
+                return response.text();
+            })
+            .then(html => {
+                console.log('Received HTML, length:', html.length);
+                content.innerHTML = html;
+
+                // Execute any script tags in the loaded content
+                const scripts = content.querySelectorAll('script');
+                scripts.forEach(script => {
+                    const newScript = document.createElement('script');
+                    if (script.src) {
+                        newScript.src = script.src;
+                    } else {
+                        newScript.textContent = script.textContent;
+                    }
+                    document.head.appendChild(newScript);
+                    document.head.removeChild(newScript);
+                });
+
+                console.log('JavaScript executed for review notes');
+            })
+            .catch(error => {
+                console.error('Error loading review notes:', error);
+                content.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                        <p class="text-danger mt-2">Error loading review notes: ${error.message}</p>
+                    </div>
+                `;
+            });
+    } catch (error) {
+        console.error('Error in openReviewNotes:', error);
+        alert('Error opening review notes: ' + error.message);
+    }
 }
 
 function openDecisions() {
-    const modal = new bootstrap.Modal(document.getElementById('decisionsModal'));
-    const content = document.getElementById('decisionsContent');
+    console.log('openDecisions called');
+    try {
+        const modalElement = document.getElementById('decisionsModal');
+        const content = document.getElementById('decisionsContent');
 
-    content.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-            <p class="text-muted mt-2">Loading decisions...</p>
-        </div>
-    `;
+        if (!modalElement) {
+            console.error('decisionsModal element not found');
+            return;
+        }
 
-    modal.show();
+        if (!content) {
+            console.error('decisionsContent element not found');
+            return;
+        }
 
-    fetch('{% url "reviews:decisions" meeting.pk %}')
-        .then(response => response.text())
-        .then(html => {
-            content.innerHTML = html;
-        })
-        .catch(error => {
-            console.error('Error loading decisions:', error);
-            content.innerHTML = `
-                <div class="text-center py-4">
-                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
-                    <p class="text-danger mt-2">Error loading decisions</p>
-                </div>
-            `;
-        });
+        // Check if Bootstrap is available
+        if (typeof bootstrap === 'undefined') {
+            console.error('Bootstrap is not loaded');
+            if (typeof $ !== 'undefined') {
+                $('#decisionsModal').modal('show');
+            } else {
+                modalElement.style.display = 'block';
+                modalElement.classList.add('show');
+                document.body.classList.add('modal-open');
+            }
+        } else {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+        }
+
+        content.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                <p class="text-muted mt-2">Loading decisions...</p>
+            </div>
+        `;
+
+        fetch('{% url "reviews:decisions" meeting.pk %}')
+            .then(response => response.text())
+            .then(html => {
+                content.innerHTML = html;
+
+                // Execute any script tags in the loaded content
+                const scripts = content.querySelectorAll('script');
+                scripts.forEach(script => {
+                    const newScript = document.createElement('script');
+                    if (script.src) {
+                        newScript.src = script.src;
+                    } else {
+                        newScript.textContent = script.textContent;
+                    }
+                    document.head.appendChild(newScript);
+                    document.head.removeChild(newScript);
+                });
+
+                console.log('JavaScript executed for decisions');
+            })
+            .catch(error => {
+                console.error('Error loading decisions:', error);
+                content.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                        <p class="text-danger mt-2">Error loading decisions: ${error.message}</p>
+                    </div>
+                `;
+            });
+    } catch (error) {
+        console.error('Error in openDecisions:', error);
+        alert('Error opening decisions: ' + error.message);
+    }
+}
+
+function loadActionItems() {
+    return openActionItems();
 }
 
 function openActionItems() {
-    const modal = new bootstrap.Modal(document.getElementById('actionItemsModal'));
+    console.log('openActionItems called');
+    try {
+        const modalElement = document.getElementById('actionItemsModal');
+        const content = document.getElementById('actionItemsContent');
+
+        if (!modalElement) {
+            console.error('actionItemsModal element not found');
+            return;
+        }
+
+        if (!content) {
+            console.error('actionItemsContent element not found');
+            return;
+        }
+
+        // Check if Bootstrap is available
+        if (typeof bootstrap === 'undefined') {
+            console.error('Bootstrap is not loaded');
+            if (typeof $ !== 'undefined') {
+                $('#actionItemsModal').modal('show');
+            } else {
+                modalElement.style.display = 'block';
+                modalElement.classList.add('show');
+                document.body.classList.add('modal-open');
+            }
+        } else {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+        }
+
+        content.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                <p class="text-muted mt-2">Loading action items...</p>
+            </div>
+        `;
+
+        fetch('{% url "reviews:action_items" meeting.pk %}')
+            .then(response => response.text())
+            .then(html => {
+                content.innerHTML = html;
+
+                // Execute any script tags in the loaded content
+                const scripts = content.querySelectorAll('script');
+                scripts.forEach(script => {
+                    const newScript = document.createElement('script');
+                    if (script.src) {
+                        newScript.src = script.src;
+                    } else {
+                        newScript.textContent = script.textContent;
+                    }
+                    document.head.appendChild(newScript);
+                    document.head.removeChild(newScript);
+                });
+
+                console.log('JavaScript executed for action items');
+            })
+            .catch(error => {
+                console.error('Error loading action items:', error);
+                content.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                        <p class="text-danger mt-2">Error loading action items: ${error.message}</p>
+                    </div>
+                `;
+            });
+    } catch (error) {
+        console.error('Error in openActionItems:', error);
+        alert('Error opening action items: ' + error.message);
+    }
+}
+
+// Flag to track if we're adding action from within Action Items popup - make it globally accessible
+window.addingActionFromActionItems = false;
+
+// Custom save action function that handles Action Items popup refresh
+function customSaveAction() {
+    console.log('customSaveAction called, addingActionFromActionItems:', window.addingActionFromActionItems);
+
+    const form = document.getElementById('newActionForm');
+    const formData = new FormData(form);
+
+    // Clear previous errors
+    clearFormErrors('action');
+
+    // Validate required fields
+    const action = document.getElementById('actionTitle').value.trim();
+    const team = document.getElementById('actionTeam').value;
+    const assignedTo = document.getElementById('actionMember').value;
+
+    if (!action) {
+        showFieldError('actionTitle', 'Action is required');
+        return;
+    }
+
+    if (!team) {
+        showFieldError('actionTeam', 'Please select a team');
+        return;
+    }
+
+    if (!assignedTo) {
+        showFieldError('actionMember', 'Please select a member');
+        return;
+    }
+
+    // Disable save button
+    const saveBtn = document.getElementById('saveActionBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+
+    fetch('/api/create-action/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage('Action created successfully!', 'action');
+            setTimeout(() => {
+                currentModal.hide();
+
+                // If we're adding from Action Items popup, refresh it instead of page
+                if (window.addingActionFromActionItems) {
+                    console.log('Refreshing Action Items popup instead of page reload');
+                    // Reset the flag
+                    window.addingActionFromActionItems = false;
+                    // Refresh the Action Items popup content
+                    refreshActionItems();
+                    // Show the Action Items modal again
+                    setTimeout(() => {
+                        const actionItemsModal = new bootstrap.Modal(document.getElementById('actionItemsModal'));
+                        actionItemsModal.show();
+                    }, 500);
+                } else {
+                    console.log('Normal page reload behavior');
+                    // Normal behavior - refresh entire page
+                    location.reload();
+                }
+            }, 1500);
+        } else {
+            showErrorMessage(data.error || 'Error creating action', 'action');
+            // Re-enable save button on error
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Action';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showErrorMessage('Error creating action: ' + error.message, 'action');
+        // Re-enable save button on error
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Action';
+    });
+}
+
+// Alternative approach - intercept the save button click
+function setupSaveActionInterception() {
+    console.log('Setting up save action interception');
+
+    // Find the save action button and intercept its click
+    const saveBtn = document.getElementById('saveActionBtn');
+    if (saveBtn) {
+        console.log('Found save action button, adding custom handler');
+
+        // Remove existing event listeners and add our custom one
+        const newSaveBtn = saveBtn.cloneNode(true);
+        saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+
+        newSaveBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Custom save button clicked, calling customSaveAction');
+            customSaveAction();
+        });
+    } else {
+        console.log('Save action button not found, retrying...');
+        setTimeout(setupSaveActionInterception, 500);
+    }
+}
+
+// Override the saveAction function after DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Setting up custom saveAction override');
+    // Wait a bit for the original function to load
+    setTimeout(() => {
+        window.saveAction = customSaveAction;
+        console.log('saveAction function overridden successfully');
+
+        // Also setup button interception as backup
+        setupSaveActionInterception();
+    }, 1000);
+});
+
+// Function to refresh Action Items popup content
+function refreshActionItems(parameterType, parameterId) {
+    console.log('Refreshing Action Items popup...', { parameterType, parameterId });
     const content = document.getElementById('actionItemsContent');
+    if (!content) {
+        console.error('actionItemsContent not found');
+        return;
+    }
 
     content.innerHTML = `
         <div class="text-center py-4">
             <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-            <p class="text-muted mt-2">Loading action items...</p>
+            <p class="text-muted mt-2">Refreshing action items...</p>
         </div>
     `;
 
-    modal.show();
+    // Build URL with parameter context if provided
+    let url = '{% url "reviews:action_items" meeting.pk %}';
+    if (parameterType && parameterId) {
+        url += `?parameter_type=${parameterType}&parameter_id=${parameterId}`;
+        console.log('Refreshing with parameter context');
+    } else {
+        console.log('Refreshing generic action items');
+    }
 
-    fetch('{% url "reviews:action_items" meeting.pk %}')
-        .then(response => response.text())
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.text();
+        })
         .then(html => {
             content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.head.appendChild(newScript);
+                setTimeout(() => {
+                    if (document.head.contains(newScript)) {
+                        document.head.removeChild(newScript);
+                    }
+                }, 100);
+            });
+
+            console.log('Action Items refreshed successfully');
         })
         .catch(error => {
-            console.error('Error loading action items:', error);
+            console.error('Error refreshing action items:', error);
             content.innerHTML = `
                 <div class="text-center py-4">
                     <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
-                    <p class="text-danger mt-2">Error loading action items</p>
+                    <p class="text-danger mt-2">Error refreshing: ${error.message}</p>
+                    <button class="btn btn-outline-primary btn-sm" onclick="refreshActionItems(${parameterType ? `'${parameterType}', '${parameterId}'` : ''})">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
                 </div>
             `;
         });
 }
 </script>
+
+<!-- Include standard Issue and Action modals -->
+{% include 'includes/new_issue_modal.html' %}
+{% include 'includes/new_action_modal.html' %}
+</div>
 {% endblock %}

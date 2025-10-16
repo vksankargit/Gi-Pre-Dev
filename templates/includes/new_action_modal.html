@@ -11,6 +11,10 @@
             <div class="modal-body">
                 <form id="newActionForm">
                     {% csrf_token %}
+                    <!-- Hidden fields for parameter linking -->
+                    <input type="hidden" id="actionParameterType" name="parameter_type" value="">
+                    <input type="hidden" id="actionParameterId" name="parameter_id" value="">
+
                     <div class="mb-3">
                         <label class="form-label">Action <span class="text-danger">*</span></label>
                         <textarea class="form-control" id="actionTitle" name="action" rows="2" required placeholder="Describe the action to be taken"></textarea>

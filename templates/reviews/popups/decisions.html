@@ -189,8 +189,17 @@ function addDecision() {
 }
 
 function cancelAddDecision() {
+    const contentInput = document.getElementById('newDecisionContent');
+
+    // Check if any data has been entered
+    if (contentInput.value.trim()) {
+        if (!confirm('You will lose the data entered. Do you wish to continue?')) {
+            return;
+        }
+    }
+
     document.getElementById('addDecisionForm').style.display = 'none';
-    document.getElementById('newDecisionContent').value = '';
+    contentInput.value = '';
 }
 
 function createDecision(event) {
@@ -244,13 +253,22 @@ function cancelEditDecision(decisionId) {
     const content = decisionItem.querySelector('.decision-content');
     const editForm = decisionItem.querySelector('.decision-edit-form');
     const buttons = decisionItem.querySelector('.btn-group');
+    const textarea = editForm.querySelector('textarea');
+
+    // Check if any changes were made
+    const hasChanges = textarea.value !== textarea.defaultValue;
+
+    if (hasChanges) {
+        if (!confirm('You will lose the data entered. Do you wish to continue?')) {
+            return;
+        }
+    }
 
     content.style.display = 'block';
     editForm.style.display = 'none';
     buttons.style.display = 'flex';
 
     // Reset textarea to original value
-    const textarea = editForm.querySelector('textarea');
     const originalText = content.querySelector('p').innerText.replace('Decision: ', '').trim();
     textarea.value = originalText;
 }

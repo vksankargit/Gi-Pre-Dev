@@ -4,17 +4,12 @@
 {% block title %}Review - PRE System{% endblock %}
 
 {% block content %}
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h3">
-                <i class="fas fa-search me-2"></i>Review
-            </h1>
-            <a href="{% url 'reviews:new_review' %}" class="btn btn-primary">
-                <i class="fas fa-plus me-2"></i>New Review
-            </a>
-        </div>
-    </div>
+<div class="style-3">
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1><i class="fas fa-search me-2"></i>Review</h1>
+    <a href="{% url 'reviews:new_review' %}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>New Review
+    </a>
 </div>
 
 <!-- Filter Section as per PRD -->
@@ -70,98 +65,6 @@
                         </div>
                     </div>
                 </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Recent and Upcoming Meetings Summary -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-calendar-alt me-2"></i>Recent & Upcoming Meetings
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="mb-3">Recent Meetings</h6>
-                        {% if meetings %}
-                            <div class="list-group">
-                                {% for meeting in meetings|slice:":5" %}
-                                <div class="list-group-item">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <h6 class="mb-1">{{ meeting.team.name }} - {{ meeting.get_review_type_display }}</h6>
-                                            <p class="mb-1">{{ meeting.review_date|date:"M d, Y g:i A" }}</p>
-                                            <small class="text-muted">Manager: {{ meeting.manager_name }}</small>
-                                        </div>
-                                        <div>
-                                            {% now "Y-m-d H:i" as current_datetime %}
-                                            {% if meeting.review_date|date:"Y-m-d H:i" > current_datetime %}
-                                                <span class="badge bg-info mb-2">Scheduled</span>
-                                            {% else %}
-                                                <span class="badge bg-success mb-2">Completed</span>
-                                            {% endif %}
-                                            <div class="btn-group btn-group-sm">
-                                                <a href="{% url 'reviews:meeting' meeting.pk %}" class="btn btn-outline-primary"
-                                                   data-bs-toggle="tooltip" data-bs-placement="top" title="Edit/View Meeting">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                            {% if meetings|length > 5 %}
-                                <div class="text-center mt-3">
-                                    <small class="text-muted">Showing 5 of {{ meetings|length }} meetings</small>
-                                </div>
-                            {% endif %}
-                        {% else %}
-                            <div class="text-center py-4">
-                                <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
-                                <p class="text-muted">No meetings found.</p>
-                                <a href="{% url 'reviews:new_review' %}" class="btn btn-primary">Create First Meeting</a>
-                            </div>
-                        {% endif %}
-                    </div>
-
-                    <div class="col-md-6">
-                        <h6 class="mb-3">Quick Stats</h6>
-                        <div class="row">
-                            <div class="col-6">
-                                <div class="card text-center">
-                                    <div class="card-body py-3">
-                                        <h4 class="text-primary">{{ meetings|length }}</h4>
-                                        <small class="text-muted">Total Meetings</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="card text-center">
-                                    <div class="card-body py-3">
-                                        <h4 class="text-success">{{ user_teams|length }}</h4>
-                                        <small class="text-muted">Active Teams</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-3">
-                            <h6 class="mb-2">Review Types</h6>
-                            <div class="d-flex flex-wrap gap-2">
-                                {% for type_key, type_name in review_types %}
-                                    <span class="badge bg-{% if type_key == 'daily' %}info{% elif type_key == 'weekly' %}warning{% else %}success{% endif %}">
-                                        {{ type_name }}
-                                    </span>
-                                {% endfor %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -351,4 +254,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+</div>
 {% endblock %}

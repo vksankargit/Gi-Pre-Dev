@@ -4,20 +4,18 @@
 {% block title %}Sub Actions - PRE System{% endblock %}
 
 {% block content %}
-<div class="row mt-4">
-    <div class="col-12">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{% url 'implement:dashboard' %}">Implement</a></li>
-                <li class="breadcrumb-item"><a href="{% url 'implement:my_todo' %}">My To Do</a></li>
-                <li class="breadcrumb-item active">Sub Actions</li>
-            </ol>
-        </nav>
+<div class="style-3">
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'implement:dashboard' %}">Implement</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'implement:my_todo' %}">My To Do</a></li>
+        <li class="breadcrumb-item active">Sub Actions</li>
+    </ol>
+</nav>
 
-        <h1 class="h3 mb-4">
-            <i class="fas fa-list me-2"></i>Sub Actions
-        </h1>
-    </div>
+<div class="page-header">
+    <h1><i class="fas fa-list me-2"></i>Sub Actions</h1>
+</div>
 </div>
 
 <div class="row">
@@ -41,7 +39,8 @@
                                     <th>Assigned To</th>
                                     <th>Priority</th>
                                     <th>Status</th>
-                                    <th>Due Date</th>
+                                    <th>Original Due Date</th>
+                                    <th>Revised Due Date</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -65,10 +64,12 @@
                                             {{ sub_action.get_status_display }}
                                         </span>
                                     </td>
+                                    <td>{{ sub_action.original_due_date|date:"M d, Y" }}</td>
                                     <td>
-                                        {{ sub_action.original_due_date|date:"M d, Y" }}
                                         {% if sub_action.revised_due_date %}
-                                            <br><small class="text-info">Revised: {{ sub_action.revised_due_date|date:"M d" }}</small>
+                                            {{ sub_action.revised_due_date|date:"M d, Y" }}
+                                        {% else %}
+                                            -
                                         {% endif %}
                                     </td>
                                     <td>
@@ -76,11 +77,17 @@
                                             <button class="btn btn-outline-primary" onclick="editSubAction({{ sub_action.id|unlocalize }})" title="Edit">
                                                 <i class="fas fa-edit"></i>
                                             </button>
+                                            <button class="btn btn-outline-info" onclick="reassignSubAction({{ sub_action.id|unlocalize }})" title="Reassign">
+                                                <i class="fas fa-user-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" onclick="rejectSubAction({{ sub_action.id|unlocalize }})" title="Mark Reject">
+                                                <i class="fas fa-ban"></i>
+                                            </button>
+                                            <button class="btn btn-outline-secondary" onclick="viewSubActionHistory({{ sub_action.id|unlocalize }})" title="View History">
+                                                <i class="fas fa-history"></i>
+                                            </button>
                                             <button class="btn btn-outline-success" onclick="toggleSubActionComplete({{ sub_action.id|unlocalize }})" title="Toggle Complete">
                                                 <i class="fas fa-check"></i>
-                                            </button>
-                                            <button class="btn btn-outline-danger" onclick="deleteSubAction({{ sub_action.id|unlocalize }})" title="Delete">
-                                                <i class="fas fa-trash"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -205,6 +212,9 @@
     </div>
 </div>
 
+<!-- Include New Action Modal for creating sub-actions -->
+{% include 'includes/new_action_modal.html' %}
+
 <!-- Create/Edit Sub Action Modal -->
 <div class="modal fade" id="subActionModal" tabindex="-1">
     <div class="modal-dialog">
@@ -252,8 +262,27 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="subActionDueDate" class="form-label">Due Date <span class="text-danger">*</span></label>
+                                <label for="subActionStatus" class="form-label">Status</label>
+                                <select class="form-control" id="subActionStatus" name="status">
+                                    <option value="in_progress">On Track</option>
+                                    <option value="at_risk">At Risk</option>
+                                    <option value="danger">Danger</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="subActionDueDate" class="form-label">Original Due Date <span class="text-danger">*</span></label>
                                 <input type="date" class="form-control" id="subActionDueDate" name="original_due_date" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="subActionRevisedDueDate" class="form-label">Revised Due Date</label>
+                                <input type="date" class="form-control" id="subActionRevisedDueDate" name="revised_due_date">
                             </div>
                         </div>
                     </div>
@@ -274,17 +303,33 @@
 
 <script>
 function createSubAction() {
-    document.getElementById('subActionModalTitle').textContent = 'Create Sub Action';
-    document.getElementById('subActionForm').reset();
-    document.getElementById('subActionId').value = '';
+    // Reset the form (if resetActionForm exists from issue_action_modals.js)
+    if (typeof resetActionForm === 'function') {
+        resetActionForm();
+    } else {
+        document.getElementById('newActionForm').reset();
+        const memberSelect = document.getElementById('actionMember');
+        if (memberSelect) {
+            memberSelect.innerHTML = '<option value="">Select</option>';
+        }
+    }
 
-    // Reset the member dropdown
-    const memberSelect = document.getElementById('subActionAssignedTo');
-    memberSelect.innerHTML = '<option value="">Select Team First</option>';
-    memberSelect.disabled = true;
+    // Set parent action ID in a hidden field to create this as a sub-action
+    let parentActionField = document.getElementById('parentActionId');
+    if (!parentActionField) {
+        // Create the hidden field if it doesn't exist
+        parentActionField = document.createElement('input');
+        parentActionField.type = 'hidden';
+        parentActionField.id = 'parentActionId';
+        parentActionField.name = 'parent_action_id';
+        document.getElementById('newActionForm').appendChild(parentActionField);
+    }
+    parentActionField.value = {{ parent_action.id|unlocalize }};
 
-    const modal = new bootstrap.Modal(document.getElementById('subActionModal'));
-    modal.show();
+    // Set currentModal variable (used by saveAction function in issue_action_modals.js)
+    // Access it through window to ensure we're setting the global variable
+    window.currentModal = new bootstrap.Modal(document.getElementById('newActionModal'));
+    window.currentModal.show();
 }
 
 function editSubAction(subActionId) {
@@ -296,8 +341,10 @@ function editSubAction(subActionId) {
             document.getElementById('subActionId').value = subActionId;
             document.getElementById('subActionText').value = data.action;
             document.getElementById('subActionPriority').value = data.priority;
+            document.getElementById('subActionStatus').value = data.status || 'in_progress';
             document.getElementById('subActionDueDate').value = data.original_due_date;
-            document.getElementById('subActionComments').value = data.comments;
+            document.getElementById('subActionRevisedDueDate').value = data.revised_due_date || '';
+            document.getElementById('subActionComments').value = data.comments || '';
 
             // Set team and then load members
             const teamSelect = document.getElementById('subActionTeam');
@@ -354,7 +401,9 @@ function toggleSubActionComplete(subActionId) {
     fetch(`/implement/action/${subActionId}/toggle-complete/`, {
         method: 'POST',
         headers: {
-            'X-CSRFToken': getCookie('csrftoken')
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
         }
     })
     .then(response => response.json())
@@ -376,7 +425,9 @@ function deleteSubAction(subActionId) {
         fetch(`/implement/action/${subActionId}/delete/`, {
             method: 'POST',
             headers: {
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
             }
         })
         .then(response => response.json())
@@ -392,6 +443,49 @@ function deleteSubAction(subActionId) {
             alert('Error deleting sub action: ' + error.message);
         });
     }
+}
+
+function reassignSubAction(subActionId) {
+    window.location.href = `/implement/action/${subActionId}/reassign/`;
+}
+
+function rejectSubAction(subActionId) {
+    const reason = prompt('Please enter rejection reason:');
+    if (reason === null) return; // User clicked cancel
+
+    if (!reason.trim()) {
+        alert('Rejection reason is required');
+        return;
+    }
+
+    fetch(`/implement/action/${subActionId}/reject/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            rejection_reason: reason
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Sub action marked as rejected');
+            location.reload();
+        } else {
+            alert('Error rejecting sub action: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error rejecting sub action:', error);
+        alert('Error rejecting sub action: ' + error.message);
+    });
+}
+
+function viewSubActionHistory(subActionId) {
+    window.location.href = `/implement/action/${subActionId}/history/`;
 }
 
 // Team selection and member loading functionality
@@ -474,4 +568,5 @@ function getCookie(name) {
     return cookieValue;
 }
 </script>
+</div>
 {% endblock %}
