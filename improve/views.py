@@ -239,21 +239,19 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         try:
-            # Create or update improvement upload
-            improvement_upload, created = ImprovementUpload.objects.update_or_create(
+            # Always create a new improvement upload (multiple uploads allowed per quarter)
+            improvement_upload = ImprovementUpload.objects.create(
                 team=team,
                 financial_year=financial_year,
                 quarter=quarter,
-                defaults={
-                    'file_name': uploaded_file.name,
-                    'file_path': uploaded_file,
-                    'upload_status': 'processing',
-                    'uploaded_by': request.user,
-                    'error_log': '',
-                    'total_records': 0,
-                    'processed_records': 0,
-                    'error_records': 0,
-                }
+                file_name=uploaded_file.name,
+                file_path=uploaded_file,
+                upload_status='processing',
+                uploaded_by=request.user,
+                error_log='',
+                total_records=0,
+                processed_records=0,
+                error_records=0
             )
 
             # Process the Excel file using PPI-style processing
@@ -270,6 +268,20 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
                 improvement_upload.error_log = '\n'.join(processing_errors) if processing_errors else 'Processing errors occurred'
                 improvement_upload.save()
 
+                # Create history record for failed upload
+                from improve.models import ImprovementUploadHistory
+                ImprovementUploadHistory.objects.create(
+                    improvement_upload=improvement_upload,
+                    file_name=uploaded_file.name,
+                    file_path=improvement_upload.file_path,
+                    upload_status='failed',
+                    error_log=improvement_upload.error_log,
+                    uploaded_by=request.user,
+                    total_records=improvement_upload.total_records,
+                    processed_records=improvement_upload.processed_records,
+                    error_records=improvement_upload.error_records
+                )
+
                 if processing_errors:
                     error_message = f'File uploaded but processing failed: {"; ".join(processing_errors[:3])}'
                     if len(processing_errors) > 3:
@@ -283,8 +295,22 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
             else:
                 improvement_upload.upload_status = 'successful'
                 improvement_upload.save()
-                action = 'created' if created else 'updated'
-                success_message = f'Improvement plan {action} and processed successfully. Total: {improvement_upload.total_records}, Processed: {improvement_upload.processed_records}, Errors: {improvement_upload.error_records}'
+
+                # Create history record for successful upload
+                from improve.models import ImprovementUploadHistory
+                ImprovementUploadHistory.objects.create(
+                    improvement_upload=improvement_upload,
+                    file_name=uploaded_file.name,
+                    file_path=improvement_upload.file_path,
+                    upload_status='successful',
+                    error_log='',
+                    uploaded_by=request.user,
+                    total_records=improvement_upload.total_records,
+                    processed_records=improvement_upload.processed_records,
+                    error_records=0
+                )
+
+                success_message = f'Improvement plan uploaded and processed successfully. Total: {improvement_upload.total_records}, Processed: {improvement_upload.processed_records}, Errors: {improvement_upload.error_records}'
 
                 if is_ajax:
                     return JsonResponse({'success': True, 'message': success_message})
@@ -335,9 +361,6 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
             # Load the Excel workbook
             workbook = openpyxl.load_workbook(uploaded_file, data_only=True)
 
-            # Clear existing projects for this upload
-            ImprovementProject.objects.filter(upload=improvement_upload).delete()
-
             # Process PPI-style sheet (assume first sheet or named 'PPI' or 'Improvements')
             if 'PPI' in workbook.sheetnames:
                 sheet = workbook['PPI']
@@ -345,6 +368,46 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
                 sheet = workbook['Improvements']
             else:
                 sheet = workbook.active
+
+            # First pass: Extract all project names from the uploaded file
+            project_names_in_file = []
+            for row_num, row in enumerate(sheet.iter_rows(min_row=5, values_only=True), start=5):
+                if not any(row):  # Skip empty rows
+                    continue
+
+                if len(row) < 2:
+                    continue
+
+                project_name = row[1]  # Project name is in column B (index 1)
+
+                # Skip rows without project name or with header-like content
+                if not project_name or project_name == 'None' or str(project_name).strip() == 'Project Name':
+                    continue
+
+                project_names_in_file.append(str(project_name).strip())
+
+            # Check for duplicates across all existing improvement projects for the same team/quarter/year
+            if project_names_in_file:
+                # Get ALL existing project names for the same team, financial year, and quarter
+                # Exclude the current upload since it was just created and has no projects yet
+                existing_project_names = list(ImprovementProject.objects.filter(
+                    upload__team=improvement_upload.team,
+                    upload__financial_year=improvement_upload.financial_year,
+                    upload__quarter=improvement_upload.quarter
+                ).exclude(upload=improvement_upload).values_list('name', flat=True))
+
+                # Find duplicates
+                duplicates = [name for name in project_names_in_file if name in existing_project_names]
+
+                if duplicates:
+                    # Return error and don't import anything
+                    duplicate_list = ', '.join(f'"{name}"' for name in duplicates[:5])
+                    if len(duplicates) > 5:
+                        duplicate_list += f' and {len(duplicates) - 5} more'
+                    errors.append(f"Duplicate project names found: {duplicate_list}. These projects already exist for {improvement_upload.team.name} - {improvement_upload.financial_year.year} {improvement_upload.quarter}. Please remove duplicates from the file and try again.")
+                    return errors
+
+            # Don't delete any existing projects - we're adding new ones to the quarter
 
             # Process improvement projects using PPI format
             project_errors = self._process_improvement_sheet(sheet, improvement_upload, User)

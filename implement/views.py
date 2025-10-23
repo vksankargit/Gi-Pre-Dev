@@ -85,35 +85,50 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         if current_month_in_quarter > 3:
             current_month_in_quarter = ((current_month_num - quarter_start_month + 12) % 12) // 1 + 1
 
+        # Get user's teams (where user is a member OR manager)
+        user_member_teams = user.team_memberships.filter(is_active=True).values_list('team_id', flat=True)
+        user_managed_teams = user.managed_teams.filter(is_active=True).values_list('id', flat=True)
+        user_teams = list(user_member_teams) + list(user_managed_teams)
+
         # Get Weekly Numbers from GPI Parameters - filter by current quarter
+        # Show parameters from user's teams OR where user is responsible
         weekly_numbers = GPIParameter.objects.filter(
-            responsible_user=user,
+            Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user),
             tracking_type='weekly',
             quarterly_plan__quarter=current_quarter_num,
             quarterly_plan__financial_year=current_financial_year
-        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones') if current_financial_year else GPIParameter.objects.none()
+        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user', 'assigned_team').prefetch_related('milestones') if current_financial_year else GPIParameter.objects.none()
 
         # Get Monthly Numbers from FPI and GPI Parameters - filter by current quarter
+        # Show parameters from user's teams OR where user is responsible
         monthly_fpi = FPIParameter.objects.filter(
-            responsible_user=user,
+            Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user),
             quarterly_plan__quarter=current_quarter_num,
             quarterly_plan__financial_year=current_financial_year
-        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones') if current_financial_year else FPIParameter.objects.none()
+        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user', 'assigned_team').prefetch_related('milestones') if current_financial_year else FPIParameter.objects.none()
 
         monthly_gpi = GPIParameter.objects.filter(
-            responsible_user=user,
+            Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user),
             tracking_type='monthly',
             quarterly_plan__quarter=current_quarter_num,
             quarterly_plan__financial_year=current_financial_year
-        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones') if current_financial_year else GPIParameter.objects.none()
+        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user', 'assigned_team').prefetch_related('milestones') if current_financial_year else GPIParameter.objects.none()
 
         # Convert querysets to lists and combine monthly numbers
         monthly_numbers = list(monthly_fpi) + list(monthly_gpi)
 
         # Get summary statistics (exclude carry_forward actions)
+        # Show counts from user's teams OR where user is assigned/responsible
         context.update({
-            'my_actions_count': Action.objects.filter(assigned_to=user, status__in=['not_started', 'in_progress', 'at_risk', 'danger']).exclude(status='carry_forward').count(),
-            'my_projects_count': PPIProject.objects.filter(responsible_user=user).count() + ImprovementProject.objects.filter(responsible_user=user).count(),
+            'my_actions_count': Action.objects.filter(
+                Q(team_id__in=user_teams) | Q(assigned_to=user),
+                status__in=['not_started', 'in_progress', 'at_risk', 'danger']
+            ).exclude(status='carry_forward').count(),
+            'my_projects_count': PPIProject.objects.filter(
+                Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user)
+            ).count() + ImprovementProject.objects.filter(
+                Q(upload__team_id__in=user_teams) | Q(responsible_user=user)
+            ).count(),
             'pending_numbers': weekly_numbers.count() + monthly_fpi.count() + monthly_gpi.count(),
             'today': today,
             'current_week_display': current_week_display,
@@ -132,18 +147,19 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         next_week_start = current_week_end + timedelta(days=1)  # Next Monday
         next_week_end = next_week_start + timedelta(days=6)  # Next Sunday
 
-        # Get all actions first
-        all_actions = Action.objects.filter(
-            assigned_to=user
-        ).exclude(
-            status='carry_forward'
-        ).select_related('team', 'created_by').order_by('original_due_date', '-created_at')
-
         # Get filter parameter from request (default: overdue,current_week)
         filter_param = self.request.GET.get('due_date_filter', 'overdue,current_week')
         filters = [f.strip() for f in filter_param.split(',') if f.strip()]
 
-        # Apply filtering based on selected options
+        # Get all regular actions first
+        # Show actions from user's teams OR where user is assigned
+        all_regular_actions = Action.objects.filter(
+            Q(team_id__in=user_teams) | Q(assigned_to=user)
+        ).exclude(
+            status='carry_forward'
+        ).select_related('team', 'created_by', 'assigned_to').prefetch_related('assigned_to__team_memberships__team')
+
+        # Apply filtering for regular actions
         if filters:
             filter_query = Q()
 
@@ -163,11 +179,106 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                 # Later: due date after next week end
                 filter_query |= Q(original_due_date__gt=next_week_end)
 
-            actions = all_actions.filter(filter_query)
+            regular_actions = all_regular_actions.filter(filter_query)
         else:
             # No filters selected, show all actions
-            actions = all_actions
+            regular_actions = all_regular_actions
 
+        # Get Review Action Items (from parameter actions in Issue Log, GPI, FPI, PPI)
+        # Show review actions from user's teams OR where user is assigned
+        from reviews.models import ReviewActionItem
+        all_review_actions = ReviewActionItem.objects.filter(
+            Q(assigned_to_team_id__in=user_teams) | Q(assigned_to=user)
+        ).select_related(
+            'assigned_to_team', 'review_meeting', 'assigned_to'
+        ).prefetch_related('assigned_to__team_memberships__team')
+
+        # Apply filtering for review actions
+        if filters:
+            review_filter_query = Q()
+
+            if 'overdue' in filters:
+                # Overdue: due date before today and not completed
+                review_filter_query |= Q(due_date__lt=today) & ~Q(status='completed')
+
+            if 'current_week' in filters:
+                # Current week: due date between current week start and end
+                review_filter_query |= Q(due_date__gte=current_week_start, due_date__lte=current_week_end)
+
+            if 'next_week' in filters:
+                # Next week: due date between next week start and end
+                review_filter_query |= Q(due_date__gte=next_week_start, due_date__lte=next_week_end)
+
+            if 'later' in filters:
+                # Later: due date after next week end
+                review_filter_query |= Q(due_date__gt=next_week_end)
+
+            review_actions = all_review_actions.filter(review_filter_query)
+        else:
+            review_actions = all_review_actions
+
+        # Normalize both types of actions into a unified format for the template
+        combined_actions = []
+
+        # Add regular actions with a wrapper to normalize field names
+        for action in regular_actions:
+            action.action_type = 'regular'  # Mark as regular action
+            combined_actions.append(action)
+
+        # Add review actions with field mapping
+        for review_action in review_actions:
+            # Create a wrapper object to match the Action model's interface
+            class ReviewActionWrapper:
+                def __init__(self, review_action):
+                    self.id = review_action.id
+                    self.action = review_action.action_description  # Map to 'action' field
+                    self.action_type = 'review'  # Mark as review action
+                    self.team = review_action.assigned_to_team
+                    self.priority = review_action.priority
+                    self.assigned_to = review_action.assigned_to
+                    self.original_due_date = review_action.due_date  # Map to 'original_due_date'
+                    self.status = review_action.status
+                    self.revised_due_date = None  # Review actions don't have revised due dates
+                    self.comments = review_action.completion_notes
+                    self.ppi_task = None
+                    self.improvement_task = None
+                    self.source_display = 'Review'
+
+                    # Add source information based on parameter_type
+                    if review_action.parameter_type:
+                        self.source = 'review'
+                        param_name = review_action.get_parameter_name()
+                        if param_name:
+                            self.source_detail = param_name
+                        else:
+                            self.source_detail = f"{review_action.parameter_type.upper()} #{review_action.parameter_id}"
+                    else:
+                        self.source = 'review'
+                        self.source_detail = f"Meeting #{review_action.review_meeting.id}"
+
+                def get_source_display(self):
+                    return self.source_display
+
+                def get_priority_display(self):
+                    priority_dict = dict(ReviewActionItem.PRIORITY_CHOICES)
+                    return priority_dict.get(self.priority, self.priority)
+
+                def get_status_display(self):
+                    # Map review action statuses to regular action statuses for display
+                    status_map = {
+                        'pending': 'Pending',
+                        'in_progress': 'On Track',
+                        'completed': 'Completed',
+                        'cancelled': 'Cancelled',
+                    }
+                    return status_map.get(self.status, self.status.title())
+
+            combined_actions.append(ReviewActionWrapper(review_action))
+
+        # Sort all actions by due date (oldest first) and created date (newest first as tiebreaker)
+        combined_actions.sort(key=lambda x: (x.original_due_date, -x.id))
+
+        actions = combined_actions
         # Actions are filtered and ready to be passed to template
 
         # Enhance weekly numbers with budget data
@@ -229,47 +340,38 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
 
         if current_financial_year:
             # Use current_quarter_num which is already calculated
+            # Show projects from user's teams OR where user is responsible
             ppi_projects = PPIProject.objects.filter(
-                responsible_user=user,
+                Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user),
                 quarterly_plan__quarter=current_quarter_num,
                 quarterly_plan__financial_year=current_financial_year
-            ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('status_history')
+            ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user').prefetch_related('status_history', 'responsible_user__team_memberships__team')
 
             # Get improvement projects for the same quarter and financial year
-            # Search by quarter string which contains both FY and quarter like "FY 25-26 – Q2"
+            # Use proper relationship filtering instead of string matching
             improvement_projects = ImprovementProject.objects.filter(
-                responsible_user=user,
-                upload__quarter__icontains=quarter
-            ).filter(
-                upload__quarter__icontains=current_fy_string
-            ).select_related('upload__team', 'upload__financial_year').prefetch_related('tasks')
+                Q(upload__team_id__in=user_teams) | Q(responsible_user=user),
+                upload__quarter=quarter,
+                upload__financial_year=current_financial_year
+            ).select_related('upload__team', 'upload__financial_year', 'responsible_user').prefetch_related('tasks', 'responsible_user__team_memberships__team')
         else:
             # Fallback if no financial year found - show all projects
             ppi_projects = PPIProject.objects.filter(
-                responsible_user=user
-            ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('status_history')
+                Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user)
+            ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user').prefetch_related('status_history', 'responsible_user__team_memberships__team')
 
             improvement_projects = ImprovementProject.objects.filter(
-                responsible_user=user
-            ).select_related('upload__team', 'upload__financial_year').prefetch_related('tasks')
+                Q(upload__team_id__in=user_teams) | Q(responsible_user=user)
+            ).select_related('upload__team', 'upload__financial_year', 'responsible_user').prefetch_related('tasks', 'responsible_user__team_memberships__team')
 
         # Combine and enhance all projects
         enhanced_projects = []
 
         # Process PPI projects
         for project in ppi_projects:
-            # Calculate completion percentage based on project tasks
-            if hasattr(project, 'tasks') and project.tasks.exists():
-                total_tasks = project.tasks.count()
-                completed_tasks = project.tasks.filter(is_completed=True).count()
-                project.completion_percentage = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-            else:
-                # Use status_history if available
-                latest_status = project.status_history.first() if hasattr(project, 'status_history') else None
-                if latest_status and hasattr(latest_status, 'completion_percentage'):
-                    project.completion_percentage = latest_status.completion_percentage
-                else:
-                    project.completion_percentage = 0
+            # Use the completion_percentage property which calculates based on completed weeks
+            # Note: project.completion_percentage is a @property that returns an integer (0-100)
+            # based on: (# of weeks with completed activities / # of weeks with planned activities) * 100
 
             # Add project type identifier
             project.project_type = 'PPI'
@@ -294,6 +396,7 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                     # Create a quarterly_plan-like object for template compatibility
                     class TeamWrapper:
                         def __init__(self, team):
+                            self.id = team.id
                             self.name = team.name
 
                     class QuarterlyPlanWrapper:
@@ -341,13 +444,10 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                     # Make tasks accessible
                     self.tasks = improvement_project.tasks
 
-                    # Calculate completion percentage
-                    if improvement_project.tasks.exists():
-                        total_tasks = improvement_project.tasks.count()
-                        completed_tasks = improvement_project.tasks.filter(is_completed=True).count()
-                        self.completion_percentage = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-                    else:
-                        self.completion_percentage = 0
+                    # Use the completion_percentage property from the model which calculates based on completed weeks
+                    # Note: improvement_project.completion_percentage is a @property that returns an integer (0-100)
+                    # based on: (# of weeks with completed activities / # of weeks with planned activities) * 100
+                    self.completion_percentage = improvement_project.completion_percentage
 
                 def get_status_display(self):
                     """Method to provide human-readable status like Django models"""
@@ -553,22 +653,47 @@ class ReassignParameterView(LoginRequiredMixin, View):
             param_id = request.POST.get('param_id')
             param_type = request.POST.get('param_type')
             member_id = request.POST.get('member_id')
+            team_id = request.POST.get('team_id')
 
             if not all([param_id, param_type, member_id]):
                 return JsonResponse({'success': False, 'error': 'Missing required parameters'})
 
             # Get the new responsible user
             from django.contrib.auth import get_user_model
+            from organizations.models import Team
             User = get_user_model()
             new_user = get_object_or_404(User, id=member_id)
 
+            # Get the team if provided
+            assigned_team = None
+            if team_id:
+                assigned_team = get_object_or_404(Team, id=team_id)
+
             if param_type == 'gpi':
-                param = get_object_or_404(GPIParameter, id=param_id, responsible_user=request.user)
+                param = get_object_or_404(GPIParameter, id=param_id)
+                # Check if user has permission (is responsible user OR is team manager OR is member of the team)
+                user_teams = list(request.user.team_memberships.filter(is_active=True).values_list('team_id', flat=True))
+                user_managed_teams = list(request.user.managed_teams.filter(is_active=True).values_list('id', flat=True))
+                all_user_teams = user_teams + user_managed_teams
+
+                if param.responsible_user != request.user and param.quarterly_plan.team_id not in all_user_teams:
+                    return JsonResponse({'success': False, 'error': 'You do not have permission to reassign this parameter'})
+
                 param.responsible_user = new_user
+                param.assigned_team = assigned_team
                 param.save()
             elif param_type == 'fpi':
-                param = get_object_or_404(FPIParameter, id=param_id, responsible_user=request.user)
+                param = get_object_or_404(FPIParameter, id=param_id)
+                # Check if user has permission (is responsible user OR is team manager OR is member of the team)
+                user_teams = list(request.user.team_memberships.filter(is_active=True).values_list('team_id', flat=True))
+                user_managed_teams = list(request.user.managed_teams.filter(is_active=True).values_list('id', flat=True))
+                all_user_teams = user_teams + user_managed_teams
+
+                if param.responsible_user != request.user and param.quarterly_plan.team_id not in all_user_teams:
+                    return JsonResponse({'success': False, 'error': 'You do not have permission to reassign this parameter'})
+
                 param.responsible_user = new_user
+                param.assigned_team = assigned_team
                 param.save()
             else:
                 return JsonResponse({'success': False, 'error': 'Invalid parameter type'})
@@ -727,6 +852,7 @@ class MyTodoView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         from django.db.models import Q
         from datetime import date, timedelta
+        from reviews.models import ReviewActionItem
         context = super().get_context_data(**kwargs)
         user = get_effective_user(self.request)
 
@@ -741,14 +867,18 @@ class MyTodoView(LoginRequiredMixin, TemplateView):
         next_week_start = current_week_end + timedelta(days=1)  # Next Monday
         next_week_end = next_week_start + timedelta(days=6)  # Next Sunday
 
-        # Get actions assigned to user OR created by user OR owned via project
+        # Get filter parameter from request (default: overdue,current_week)
+        filter_param = self.request.GET.get('due_date_filter', 'overdue,current_week')
+        filters = [f.strip() for f in filter_param.split(',') if f.strip()]
+
+        # Get regular actions assigned to user OR created by user OR owned via project
         # This includes:
         # 1. Actions assigned to the user
         # 2. Actions created by the user (delegated tasks)
         # 3. Actions linked to PPI tasks where user owns the project
         # Use .distinct() to avoid duplicates when an action matches multiple conditions
         # Exclude carry_forward actions from the todo list
-        all_actions = Action.objects.filter(
+        all_regular_actions = Action.objects.filter(
             Q(assigned_to=user) |
             Q(created_by=user) |
             Q(ppi_task__project__responsible_user=user) |
@@ -757,13 +887,9 @@ class MyTodoView(LoginRequiredMixin, TemplateView):
             status='carry_forward'
         ).select_related(
             'team', 'created_by', 'assigned_to', 'ppi_task__project', 'improvement_task__project'
-        ).distinct().order_by('original_due_date', '-created_at')
+        ).distinct()
 
-        # Get filter parameter from request (default: overdue,current_week)
-        filter_param = self.request.GET.get('due_date_filter', 'overdue,current_week')
-        filters = [f.strip() for f in filter_param.split(',') if f.strip()]
-
-        # Apply filtering based on selected options
+        # Apply filtering for regular actions
         if filters:
             filter_query = Q()
 
@@ -783,13 +909,109 @@ class MyTodoView(LoginRequiredMixin, TemplateView):
                 # Later: due date after next week end
                 filter_query |= Q(original_due_date__gt=next_week_end)
 
-            actions = all_actions.filter(filter_query)
+            regular_actions = all_regular_actions.filter(filter_query)
         else:
             # No filters selected, show all actions
-            actions = all_actions
+            regular_actions = all_regular_actions
+
+        # Get Review Action Items (from parameter actions in Issue Log, GPI, FPI, PPI)
+        all_review_actions = ReviewActionItem.objects.filter(
+            assigned_to=user
+        ).select_related(
+            'assigned_to_team', 'review_meeting', 'assigned_to'
+        )
+
+        # Apply filtering for review actions
+        if filters:
+            review_filter_query = Q()
+
+            if 'overdue' in filters:
+                # Overdue: due date before today and not completed
+                review_filter_query |= Q(due_date__lt=today) & ~Q(status='completed')
+
+            if 'current_week' in filters:
+                # Current week: due date between current week start and end
+                review_filter_query |= Q(due_date__gte=current_week_start, due_date__lte=current_week_end)
+
+            if 'next_week' in filters:
+                # Next week: due date between next week start and end
+                review_filter_query |= Q(due_date__gte=next_week_start, due_date__lte=next_week_end)
+
+            if 'later' in filters:
+                # Later: due date after next week end
+                review_filter_query |= Q(due_date__gt=next_week_end)
+
+            review_actions = all_review_actions.filter(review_filter_query)
+        else:
+            review_actions = all_review_actions
+
+        # Normalize both types of actions into a unified format for the template
+        combined_actions = []
+
+        # Add regular actions with a wrapper to normalize field names
+        for action in regular_actions:
+            action.action_type = 'regular'  # Mark as regular action
+            action.original_due_date_display = action.original_due_date
+            combined_actions.append(action)
+
+        # Add review actions with field mapping
+        for review_action in review_actions:
+            # Create a wrapper object to match the Action model's interface
+            class ReviewActionWrapper:
+                def __init__(self, review_action):
+                    self.id = review_action.id
+                    self.action = review_action.action_description  # Map to 'action' field
+                    self.action_type = 'review'  # Mark as review action
+                    self.team = review_action.assigned_to_team
+                    self.priority = review_action.priority
+                    self.assigned_to = review_action.assigned_to
+                    self.original_due_date = review_action.due_date  # Map to 'original_due_date'
+                    self.original_due_date_display = review_action.due_date
+                    self.status = review_action.status
+                    self.revised_due_date = None  # Review actions don't have revised due dates
+                    self.comments = review_action.completion_notes
+                    self.ppi_task = None
+                    self.improvement_task = None
+
+                    # Add source information based on parameter_type
+                    if review_action.parameter_type:
+                        self.source = 'review'
+                        self.source_display = f"Review - {review_action.parameter_type.upper()}"
+                        # Get the parameter name for display
+                        param_name = review_action.get_parameter_name()
+                        if param_name:
+                            self.source_detail = param_name
+                        else:
+                            self.source_detail = f"{review_action.parameter_type.upper()} #{review_action.parameter_id}"
+                    else:
+                        self.source = 'review'
+                        self.source_display = 'Review Meeting'
+                        self.source_detail = f"Meeting #{review_action.review_meeting.id}"
+
+                def get_source_display(self):
+                    return self.source_display
+
+                def get_priority_display(self):
+                    priority_dict = dict(ReviewActionItem.PRIORITY_CHOICES)
+                    return priority_dict.get(self.priority, self.priority)
+
+                def get_status_display(self):
+                    # Map review action statuses to regular action statuses for display
+                    status_map = {
+                        'pending': 'Pending',
+                        'in_progress': 'On Track',
+                        'completed': 'Completed',
+                        'cancelled': 'Cancelled',
+                    }
+                    return status_map.get(self.status, self.status.title())
+
+            combined_actions.append(ReviewActionWrapper(review_action))
+
+        # Sort all actions by due date (oldest first) and created date (newest first as tiebreaker)
+        combined_actions.sort(key=lambda x: (x.original_due_date, -x.id))
 
         context.update({
-            'actions': actions,
+            'actions': combined_actions,
             'today': today,
             'current_week_start': current_week_start,
             'current_week_end': current_week_end,
@@ -1008,12 +1230,37 @@ class ActionReassignView(LoginRequiredMixin, TemplateView):
 
 class ActionToggleCompleteView(LoginRequiredMixin, TemplateView):
     def post(self, request, pk):
+        from django.utils import timezone
         action = get_object_or_404(Action, pk=pk)
 
         if action.status == 'completed':
             action.status = 'in_progress'  # or previous status
+
+            # If this action is linked to a PPI task, mark it as incomplete
+            if action.ppi_task:
+                action.ppi_task.is_completed = False
+                action.ppi_task.completed_at = None
+                action.ppi_task.save()
+
+            # If this action is linked to an Improvement task, mark it as incomplete
+            if action.improvement_task:
+                action.improvement_task.is_completed = False
+                action.improvement_task.completed_at = None
+                action.improvement_task.save()
         else:
             action.status = 'completed'
+
+            # If this action is linked to a PPI task, mark it as complete
+            if action.ppi_task:
+                action.ppi_task.is_completed = True
+                action.ppi_task.completed_at = timezone.now()
+                action.ppi_task.save()
+
+            # If this action is linked to an Improvement task, mark it as complete
+            if action.improvement_task:
+                action.improvement_task.is_completed = True
+                action.improvement_task.completed_at = timezone.now()
+                action.improvement_task.save()
 
         action.save()
 

@@ -30,7 +30,6 @@ class ImprovementUpload(models.Model):
 
     class Meta:
         db_table = 'improve_uploads'
-        unique_together = ['team', 'financial_year', 'quarter']
         ordering = ['-uploaded_at']
 
     @property
@@ -73,6 +72,31 @@ class ImprovementUpload(models.Model):
         return f"{self.team.name} - {self.financial_year.year} - {self.quarter}"
 
 
+class ImprovementUploadHistory(models.Model):
+    """Tracks all upload attempts for improvement projects, including re-uploads"""
+    improvement_upload = models.ForeignKey(ImprovementUpload, on_delete=models.CASCADE, related_name='upload_history')
+    file_name = models.CharField(max_length=255)
+    file_path = models.FileField(upload_to='improve_uploads/')
+    upload_status = models.CharField(max_length=20, choices=[
+        ('successful', 'Successful'),
+        ('failed', 'Failed'),
+        ('processing', 'Processing')
+    ])
+    error_log = models.TextField(blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    total_records = models.IntegerField(default=0)
+    processed_records = models.IntegerField(default=0)
+    error_records = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'improve_upload_history'
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"{self.improvement_upload.team.name} - {self.improvement_upload.financial_year.year} - {self.improvement_upload.quarter} - {self.uploaded_at}"
+
+
 class ImprovementProject(models.Model):
     """Individual improvement projects from PPI-like structure"""
     STATUS_CHOICES = [
@@ -99,6 +123,37 @@ class ImprovementProject(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.upload}"
+
+    @property
+    def completion_percentage(self):
+        """
+        Calculate completion percentage based on completed weeks vs total planned weeks.
+        Formula: (# of weeks with completed activities / # of weeks with planned activities) * 100
+        Returns integer percentage (0-100).
+        """
+        # Get all tasks for this project
+        all_tasks = self.tasks.all()
+
+        if not all_tasks.exists():
+            return 0
+
+        # Get unique week numbers that have tasks
+        weeks_with_tasks = all_tasks.values_list('week_number', flat=True).distinct()
+        total_weeks = len(weeks_with_tasks)
+
+        if total_weeks == 0:
+            return 0
+
+        # Count weeks where all tasks are completed
+        completed_weeks = 0
+        for week_num in weeks_with_tasks:
+            week_tasks = all_tasks.filter(week_number=week_num)
+            if week_tasks.filter(is_completed=True).count() == week_tasks.count():
+                completed_weeks += 1
+
+        # Calculate percentage and round to integer
+        percentage = (completed_weeks / total_weeks) * 100
+        return round(percentage)
 
 
 class ImprovementTask(models.Model):
