@@ -26,7 +26,7 @@
                                 </small>
                             </div>
                             <div class="note-content">
-                                <p class="mb-0">{{ note.content|linebreaks }}</p>
+                                <p class="mb-0">{{ note.content|linebreaksbr }}</p>
                             </div>
                             <div class="note-edit-form" style="display: none;">
                                 <form onsubmit="saveNote(event, {{ note.id }})">
@@ -175,9 +175,20 @@ function createNote(event) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Reload the notes content
+            // Reload the notes content first
             refreshNotes();
-            cancelAdd();
+
+            // Then clear and hide the form (after a small delay to ensure refresh completes)
+            setTimeout(() => {
+                const titleInput = document.getElementById('newNoteTitle');
+                const contentInput = document.getElementById('newNoteContent');
+                if (titleInput) titleInput.value = '';
+                if (contentInput) contentInput.value = '';
+                const addForm = document.getElementById('addNoteForm');
+                if (addForm) {
+                    addForm.style.display = 'none';
+                }
+            }, 100);
         } else {
             alert(data.error || 'Error saving note');
         }
@@ -250,12 +261,40 @@ function saveNote(event, noteId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Update the note content
             const noteItem = document.getElementById(`note-${noteId}`);
+            const editForm = noteItem.querySelector('.note-edit-form');
+            const titleInput = editForm.querySelector('input[name="title"]');
+            const textarea = editForm.querySelector('textarea');
+
+            // Update the title in the display
+            const titleElement = noteItem.querySelector('.text-muted');
+            if (titleElement && data.note.title) {
+                // Extract the timestamp and creator info (everything after the first dash)
+                const titleText = titleElement.textContent;
+                const dashIndex = titleText.indexOf(' - Added by');
+                const timestampInfo = dashIndex !== -1 ? titleText.substring(dashIndex) : '';
+                // Update with new title but keep the timestamp info
+                titleElement.textContent = data.note.title + timestampInfo;
+            }
+
+            // Update the note content
             const content = noteItem.querySelector('.note-content p');
             content.innerHTML = data.note.review_note.replace(/\n/g, '<br>');
 
-            cancelEdit(noteId);
+            // Hide edit form and show view
+            const contentDiv = noteItem.querySelector('.note-content');
+            const buttons = noteItem.querySelector('.btn-group');
+            contentDiv.style.display = 'block';
+            editForm.style.display = 'none';
+            buttons.style.display = 'flex';
+
+            // Update both value and defaultValue to prevent confirmation dialog
+            titleInput.value = data.note.title;
+            titleInput.defaultValue = data.note.title;
+            textarea.value = data.note.content;
+            textarea.defaultValue = data.note.content;
+
+            alert('Note updated successfully!');
         } else {
             alert(data.error || 'Error updating note');
         }

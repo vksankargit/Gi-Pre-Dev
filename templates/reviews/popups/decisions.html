@@ -25,7 +25,7 @@
                                 </small>
                             </div>
                             <div class="decision-content">
-                                <p class="mb-0"><strong>Decision:</strong> {{ decision.decision|linebreaks }}</p>
+                                <p class="mb-0"><strong>Decision:</strong> {{ decision.decision|linebreaksbr }}</p>
                             </div>
                             <div class="decision-edit-form" style="display: none;">
                                 <form onsubmit="saveDecision(event, {{ decision.id }})">
@@ -219,9 +219,20 @@ function createDecision(event) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Reload the decisions content
+            // Reload the decisions content first
             refreshDecisions();
-            cancelAddDecision();
+
+            // Then clear and hide the form (after a small delay to ensure refresh completes)
+            setTimeout(() => {
+                const contentInput = document.getElementById('newDecisionContent');
+                if (contentInput) {
+                    contentInput.value = '';
+                }
+                const addForm = document.getElementById('addDecisionForm');
+                if (addForm) {
+                    addForm.style.display = 'none';
+                }
+            }, 100);
         } else {
             alert(data.error || 'Error saving decision');
         }
@@ -275,10 +286,17 @@ function cancelEditDecision(decisionId) {
 
 function saveDecision(event, decisionId) {
     event.preventDefault();
+    console.log('saveDecision called for decision ID:', decisionId);
 
     const formData = new FormData(event.target);
     formData.append('decision_id', decisionId);
     formData.append('action', 'edit');
+
+    console.log('Form data:', {
+        decision_id: decisionId,
+        decision: formData.get('decision'),
+        action: 'edit'
+    });
 
     fetch('{% url "reviews:decisions" meeting.pk %}', {
         method: 'POST',
@@ -287,22 +305,40 @@ function saveDecision(event, decisionId) {
         },
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Response status:', response.status);
+        return response.json();
+    })
     .then(data => {
+        console.log('Response data:', data);
         if (data.success) {
-            // Update the decision content
             const decisionItem = document.getElementById(`decision-${decisionId}`);
+            const editForm = decisionItem.querySelector('.decision-edit-form');
+            const textarea = editForm.querySelector('textarea');
+
+            // Update the decision content
             const content = decisionItem.querySelector('.decision-content p');
             content.innerHTML = '<strong>Decision:</strong> ' + data.decision.decision.replace(/\n/g, '<br>');
 
-            cancelEditDecision(decisionId);
+            // Hide edit form and show view
+            const contentDiv = decisionItem.querySelector('.decision-content');
+            const buttons = decisionItem.querySelector('.btn-group');
+            contentDiv.style.display = 'block';
+            editForm.style.display = 'none';
+            buttons.style.display = 'flex';
+
+            // Update both value and defaultValue to prevent confirmation dialog
+            textarea.value = data.decision.decision;
+            textarea.defaultValue = data.decision.decision;
+
+            alert('Decision updated successfully!');
         } else {
             alert(data.error || 'Error updating decision');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Error updating decision');
+        alert('Error updating decision: ' + error.message);
     });
 }
 
@@ -376,7 +412,7 @@ function copyDecisions() {
     textToCopy += 'Date: {{ meeting.review_date|date:"M d, Y g:i A" }}\n\n';
 
     {% for decision in decisions %}
-    textToCopy += 'D{{ decision.serial_number }}. {{ decision.decision }}\n';
+    textToCopy += 'D{{ decision.serial_number }}. {{ decision.decision|escapejs }}\n';
     textToCopy += '    Date: {{ decision.created_at|date:"M d, Y g:i A" }}\n\n';
     {% endfor %}
 

@@ -227,6 +227,14 @@ class AnnualPlanUploadView(LoginRequiredMixin, TemplateView):
                         new_path = os.path.join(os.path.dirname(old_path), new_name)
                         os.rename(old_path, new_path)
 
+                        # Update all previous upload history records to point to the archived file
+                        old_file_path = existing_plan.file_path.name  # e.g., 'annual_plans/file.xlsx'
+                        new_file_path = f"annual_plans/{new_name}"
+                        AnnualPlanUploadHistory.objects.filter(
+                            annual_plan=existing_plan,
+                            file_path=old_file_path
+                        ).update(file_path=new_file_path)
+
                 # Update existing plan with new file
                 existing_plan.file_name = uploaded_file.name
                 existing_plan.file_path = uploaded_file
@@ -738,7 +746,7 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
             return JsonResponse({
                 'success': False,
                 'requires_confirmation': True,
-                'error': f'A quarterly plan already exists for {team.name} - {financial_year.year} Q{quarter_num}. All data (plan & actual) related to the old plan including FPI, GPI, PPI, and all associated actions will be deleted permanently. Do you want to continue?'
+                'error': f'A quarterly plan already exists for {team.name} - {financial_year.year} Q{quarter_num}. All data (plan & actual) related to the old plan including FPI, GPI, PPI, all associated actions, issues, and review data (meetings, notes, decisions, action items) will be deleted permanently. Do you want to continue?'
             })
 
         # If existing plan and confirmed deletion, delete all related data
@@ -747,6 +755,26 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
             from implement.models import Action
 
             with transaction.atomic():
+                # Archive the old file before updating the plan
+                if existing_plan.file_path:
+                    old_path = existing_plan.file_path.path
+                    if os.path.exists(old_path):
+                        # Rename old file with timestamp
+                        timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+                        base_name = os.path.basename(old_path)
+                        name, ext = os.path.splitext(base_name)
+                        new_name = f"{name}_archived_{timestamp}{ext}"
+                        new_path = os.path.join(os.path.dirname(old_path), new_name)
+                        os.rename(old_path, new_path)
+
+                        # Update all previous upload history records to point to the archived file
+                        old_file_path = existing_plan.file_path.name  # e.g., 'quarterly_plans/file.xlsx'
+                        new_file_path = f"quarterly_plans/{new_name}"
+                        QuarterlyPlanUploadHistory.objects.filter(
+                            quarterly_plan=existing_plan,
+                            file_path=old_file_path
+                        ).update(file_path=new_file_path)
+
                 # Get all PPI projects for this plan
                 ppi_projects = PPIProject.objects.filter(quarterly_plan=existing_plan)
 
@@ -770,11 +798,25 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                 # Delete all PPI projects and their tasks (will be cascade deleted)
                 ppi_projects.delete()
 
-                # Delete the existing plan itself
-                existing_plan.delete()
+                # Delete all review meetings for this team, financial year, and quarter
+                # This will cascade delete ReviewNotes, ReviewDecisions, and ReviewActionItems
+                from reviews.models import ReviewMeeting
+                ReviewMeeting.objects.filter(
+                    team=existing_plan.team,
+                    financial_year=existing_plan.financial_year,
+                    quarter_number=existing_plan.quarter
+                ).delete()
 
-        # Process and save the quarterly plan
-        try:
+                # Update the existing plan with new file (don't delete it to preserve upload history)
+                existing_plan.file_name = uploaded_file.name
+                existing_plan.file_path = uploaded_file
+                existing_plan.upload_status = 'processing'
+                existing_plan.uploaded_by = request.user
+                existing_plan.error_log = ''
+                existing_plan.save()
+                quarterly_plan = existing_plan
+        else:
+            # Create new plan or update existing one
             quarterly_plan, created = QuarterlyPlan.objects.update_or_create(
                 team=team,
                 financial_year=financial_year,
@@ -787,6 +829,9 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                     'error_log': ''
                 }
             )
+
+        # Process and save the quarterly plan
+        try:
 
             # Process the Excel file to create FPI, GPI, and PPI records
             processing_errors = self._process_quarterly_excel_file(quarterly_plan, uploaded_file)

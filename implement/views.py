@@ -90,25 +90,40 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         user_managed_teams = user.managed_teams.filter(is_active=True).values_list('id', flat=True)
         user_teams = list(user_member_teams) + list(user_managed_teams)
 
+        # Separate managed teams from member-only teams
+        managed_team_ids = list(user_managed_teams)
+        member_only_team_ids = list(user_member_teams)
+
+        # Debug logging commented out to avoid Unicode encoding issues
+        # print(f"DEBUG Dashboard: User={user.username}, managed_teams={managed_team_ids}, member_teams={member_only_team_ids}")
+
         # Get Weekly Numbers from GPI Parameters - filter by current quarter
-        # Show parameters from user's teams OR where user is responsible
+        # Show ALL parameters from managed teams + only assigned parameters from member teams
         weekly_numbers = GPIParameter.objects.filter(
-            Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user),
+            Q(quarterly_plan__team_id__in=managed_team_ids) |  # All parameters from managed teams
+            Q(quarterly_plan__team_id__in=member_only_team_ids, responsible_user=user),  # Only assigned from member teams
             tracking_type='weekly',
             quarterly_plan__quarter=current_quarter_num,
             quarterly_plan__financial_year=current_financial_year
         ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user', 'assigned_team').prefetch_related('milestones') if current_financial_year else GPIParameter.objects.none()
 
+        # Debug logging commented out to avoid Unicode encoding issues with special characters (₹, etc.)
+        # print(f"DEBUG: Showing {weekly_numbers.count()} weekly parameters")
+        # for param in weekly_numbers:
+        #     print(f"   - {param.name} (team: {param.quarterly_plan.team.name}, responsible: {param.responsible_user.username})")
+
         # Get Monthly Numbers from FPI and GPI Parameters - filter by current quarter
-        # Show parameters from user's teams OR where user is responsible
+        # Show ALL parameters from managed teams + only assigned parameters from member teams
         monthly_fpi = FPIParameter.objects.filter(
-            Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user),
+            Q(quarterly_plan__team_id__in=managed_team_ids) |  # All parameters from managed teams
+            Q(quarterly_plan__team_id__in=member_only_team_ids, responsible_user=user),  # Only assigned from member teams
             quarterly_plan__quarter=current_quarter_num,
             quarterly_plan__financial_year=current_financial_year
         ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user', 'assigned_team').prefetch_related('milestones') if current_financial_year else FPIParameter.objects.none()
 
         monthly_gpi = GPIParameter.objects.filter(
-            Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user),
+            Q(quarterly_plan__team_id__in=managed_team_ids) |  # All parameters from managed teams
+            Q(quarterly_plan__team_id__in=member_only_team_ids, responsible_user=user),  # Only assigned from member teams
             tracking_type='monthly',
             quarterly_plan__quarter=current_quarter_num,
             quarterly_plan__financial_year=current_financial_year
@@ -340,28 +355,32 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
 
         if current_financial_year:
             # Use current_quarter_num which is already calculated
-            # Show projects from user's teams OR where user is responsible
+            # Show ALL projects from managed teams + only assigned projects from member teams
             ppi_projects = PPIProject.objects.filter(
-                Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user),
+                Q(quarterly_plan__team_id__in=managed_team_ids) |  # All projects from managed teams
+                Q(quarterly_plan__team_id__in=member_only_team_ids, responsible_user=user),  # Only assigned from member teams
                 quarterly_plan__quarter=current_quarter_num,
                 quarterly_plan__financial_year=current_financial_year
             ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user').prefetch_related('status_history', 'responsible_user__team_memberships__team')
 
             # Get improvement projects for the same quarter and financial year
-            # Use proper relationship filtering instead of string matching
+            # Show ALL projects from managed teams + only assigned projects from member teams
             improvement_projects = ImprovementProject.objects.filter(
-                Q(upload__team_id__in=user_teams) | Q(responsible_user=user),
+                Q(upload__team_id__in=managed_team_ids) |  # All projects from managed teams
+                Q(upload__team_id__in=member_only_team_ids, responsible_user=user),  # Only assigned from member teams
                 upload__quarter=quarter,
                 upload__financial_year=current_financial_year
             ).select_related('upload__team', 'upload__financial_year', 'responsible_user').prefetch_related('tasks', 'responsible_user__team_memberships__team')
         else:
             # Fallback if no financial year found - show all projects
             ppi_projects = PPIProject.objects.filter(
-                Q(quarterly_plan__team_id__in=user_teams) | Q(responsible_user=user)
+                Q(quarterly_plan__team_id__in=managed_team_ids) |
+                Q(quarterly_plan__team_id__in=member_only_team_ids, responsible_user=user)
             ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user').prefetch_related('status_history', 'responsible_user__team_memberships__team')
 
             improvement_projects = ImprovementProject.objects.filter(
-                Q(upload__team_id__in=user_teams) | Q(responsible_user=user)
+                Q(upload__team_id__in=managed_team_ids) |
+                Q(upload__team_id__in=member_only_team_ids, responsible_user=user)
             ).select_related('upload__team', 'upload__financial_year', 'responsible_user').prefetch_related('tasks', 'responsible_user__team_memberships__team')
 
         # Combine and enhance all projects
@@ -440,6 +459,9 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                                 self.quarter = "1"  # Fallback
 
                     self.quarterly_plan = QuarterlyPlanWrapper(improvement_project.upload)
+
+                    # Also add upload for direct access
+                    self.upload = improvement_project.upload
 
                     # Make tasks accessible
                     self.tasks = improvement_project.tasks

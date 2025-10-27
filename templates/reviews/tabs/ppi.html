@@ -2,13 +2,18 @@
 <!-- PPI Tab Content -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">Project Performance Indicators (PPI)</h5>
-    <p class="text-muted mb-0">{{ current_quarter_display }}</p>
+    <div class="d-flex align-items-center gap-3">
+        <p class="text-muted mb-0">{{ current_quarter_display }}</p>
+        <button class="btn btn-primary btn-sm" onclick="window.location.reload()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
 </div>
 
 <!-- Projects Grid -->
-<div class="table-responsive">
+<div class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
     <table class="table table-bordered table-hover">
-        <thead class="table-dark">
+        <thead class="table-dark" style="position: sticky; top: 0; z-index: 10;">
             <tr>
                 <th>PPI (Project) Name</th>
                 <th>Completion Criteria</th>

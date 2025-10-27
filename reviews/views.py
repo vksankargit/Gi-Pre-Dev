@@ -679,17 +679,12 @@ class PPITabView(LoginRequiredMixin, TemplateView):
         # Get improvement projects for the team in this quarter
         from improve.models import ImprovementProject
         if current_fy and current_quarter:
-            # Format FY string (e.g., "FY 25-26")
-            fy_string = current_fy.year
-            quarter_string = f"Q{current_quarter}"
-
             # Get improvement projects for this team, quarter, and FY
-            # The quarter field contains both FY and quarter like "FY 25-26 – Q2"
-            from django.db.models import Q
+            # Use the financial_year FK and quarter field directly
             improvement_projects = ImprovementProject.objects.filter(
-                Q(upload__team=meeting.team) &
-                Q(upload__quarter__icontains=quarter_string) &
-                Q(upload__quarter__icontains=fy_string)
+                upload__team=meeting.team,
+                upload__financial_year=current_fy,
+                upload__quarter=f"Q{current_quarter}"
             ).select_related(
                 'upload__team',
                 'upload__financial_year',
@@ -844,11 +839,12 @@ class PPITabView(LoginRequiredMixin, TemplateView):
                 if latest_status:
                     revised_due_date = latest_status.revised_due_date
 
-            # Use completion percentage from status history if available, otherwise calculate from tasks
-            if completion_percentage_from_status is not None:
-                display_completion_percentage = completion_percentage_from_status
+            # Use the completion_percentage property from the model which calculates based on completed weeks
+            # Formula: (# of weeks with completed activities / # of weeks with planned activities) * 100
+            if project.project_type == 'Improvement':
+                display_completion_percentage = project._imp_project.completion_percentage
             else:
-                display_completion_percentage = (project_completed_tasks.count() / project_tasks.count() * 100) if project_tasks.count() > 0 else 0
+                display_completion_percentage = project.completion_percentage
 
             # Check if all tasks are completed
             all_tasks_completed = project_tasks.count() > 0 and project_completed_tasks.count() == project_tasks.count()
@@ -948,18 +944,44 @@ class IssuesTabView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         meeting = get_object_or_404(ReviewMeeting, pk=kwargs['pk'])
 
-        # Get issues for the team with action counts
-        issues = Issue.objects.filter(
-            team=meeting.team
+        # Get all issues for the team created BEFORE the review meeting date & time
+        # This includes issues from anywhere in the system (implement, review, line items, meeting level)
+        all_issues = Issue.objects.filter(
+            team=meeting.team,
+            created_at__lt=meeting.review_date  # Only issues created BEFORE this meeting
         ).select_related('reported_by', 'escalated_to_team').prefetch_related('related_actions')
 
-        # Add action counts to each issue
-        issues_with_counts = []
-        for issue in issues:
-            total_actions = issue.related_actions.count()
-            completed_actions = issue.related_actions.filter(status='completed').count()
+        # Separate into:
+        # - Old Issues: Issues that have actions initiated (action_count > 0)
+        # - New Issues: Issues that don't have any actions yet (action_count = 0)
+        old_issues_list = []  # Issues with actions
+        new_issues_list = []  # Issues without actions
+
+        for issue in all_issues:
+            # Calculate action counts from ReviewActionItems (created via parameter action popup)
+            # Check for ReviewActionItems where parameter_type='issue' and parameter_id=issue.id
+            review_action_items = ReviewActionItem.objects.filter(
+                parameter_type='issue',
+                parameter_id=str(issue.id)
+            )
+            total_actions = review_action_items.count()
+            completed_actions = review_action_items.filter(status='completed').count()
+
+            # Also check for direct Action objects linked to this issue (from implement pages)
+            direct_actions = issue.related_actions.count()
+            direct_completed = issue.related_actions.filter(status='completed').count()
+
+            # Combine both counts
+            total_actions += direct_actions
+            completed_actions += direct_completed
+
             issue.action_count = f"{completed_actions}/{total_actions}" if total_actions > 0 else "0/0"
-            issues_with_counts.append(issue)
+
+            # Categorize based on whether actions have been initiated
+            if total_actions > 0:
+                old_issues_list.append(issue)  # Has actions - goes to "Old Issues"
+            else:
+                new_issues_list.append(issue)  # No actions yet - goes to "New Issues"
 
         # Get teams where user is a member (for escalation)
         from django.db.models import Q
@@ -971,7 +993,8 @@ class IssuesTabView(LoginRequiredMixin, TemplateView):
 
         context.update({
             'meeting': meeting,
-            'issues': issues_with_counts,
+            'old_issues': old_issues_list,
+            'new_issues': new_issues_list,
             'user_teams': user_teams,
         })
         return context
@@ -1069,6 +1092,7 @@ class ReviewNotesView(LoginRequiredMixin, TemplateView):
                     'success': True,
                     'note': {
                         'review_note': note.content,
+                        'content': note.content,
                         'title': note.title
                     }
                 })
@@ -1175,8 +1199,16 @@ class DecisionsView(LoginRequiredMixin, TemplateView):
                 decision.decision = decision_text
                 decision.updated_at = timezone.now()
                 decision.save()
+                return JsonResponse({
+                    'success': True,
+                    'decision': {
+                        'id': decision.id,
+                        'decision': decision.decision,
+                        'serial_number': decision.serial_number
+                    }
+                })
             except ReviewDecision.DoesNotExist:
-                pass
+                return JsonResponse({'success': False, 'error': 'Decision not found'})
 
         elif action == 'delete':
             decision_id = request.POST.get('decision_id')
@@ -1616,16 +1648,18 @@ class ParameterActionItemsView(LoginRequiredMixin, TemplateView):
             })
             return context
 
-        # Get action items for this specific parameter
+        # Get action items for this specific parameter from ALL review meetings
+        # This ensures we see historical actions from previous meetings
         try:
-            action_items = meeting.review_action_items.filter(
+            action_items = ReviewActionItem.objects.filter(
+                review_meeting__team=meeting.team,
                 parameter_type=parameter_type,
                 parameter_id=parameter_id
-            )
+            ).order_by('-created_at')
         except Exception as e:
             print(f"Error filtering action items: {e}")
             # Fallback to all action items if parameter fields don't exist yet
-            action_items = meeting.review_action_items.none()
+            action_items = ReviewActionItem.objects.none()
 
         # Calculate action summary statistics
         action_summary = {
@@ -1640,8 +1674,11 @@ class ParameterActionItemsView(LoginRequiredMixin, TemplateView):
         User = get_user_model()
         team_members = User.objects.filter(is_active=True).order_by('first_name', 'last_name')
 
-        # Get all active teams
-        available_teams = Team.objects.filter(is_active=True).order_by('name')
+        # Get teams where the logged-in user is the manager
+        available_teams = Team.objects.filter(
+            is_active=True,
+            manager=self.request.user
+        ).order_by('name')
 
         # Get parameter details based on type
         parameter_name = self.get_parameter_name(parameter_type, parameter_id)
@@ -1674,6 +1711,10 @@ class ParameterActionItemsView(LoginRequiredMixin, TemplateView):
                 from plans.models import PPIParameter
                 param = PPIParameter.objects.get(id=parameter_id)
                 return param.name
+            elif parameter_type == 'issue':
+                from implement.models import Issue
+                issue = Issue.objects.get(id=parameter_id)
+                return f"Issue #{issue.id}: {issue.title}"
         except Exception as e:
             print(f"Error getting parameter name: {e}")
             return f"{parameter_type.upper()} Parameter"
@@ -1719,6 +1760,20 @@ class ParameterActionItemsView(LoginRequiredMixin, TemplateView):
                     return JsonResponse({'success': False, 'error': f'Error creating action item: {str(e)}'})
             else:
                 return JsonResponse({'success': False, 'error': 'All required fields must be provided'})
+
+        elif action == 'delete':
+            action_item_id = request.POST.get('action_item_id')
+            if action_item_id:
+                try:
+                    action_item = ReviewActionItem.objects.get(id=action_item_id, review_meeting=meeting)
+                    action_item.delete()
+                    return JsonResponse({'success': True, 'message': 'Action item deleted successfully'})
+                except ReviewActionItem.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Action item not found'})
+                except Exception as e:
+                    return JsonResponse({'success': False, 'error': f'Error deleting action item: {str(e)}'})
+            else:
+                return JsonResponse({'success': False, 'error': 'Action item ID is required'})
 
         return JsonResponse({'success': False, 'error': 'Invalid action'})
 
@@ -1769,6 +1824,15 @@ class ParameterIssuesView(LoginRequiredMixin, TemplateView):
                 issues = issues.filter(ppi_project_id=parameter_id)
             elif parameter_type == 'improvement':
                 issues = issues.filter(improvement_project_id=parameter_id)
+        else:
+            # No parameter specified - show only meeting-level issues
+            # (issues not linked to any FPI/GPI/PPI/Improvement parameter)
+            issues = issues.filter(
+                fpi_parameter__isnull=True,
+                gpi_parameter__isnull=True,
+                ppi_project__isnull=True,
+                improvement_project__isnull=True
+            )
 
         issues = issues.select_related('reported_by', 'escalated_to_team').prefetch_related('related_actions')
 

@@ -60,9 +60,9 @@ console.log('###############################################');
 
                         <!-- Weekly Numbers Section -->
                         <div id="weeklyNumbersSection" class="numbers-section">
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-hover">
-                                    <thead class="table-dark">
+                            <div class="table-container" style="max-height: 400px; overflow-y: auto; overflow-x: auto; border: 2px solid red;">
+                                <table class="table table-bordered table-hover" style="margin-bottom: 0;">
+                                    <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
                                         <tr>
                                             <th>Team</th>
                                             <th>GPI (including unit of measure)</th>
@@ -113,7 +113,9 @@ console.log('###############################################');
                                                           placeholder="Add comments..."
                                                           {% if gpi.is_locked %}disabled title="Data locked - Weekly review has been saved"{% endif %}>{{ gpi.explanation|default:"" }}</textarea>
                                             </td>
-                                            <td>{{ gpi.responsible_user.get_full_name }}</td>
+                                            <td>
+                                                {{ gpi.quarterly_plan.team.name }} - {{ gpi.responsible_user.get_full_name }}
+                                            </td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
                                                     <button class="btn btn-outline-success" onclick="openParameterActions('gpi', {{ gpi.id }}, {{ current_week_in_quarter }}, null)"
@@ -125,8 +127,7 @@ console.log('###############################################');
                                                         <i class="fas fa-exclamation-triangle"></i>
                                                     </button>
                                                     <button class="btn btn-outline-warning" onclick="reassignParameter({{ gpi.id }})"
-                                                            data-bs-toggle="tooltip" title="Reassign"
-                                                            {% if gpi.responsible_user != user %}disabled{% endif %}>
+                                                            data-bs-toggle="tooltip" title="Reassign">
                                                         <i class="fas fa-user-edit"></i>
                                                     </button>
                                                     <button class="btn btn-outline-info" onclick="viewComments({{ gpi.id }})"
@@ -222,7 +223,9 @@ console.log('###############################################');
                                                           placeholder="Add comments..."
                                                           {% if param.is_locked %}disabled title="Data locked - Monthly review has been saved"{% endif %}>{{ param.explanation|default:"" }}</textarea>
                                             </td>
-                                            <td>{{ param.responsible_user.get_full_name }}</td>
+                                            <td>
+                                                {{ param.quarterly_plan.team.name }} - {{ param.responsible_user.get_full_name }}
+                                            </td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
                                                     <button class="btn btn-outline-success" onclick="openParameterActions('{% if param.main_head %}fpi{% else %}gpi{% endif %}', {{ param.id }}, null, {{ current_month_in_quarter }})"
@@ -234,8 +237,7 @@ console.log('###############################################');
                                                         <i class="fas fa-exclamation-triangle"></i>
                                                     </button>
                                                     <button class="btn btn-outline-warning" onclick="reassignParameter({{ param.id }}, '{% if param.main_head %}fpi{% else %}gpi{% endif %}')"
-                                                            data-bs-toggle="tooltip" title="Reassign"
-                                                            {% if param.responsible_user != user %}disabled{% endif %}>
+                                                            data-bs-toggle="tooltip" title="Reassign">
                                                         <i class="fas fa-user-edit"></i>
                                                     </button>
                                                     <button class="btn btn-outline-info" onclick="viewComments({{ param.id }}, '{% if param.main_head %}fpi{% else %}gpi{% endif %}')"
@@ -266,9 +268,9 @@ console.log('###############################################');
 
                         <!-- Action Buttons -->
                         <!-- Projects Grid -->
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-hover">
-                                <thead class="table-dark">
+                        <div style="max-height: 400px; overflow-y: auto; overflow-x: auto; border: 2px solid red;">
+                            <table class="table table-bordered table-hover" style="margin-bottom: 0;">
+                                <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
                                     <tr>
                                         <th>Team</th>
                                         <th>PPI (Project) Name</th>
@@ -340,10 +342,10 @@ console.log('###############################################');
                                             {% endif %}
                                         </td>
                                         <td>
-                                            {% if project.responsible_user == user %}
-                                                Self
+                                            {% if project.project_type == 'Improvement' %}
+                                                {{ project.upload.team.name }} - {{ project.responsible_user.get_full_name }}
                                             {% else %}
-                                                {{ project.responsible_user.get_full_name }}
+                                                {{ project.quarterly_plan.team.name }} - {{ project.responsible_user.get_full_name }}
                                             {% endif %}
                                         </td>
                                         <td>
@@ -433,9 +435,9 @@ console.log('###############################################');
                         </div>
                         <hr>
 
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-hover">
-                                <thead class="table-dark">
+                        <div style="max-height: 400px; overflow-y: auto; overflow-x: auto; border: 2px solid red;">
+                            <table class="table table-bordered table-hover" style="margin-bottom: 0;">
+                                <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
                                     <tr>
                                         <th>Team</th>
                                         <th>Source</th>
@@ -451,9 +453,14 @@ console.log('###############################################');
                                 <tbody>
                                     {% for action in actions %}
                                     <tr class="{% if action.original_due_date < today and action.status != 'completed' %}table-warning{% endif %}">
-                                        <td>{{ action.team.name }}</td>
+                                        <td>{{ action.team.name|default:"-" }}</td>
                                         <td>
-                                            <small class="text-muted">{{ action.source_display }}</small>
+                                            <span class="badge bg-{% if action.action_type == 'review' %}warning{% else %}info{% endif %}">
+                                                {{ action.source_display|default:"-" }}
+                                            </span>
+                                            {% if action.action_type == 'review' and action.source_detail %}
+                                                <br><small class="text-muted">{{ action.source_detail|truncatechars:50 }}</small>
+                                            {% endif %}
                                         </td>
                                         <td>
                                             <strong>{{ action.action|truncatechars:80 }}</strong>
@@ -467,11 +474,7 @@ console.log('###############################################');
                                             </span>
                                         </td>
                                         <td>
-                                            {% if action.assigned_to == user %}
-                                                <strong>Me</strong>
-                                            {% else %}
-                                                {{ action.assigned_to.get_full_name }}
-                                            {% endif %}
+                                            {{ action.team.name }} - {{ action.assigned_to.get_full_name }}
                                         </td>
                                         <td>{{ action.original_due_date|date:"M d, Y" }}</td>
                                         <td>
@@ -734,6 +737,7 @@ function saveReassignment() {
     }
 
     formData.append('member_id', memberId);
+    formData.append('team_id', teamId);
     formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
 
     // Use different endpoint based on entity type

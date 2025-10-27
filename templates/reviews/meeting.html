@@ -52,8 +52,8 @@
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openDecisions()">
                 <i class="fas fa-gavel me-1"></i>Decisions
             </button>
-            <button type="button" class="btn btn-outline-warning btn-sm" onclick="openNewIssueModal()">
-                <i class="fas fa-exclamation-triangle me-1"></i>Create Issue
+            <button type="button" class="btn btn-outline-warning btn-sm" onclick="openGeneralIssues()">
+                <i class="fas fa-exclamation-triangle me-1"></i>Issues
             </button>
             <button type="button" class="btn btn-outline-info btn-sm" onclick="loadActionItems()">
                 <i class="fas fa-tasks me-1"></i>Action Items
@@ -792,6 +792,61 @@ function openActionItems() {
         console.error('Error in openActionItems:', error);
         alert('Error opening action items: ' + error.message);
     }
+}
+
+function openGeneralIssues() {
+    console.log('openGeneralIssues called');
+
+    const modalElement = document.getElementById('issuesModal');
+    const content = document.getElementById('issuesContent');
+
+    if (!modalElement || !content) {
+        console.error('Issues modal elements not found');
+        return;
+    }
+
+    // Show the modal
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+
+    // Show loading spinner
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading issues...</p>
+        </div>
+    `;
+
+    // Load the parameter issues popup content (from the reviews app)
+    fetch('{% url "reviews:issues" meeting.pk %}')
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute scripts in loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.head.appendChild(newScript);
+                document.head.removeChild(newScript);
+            });
+
+            console.log('Issues popup loaded successfully');
+        })
+        .catch(error => {
+            console.error('Error loading issues:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading issues: ${error.message}</p>
+                </div>
+            `;
+        });
 }
 
 // Flag to track if we're adding action from within Action Items popup - make it globally accessible

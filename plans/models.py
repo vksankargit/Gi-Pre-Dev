@@ -163,6 +163,7 @@ class FPIParameter(models.Model):
     main_head = models.CharField(max_length=20, choices=MAIN_HEADS)
     sub_head = models.CharField(max_length=255)
     responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    assigned_team = models.ForeignKey('organizations.Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_fpi_parameters', help_text="Team selected during reassignment")
     annual_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     q1_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     q2_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
@@ -214,6 +215,7 @@ class GPIParameter(models.Model):
     tracking_type = models.CharField(max_length=10, choices=TRACKING_TYPES)
     indicator_type = models.CharField(max_length=10, choices=INDICATOR_TYPES)
     responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    assigned_team = models.ForeignKey('organizations.Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_gpi_parameters', help_text="Team selected during reassignment")
     annual_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     q1_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     q2_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
@@ -270,6 +272,37 @@ class PPIProject(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.quarterly_plan}"
+
+    @property
+    def completion_percentage(self):
+        """
+        Calculate completion percentage based on completed weeks vs total planned weeks.
+        Formula: (# of weeks with completed activities / # of weeks with planned activities) * 100
+        Returns integer percentage (0-100).
+        """
+        # Get all tasks for this project
+        all_tasks = self.tasks.all()
+
+        if not all_tasks.exists():
+            return 0
+
+        # Get unique week numbers that have tasks
+        weeks_with_tasks = all_tasks.values_list('week_number', flat=True).distinct()
+        total_weeks = len(weeks_with_tasks)
+
+        if total_weeks == 0:
+            return 0
+
+        # Count weeks where all tasks are completed
+        completed_weeks = 0
+        for week_num in weeks_with_tasks:
+            week_tasks = all_tasks.filter(week_number=week_num)
+            if week_tasks.filter(is_completed=True).count() == week_tasks.count():
+                completed_weeks += 1
+
+        # Calculate percentage and round to integer
+        percentage = (completed_weeks / total_weeks) * 100
+        return round(percentage)
 
 
 class PPITask(models.Model):

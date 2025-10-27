@@ -4,6 +4,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.db import transaction
+from django.db import models
+from django.db.models import Q
 import json
 from datetime import datetime
 
@@ -177,6 +179,9 @@ class CreateIssueAPIView(LoginRequiredMixin, View):
             # Get week/month tracking data (for My Numbers)
             week_number = request.POST.get('week_number', '').strip()
             month_number = request.POST.get('month_number', '').strip()
+
+            # Debug logging commented out to avoid Unicode encoding issues
+            # print(f"DEBUG CREATE ISSUE: Title='{title}', Team={team_id}, ParamType={parameter_type}, ParamID={parameter_id}, Week={week_number}, Month={month_number}")
 
             # Validation
             if not title:
@@ -554,7 +559,7 @@ class ParameterActionsAPIView(LoginRequiredMixin, View):
             # Get the parameter and its actions
             if parameter_type == 'gpi':
                 parameter = GPIParameter.objects.select_related('quarterly_plan__team').get(id=parameter_id)
-                actions = Action.objects.filter(gpi_parameter=parameter).select_related('assigned_to')
+                actions = Action.objects.filter(gpi_parameter=parameter).select_related('assigned_to', 'team')
 
                 # Filter by week/month if provided
                 if week_number:
@@ -565,7 +570,7 @@ class ParameterActionsAPIView(LoginRequiredMixin, View):
                 parameter_name = parameter.name
             elif parameter_type == 'fpi':
                 parameter = FPIParameter.objects.select_related('quarterly_plan__team').get(id=parameter_id)
-                actions = Action.objects.filter(fpi_parameter=parameter).select_related('assigned_to')
+                actions = Action.objects.filter(fpi_parameter=parameter).select_related('assigned_to', 'team')
 
                 # Filter by month if provided (FPI is monthly)
                 if month_number:
@@ -584,10 +589,13 @@ class ParameterActionsAPIView(LoginRequiredMixin, View):
                 # Use revised_due_date if available, otherwise original_due_date
                 due_date = action.revised_due_date if action.revised_due_date else action.original_due_date
 
+                # Format assigned to with team name
+                assigned_to_display = f"{action.team.name} - {action.assigned_to.get_full_name() or action.assigned_to.username}" if action.team else (action.assigned_to.get_full_name() or action.assigned_to.username)
+
                 actions_data.append({
                     'id': action.id,
                     'description': action.action,  # Field is called 'action', not 'description'
-                    'assigned_to_name': action.assigned_to.get_full_name() or action.assigned_to.username,
+                    'assigned_to_name': assigned_to_display,
                     'due_date': due_date.strftime('%Y-%m-%d') if due_date else None,
                     'status': action.status,
                     'status_display': action.get_status_display(),
@@ -622,6 +630,9 @@ class ParameterIssuesAPIView(LoginRequiredMixin, View):
         week_number = request.GET.get('week_number')
         month_number = request.GET.get('month_number')
 
+        # Debug logging commented out to avoid Unicode encoding issues with special characters
+        # print(f"DEBUG: ParameterIssuesAPIView - Type: {parameter_type}, ID: {parameter_id}, Week: {week_number}, Month: {month_number}")
+
         if not parameter_type or not parameter_id:
             return JsonResponse({
                 'success': False,
@@ -634,18 +645,56 @@ class ParameterIssuesAPIView(LoginRequiredMixin, View):
             # Get the parameter and its issues
             if parameter_type == 'gpi':
                 parameter = GPIParameter.objects.select_related('quarterly_plan__team').get(id=parameter_id)
-                issues = Issue.objects.filter(gpi_parameter=parameter).select_related('team', 'reported_by')
+
+                # Get user's teams
+                from organizations.models import TeamMember
+                user_teams = list(Team.objects.filter(
+                    Q(manager=request.user) |
+                    Q(members__member=request.user, members__is_active=True)
+                ).values_list('id', flat=True))
+
+                # Debug logging commented out
+                # print(f"DEBUG: User {request.user.username} belongs to teams: {user_teams}")
+
+                # Filter issues to only show those from user's teams
+                issues = Issue.objects.filter(
+                    gpi_parameter=parameter,
+                    team_id__in=user_teams
+                ).select_related('team', 'reported_by')
+                # print(f"DEBUG: Found {issues.count()} total issues for GPI {parameter_id} in user's teams")
+
+                # Debug: Print ALL issues BEFORE week/month filtering
+                # for issue in issues:
+                #     print(f"DEBUG BEFORE FILTER: Issue #{issue.id}: '{issue.title}', Team: {issue.team.name}, Week: {issue.week_number}")
 
                 # Filter by week/month if provided
                 if week_number:
                     issues = issues.filter(week_number=int(week_number))
+                    # print(f"DEBUG: After week filter ({week_number}): {issues.count()} issues")
                 if month_number:
                     issues = issues.filter(month_number=int(month_number))
+                    # print(f"DEBUG: After month filter ({month_number}): {issues.count()} issues")
+
+                # Debug: Print all issues with their details
+                # for issue in issues:
+                #     print(f"DEBUG: Issue #{issue.id}: {issue.title}, Team: {issue.team.name}, Week: {issue.week_number}, Status: {issue.status}")
 
                 parameter_name = parameter.name
             elif parameter_type == 'fpi':
                 parameter = FPIParameter.objects.select_related('quarterly_plan__team').get(id=parameter_id)
-                issues = Issue.objects.filter(fpi_parameter=parameter).select_related('team', 'reported_by')
+
+                # Get user's teams
+                from organizations.models import TeamMember
+                user_teams = list(Team.objects.filter(
+                    Q(manager=request.user) |
+                    Q(members__member=request.user, members__is_active=True)
+                ).values_list('id', flat=True))
+
+                # Filter issues to only show those from user's teams
+                issues = Issue.objects.filter(
+                    fpi_parameter=parameter,
+                    team_id__in=user_teams
+                ).select_related('team', 'reported_by')
 
                 # Filter by month if provided (FPI is monthly)
                 if month_number:
@@ -719,12 +768,18 @@ class ProjectActionsAPIView(LoginRequiredMixin, View):
 
             actions_data = []
             for action in actions:
+                # Format assigned to with team name
+                if action.assigned_to:
+                    assigned_to_display = f"{action.team.name} - {action.assigned_to.get_full_name()}" if action.team else action.assigned_to.get_full_name()
+                else:
+                    assigned_to_display = 'Unassigned'
+
                 actions_data.append({
                     'id': action.id,
                     'action': action.action,
                     'priority': action.priority,
                     'priority_display': action.get_priority_display(),
-                    'assigned_to_name': action.assigned_to.get_full_name() if action.assigned_to else 'Unassigned',
+                    'assigned_to_name': assigned_to_display,
                     'original_due_date': action.original_due_date.strftime('%Y-%m-%d') if action.original_due_date else None,
                     'status': action.status,
                     'status_display': action.get_status_display()
@@ -794,46 +849,6 @@ class ProjectIssuesAPIView(LoginRequiredMixin, View):
             })
 
 
-class ActionActionsAPIView(LoginRequiredMixin, View):
-    def get(self, request):
-        action_id = request.GET.get('action_id')
-
-        if not action_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'Missing action_id'
-            })
-
-        try:
-            parent_action = Action.objects.get(id=action_id)
-            # Fetch actions that have this action as parent_action
-            actions = Action.objects.filter(parent_action=parent_action).select_related('assigned_to', 'team')
-
-            actions_data = []
-            for action in actions:
-                actions_data.append({
-                    'id': action.id,
-                    'action': action.action,
-                    'priority': action.priority,
-                    'priority_display': action.get_priority_display(),
-                    'assigned_to_name': action.assigned_to.get_full_name() if action.assigned_to else 'Unassigned',
-                    'original_due_date': action.original_due_date.strftime('%Y-%m-%d') if action.original_due_date else None,
-                    'status': action.status,
-                    'status_display': action.get_status_display()
-                })
-
-            return JsonResponse({
-                'success': True,
-                'actions': actions_data
-            })
-
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': f'Error fetching actions: {str(e)}'
-            })
-
-
 class ActionIssuesAPIView(LoginRequiredMixin, View):
     def get(self, request):
         action_id = request.GET.get('action_id')
@@ -891,12 +906,18 @@ class ActionActionsAPIView(LoginRequiredMixin, View):
 
             actions_data = []
             for action in actions:
+                # Format assigned to with team name
+                if action.assigned_to:
+                    assigned_to_display = f"{action.team.name} - {action.assigned_to.get_full_name()}" if action.team else action.assigned_to.get_full_name()
+                else:
+                    assigned_to_display = 'Unassigned'
+
                 actions_data.append({
                     'id': action.id,
                     'action': action.action,
                     'priority': action.priority,
                     'priority_display': action.get_priority_display(),
-                    'assigned_to_name': action.assigned_to.get_full_name() if action.assigned_to else 'Unassigned',
+                    'assigned_to_name': assigned_to_display,
                     'original_due_date': action.original_due_date.strftime('%Y-%m-%d') if action.original_due_date else None,
                     'status': action.status,
                     'status_display': action.get_status_display()

@@ -106,6 +106,7 @@ class ReviewActionItem(models.Model):
         ('fpi', 'FPI'),
         ('gpi', 'GPI'),
         ('ppi', 'PPI'),
+        ('issue', 'Issue'),
     ]
 
     review_meeting = models.ForeignKey(ReviewMeeting, on_delete=models.CASCADE, related_name='review_action_items')
@@ -130,7 +131,7 @@ class ReviewActionItem(models.Model):
         return f"{self.action_description[:50]} - {self.assigned_to.get_full_name()}"
 
     def get_parameter_name(self):
-        """Get the name of the linked parameter (FPI/GPI/PPI)"""
+        """Get the name of the linked parameter (FPI/GPI/PPI/Issue)"""
         if not self.parameter_type or not self.parameter_id:
             return None
 
@@ -150,6 +151,10 @@ class ReviewActionItem(models.Model):
                 from plans.models import PPIProject
                 param = PPIProject.objects.get(id=self.parameter_id)
                 return param.name
+            elif self.parameter_type == 'issue':
+                from implement.models import Issue
+                issue = Issue.objects.get(id=self.parameter_id)
+                return f"Issue #{issue.id}: {issue.title}"
         except Exception as e:
             return f"ID: {self.parameter_id}"
 
