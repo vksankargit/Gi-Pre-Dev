@@ -301,14 +301,61 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         for gpi in weekly_numbers:
             # Use the already calculated current_week_in_quarter (1-13)
             # This matches the period_number in GPIMilestone
-            last_week_in_quarter = current_week_in_quarter - 1 if current_week_in_quarter > 1 else 0
 
-            # Get milestone values for last week and current week
-            last_week_milestone = gpi.milestones.filter(period_number=last_week_in_quarter).first()
+            # Handle quarter boundary: if current week is 1, last week is in previous quarter
+            if current_week_in_quarter > 1:
+                # Last week is in the same quarter
+                last_week_in_quarter = current_week_in_quarter - 1
+                last_week_milestone = gpi.milestones.filter(period_number=last_week_in_quarter).first()
+                gpi.last_week_budget = last_week_milestone.budget_value if last_week_milestone else 0
+
+                # For last_week_goal within same quarter, use the stored value from weekly_rollover
+                # This was set by the rollover command copying previous week's current_week_plan
+                if not gpi.last_week_goal:
+                    gpi.last_week_goal = 0
+            else:
+                # Last week is in the previous quarter (week 13)
+                # Get previous quarter's plan
+                previous_quarter_num = current_quarter_num - 1 if current_quarter_num > 1 else 4
+
+                # Determine FY for previous quarter
+                if current_quarter_num == 1:
+                    # Q1, so previous Q4 is from previous FY
+                    prev_fy_start_year = fy_start_year - 1
+                    prev_fy_end_year = prev_fy_start_year + 1
+                    prev_fy_string = f"FY {prev_fy_start_year % 100:02d}-{prev_fy_end_year % 100:02d}"
+                    prev_financial_year = FinancialYear.objects.filter(year=prev_fy_string).first()
+                else:
+                    # Previous quarter is in same FY
+                    prev_financial_year = current_financial_year
+
+                # Get GPI parameter from previous quarter
+                if prev_financial_year:
+                    prev_quarter_gpi = GPIParameter.objects.filter(
+                        quarterly_plan__team=gpi.quarterly_plan.team,
+                        quarterly_plan__quarter=previous_quarter_num,
+                        quarterly_plan__financial_year=prev_financial_year,
+                        name=gpi.name,  # Match by name to find same parameter
+                        tracking_type='weekly'
+                    ).first()
+
+                    if prev_quarter_gpi:
+                        # Get week 13 budget from previous quarter
+                        last_week_milestone = prev_quarter_gpi.milestones.filter(period_number=13).first()
+                        gpi.last_week_budget = last_week_milestone.budget_value if last_week_milestone else 0
+
+                        # Get week 13 goal (current_week_plan) from previous quarter
+                        # This is the goal that was entered in week 13 of the previous quarter
+                        gpi.last_week_goal = prev_quarter_gpi.current_week_plan if prev_quarter_gpi.current_week_plan else 0
+                    else:
+                        gpi.last_week_budget = 0
+                        gpi.last_week_goal = 0
+                else:
+                    gpi.last_week_budget = 0
+                    gpi.last_week_goal = 0
+
+            # Get current week milestone from current quarter
             current_week_milestone = gpi.milestones.filter(period_number=current_week_in_quarter).first()
-
-            # Add budget values to the GPI object
-            gpi.last_week_budget = last_week_milestone.budget_value if last_week_milestone else 0
             gpi.current_week_budget = current_week_milestone.budget_value if current_week_milestone else 0
 
             enhanced_weekly_numbers.append(gpi)
@@ -319,25 +366,104 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         next_month = month_num + 1 if month_num < 12 else 1
 
         # Calculate quarterly month numbers (1-3 within quarter)
-        quarter_start_month = ((month_num - 1) // 3) * 3 + 1  # Jan=1, Apr=4, Jul=7, Oct=10
-        current_quarter_month = month_num - quarter_start_month + 1  # 1-3
-        last_quarter_month = current_quarter_month - 1 if current_quarter_month > 1 else 3
+        # For financial year: Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar
+        # current_month_in_quarter is already calculated above (1-3)
 
         enhanced_monthly_numbers = []
         for param in monthly_numbers:
             # Check if this is FPI or GPI parameter
-            if hasattr(param, 'main_head'):  # FPI parameter
-                # Get FPI milestone values
-                last_month_milestone = param.milestones.filter(month_number=last_quarter_month).first()
-                current_month_milestone = param.milestones.filter(month_number=current_quarter_month).first()
-            else:  # GPI parameter
-                # Get GPI milestone values (for monthly GPI, use period_number as month)
-                last_month_milestone = param.milestones.filter(period_number=last_quarter_month).first()
-                current_month_milestone = param.milestones.filter(period_number=current_quarter_month).first()
+            is_fpi = hasattr(param, 'main_head')
 
-            # Add budget values to the parameter object
-            param.last_month_budget = last_month_milestone.budget_value if last_month_milestone else 0
-            param.current_month_budget = current_month_milestone.budget_value if current_month_milestone else 0
+            # Handle quarter boundary: if current month is first month of quarter, last month is in previous quarter
+            if current_month_in_quarter > 1:
+                # Last month is in the same quarter
+                last_quarter_month = current_month_in_quarter - 1
+
+                if is_fpi:
+                    # Get FPI milestone values from current quarter
+                    last_month_milestone = param.milestones.filter(month_number=last_quarter_month).first()
+                    current_month_milestone = param.milestones.filter(month_number=current_month_in_quarter).first()
+                else:
+                    # Get GPI milestone values (for monthly GPI, use period_number as month)
+                    last_month_milestone = param.milestones.filter(period_number=last_quarter_month).first()
+                    current_month_milestone = param.milestones.filter(period_number=current_month_in_quarter).first()
+
+                param.last_month_budget = last_month_milestone.budget_value if last_month_milestone else 0
+                param.current_month_budget = current_month_milestone.budget_value if current_month_milestone else 0
+
+                # For last_month_goal within same quarter, use the stored value from monthly_rollover
+                # This was set by the rollover command copying previous month's current_month_plan
+                if not param.last_month_goal:
+                    param.last_month_goal = 0
+            else:
+                # Last month is in the previous quarter (month 3 of previous quarter)
+                # Get previous quarter's plan
+                previous_quarter_num = current_quarter_num - 1 if current_quarter_num > 1 else 4
+
+                # Determine FY for previous quarter
+                if current_quarter_num == 1:
+                    # Q1, so previous Q4 is from previous FY
+                    prev_fy_start_year = fy_start_year - 1
+                    prev_fy_end_year = prev_fy_start_year + 1
+                    prev_fy_string = f"FY {prev_fy_start_year % 100:02d}-{prev_fy_end_year % 100:02d}"
+                    prev_financial_year = FinancialYear.objects.filter(year=prev_fy_string).first()
+                else:
+                    # Previous quarter is in same FY
+                    prev_financial_year = current_financial_year
+
+                # Get parameter from previous quarter
+                if prev_financial_year:
+                    if is_fpi:
+                        # Get FPI parameter from previous quarter by matching main_head and sub_head
+                        prev_quarter_param = FPIParameter.objects.filter(
+                            quarterly_plan__team=param.quarterly_plan.team,
+                            quarterly_plan__quarter=previous_quarter_num,
+                            quarterly_plan__financial_year=prev_financial_year,
+                            main_head=param.main_head,
+                            sub_head=param.sub_head
+                        ).first()
+
+                        if prev_quarter_param:
+                            # Get month 3 budget from previous quarter
+                            last_month_milestone = prev_quarter_param.milestones.filter(month_number=3).first()
+                            param.last_month_budget = last_month_milestone.budget_value if last_month_milestone else 0
+
+                            # Get month 3 goal (current_month_plan) from previous quarter
+                            param.last_month_goal = prev_quarter_param.current_month_plan if prev_quarter_param.current_month_plan else 0
+                        else:
+                            param.last_month_budget = 0
+                            param.last_month_goal = 0
+                    else:
+                        # Get GPI parameter from previous quarter by matching name
+                        prev_quarter_param = GPIParameter.objects.filter(
+                            quarterly_plan__team=param.quarterly_plan.team,
+                            quarterly_plan__quarter=previous_quarter_num,
+                            quarterly_plan__financial_year=prev_financial_year,
+                            name=param.name,
+                            tracking_type='monthly'
+                        ).first()
+
+                        if prev_quarter_param:
+                            # Get month 3 budget from previous quarter (using period_number)
+                            last_month_milestone = prev_quarter_param.milestones.filter(period_number=3).first()
+                            param.last_month_budget = last_month_milestone.budget_value if last_month_milestone else 0
+
+                            # Get month 3 goal (current_month_plan) from previous quarter
+                            param.last_month_goal = prev_quarter_param.current_month_plan if prev_quarter_param.current_month_plan else 0
+                        else:
+                            param.last_month_budget = 0
+                            param.last_month_goal = 0
+                else:
+                    param.last_month_budget = 0
+                    param.last_month_goal = 0
+
+                # Current month budget from current quarter (month 1)
+                if is_fpi:
+                    current_month_milestone = param.milestones.filter(month_number=1).first()
+                else:
+                    current_month_milestone = param.milestones.filter(period_number=1).first()
+
+                param.current_month_budget = current_month_milestone.budget_value if current_month_milestone else 0
 
             enhanced_monthly_numbers.append(param)
 
