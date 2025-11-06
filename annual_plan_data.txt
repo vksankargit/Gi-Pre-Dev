@@ -1,0 +1,161 @@
+================================================================================
+ANNUAL PLAN: Team 2 - FY 25-26
+File: 01 Annual Plan - Owner WoW_With Data (1).xlsx
+Status: successful
+Uploaded by: Ravi on 2025-10-12 00:59
+================================================================================
+
+FPI PARAMETERS:
+  Total FPIs: 11
+
+  [Revenue] Domestic
+    Annual Goal: 1200.00
+    Q1: 240.00, Q2: 300.00, Q3: 300.00, Q4: 360.00
+    Responsible: Ravi
+
+  [Revenue] Exports
+    Annual Goal: 800.00
+    Q1: 160.00, Q2: 200.00, Q3: 200.00, Q4: 240.00
+    Responsible: Sankar
+
+  [Revenue] Services
+    Annual Goal: 500.00
+    Q1: 100.00, Q2: 125.00, Q3: 125.00, Q4: 150.00
+
+  [Revenue] Materials
+    Annual Goal: 600.00
+    Q1: 120.00, Q2: 150.00, Q3: 150.00, Q4: 180.00
+    Responsible: Ravi
+
+  [Revenue] Sub-contract
+    Annual Goal: 400.00
+    Q1: 80.00, Q2: 100.00, Q3: 100.00, Q4: 120.00
+    Responsible: Sankar
+
+  [Revenue] Other Variable
+    Annual Goal: 200.00
+    Q1: 40.00, Q2: 50.00, Q3: 50.00, Q4: 60.00
+
+  [Operating Expenses] Salaries
+    Annual Goal: 300.00
+    Q1: 60.00, Q2: 75.00, Q3: 75.00, Q4: 90.00
+    Responsible: Ravi
+
+  [Operating Expenses] Power
+    Annual Goal: 90.00
+    Q1: 18.00, Q2: 23.00, Q3: 23.00, Q4: 26.00
+    Responsible: Sankar
+
+  [Operating Expenses] Other Opex
+    Annual Goal: 120.00
+    Q1: 24.00, Q2: 30.00, Q3: 30.00, Q4: 36.00
+
+  [Other Expenses] Depreciation
+    Annual Goal: 40.00
+    Q1: 8.00, Q2: 10.00, Q3: 10.00, Q4: 12.00
+    Responsible: Ravi
+
+  [Other Expenses] Interest
+    Annual Goal: 20.00
+    Q1: 4.00, Q2: 5.00, Q3: 5.00, Q4: 6.00
+    Responsible: Sankar
+
+
+GPI PARAMETERS:
+  Total GPIs: 7
+
+  New Customer Acquisition
+    Indicator Type: Outcome
+    Tracking Type: Monthly
+    Cumulation Type: Sum
+    Annual Goal: 120.00
+    Q1: 25.00, Q2: 30.00, Q3: 30.00, Q4: 35.00
+    Responsible: Ravi
+
+  Sales Pipeline Value (₹ Cr)
+    Indicator Type: Activity
+    Tracking Type: Weekly
+    Cumulation Type: Sum
+    Annual Goal: 200.00
+    Q1: 45.00, Q2: 50.00, Q3: 50.00, Q4: 55.00
+
+  Customer Retention %
+    Indicator Type: Outcome
+    Tracking Type: Monthly
+    Cumulation Type: Average
+    Annual Goal: 85.00
+    Q1: 82.00, Q2: 83.00, Q3: 84.00, Q4: 85.00
+
+  Average Order Value (₹ Lakh)
+    Indicator Type: Activity
+    Tracking Type: Monthly
+    Cumulation Type: Average
+    Annual Goal: 5.00
+    Q1: 4.50, Q2: 4.70, Q3: 4.90, Q4: 5.00
+    Responsible: Ravi
+
+  On-time Project Delivery %
+    Indicator Type: Outcome
+    Tracking Type: Weekly
+    Cumulation Type: Average
+    Annual Goal: 95.00
+    Q1: 93.00, Q2: 94.00, Q3: 95.00, Q4: 95.00
+
+  Employee Training Hours
+    Indicator Type: Outcome
+    Tracking Type: Monthly
+    Cumulation Type: Sum
+    Annual Goal: 1000.00
+    Q1: 250.00, Q2: 250.00, Q3: 250.00, Q4: 250.00
+
+  NPS (Net Promoter Score)
+    Indicator Type: Activity
+    Tracking Type: Weekly
+    Cumulation Type: Average
+    Annual Goal: 60.00
+    Q1: 55.00, Q2: 57.00, Q3: 59.00, Q4: 60.00
+    Responsible: Ravi
+
+
+PPI PROJECTS:
+  Total PPIs: 6
+
+  ERP System Implementation
+    Completion Criteria: Go-Live by Q4
+    Duration: 2025-10-01 to 2025-11-30
+    Annual Goal: Go-Live by Q4
+    Q1: Requirement Finalization, Q2: Module Development, Q3: UAT & Training, Q4: Go-Live
+
+  New Product Launch
+    Completion Criteria: Launch in 3 markets
+    Duration: 2025-10-05 to 2025-12-05
+    Annual Goal: Launch in 3 markets
+    Q1: Market Research, Q2: Prototype & Pilot, Q3: Marketing Campaign, Q4: Launch
+    Responsible: Ravi
+
+  Export Expansion Project
+    Completion Criteria: Enter 5 new countries
+    Duration: 2025-10-15 to 2025-11-26
+    Annual Goal: Enter 5 new countries
+    Q1: Identify Partners, Q2: Compliance & Licensing, Q3: Pilot Shipments, Q4: Full Rollout
+
+  Digital Marketing Revamp
+    Completion Criteria: 30% Lead Growth
+    Duration: 2025-10-09 to 2025-11-01
+    Annual Goal: 30% Lead Growth
+    Q1: Agency Finalization, Q2: Campaign Setup, Q3: Performance Optimization, Q4: Scale-up
+
+  Manufacturing Automation
+    Completion Criteria: 20% Efficiency Gain
+    Duration: 2025-10-06 to 2025-11-22
+    Annual Goal: 20% Efficiency Gain
+    Q1: Vendor Selection, Q2: Equipment Installation, Q3: Testing & Training, Q4: Full Deployment
+
+  Customer Portal Upgrade
+    Completion Criteria: 1000 Active Users
+    Duration: 2025-10-13 to 2025-11-30
+    Annual Goal: 1000 Active Users
+    Q1: Design & Wireframes, Q2: Development, Q3: Beta Release, Q4: Final Release
+    Responsible: Ravi
+
+

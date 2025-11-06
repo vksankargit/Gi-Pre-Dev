@@ -1,0 +1,400 @@
+{% extends 'base.html' %}
+
+{% block title %}
+{% if object %}Edit Team{% else %}Create Team{% endif %} - PRE System
+{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{% url 'organizations:teams' %}" class="btn btn-outline-secondary me-3">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-users-cog me-2"></i>
+                {% if object %}Edit Team{% else %}New Team{% endif %}
+            </h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    {% if object %}Team Details{% else %}Team Information{% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {{ form.non_field_errors }}
+                    </div>
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">
+                            <i class="fas fa-users-cog me-2"></i>Team Name
+                        </label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.name.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.organization.id_for_label }}" class="form-label">
+                            <i class="fas fa-building me-2"></i>Organization
+                        </label>
+                        <select class="form-control" name="{{ form.organization.name }}" id="id_organization" required>
+                            <option value="">Select Organization</option>
+                            {% for choice in form.organization.field.choices %}
+                                {% if choice.0 %}
+                                <option value="{{ choice.0 }}" {% if form.organization.value == choice.0 %}selected{% endif %}>
+                                    {{ choice.1 }}
+                                </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                        {% if form.organization.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.organization.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.manager.id_for_label }}" class="form-label">
+                            <i class="fas fa-user-tie me-2"></i>Team Manager
+                        </label>
+                        <select class="form-control" name="{{ form.manager.name }}" id="id_manager" required>
+                            <option value="">Select Team Manager</option>
+                            {% for choice in form.manager.field.choices %}
+                                {% if choice.0 %}
+                                <option value="{{ choice.0 }}" {% if form.manager.value == choice.0 %}selected{% endif %}>
+                                    {{ choice.1 }}
+                                </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                        {% if form.manager.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.manager.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">
+                            Select a user who will manage this team.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="fas fa-users me-2"></i>Team Members
+                        </label>
+
+                        <!-- Search Input -->
+                        <div class="input-group mb-2">
+                            <span class="input-group-text">
+                                <i class="fas fa-search"></i>
+                            </span>
+                            <input type="text" class="form-control" id="memberSearch"
+                                   placeholder="Search members by name or email...">
+                            <button class="btn btn-outline-secondary" type="button" id="clearSearch">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <!-- Selected Members Display -->
+                        <div id="selectedMembersContainer" class="mb-2" style="display: none;">
+                            <div class="border rounded p-2 bg-light">
+                                <small class="text-muted">Selected Members:</small>
+                                <div id="selectedMembersList" class="mt-1"></div>
+                            </div>
+                        </div>
+
+                        <!-- Members List -->
+                        <div class="border rounded p-3" style="max-height: 300px; overflow-y: auto;" id="membersContainer">
+                            {% if form.members.field.choices %}
+                                {% for choice in form.members.field.choices %}
+                                    {% if choice.0 %}
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="{{ form.members.name }}"
+                                               value="{{ choice.0 }}" id="member_{{ choice.0 }}"
+                                               {% if choice.0 in form.members.value %}checked{% endif %}>
+                                        <label class="form-check-label" for="member_{{ choice.0 }}">
+                                            {{ choice.1 }}
+                                        </label>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                                <div id="noMembersFound" class="text-muted text-center py-3" style="display: none;">
+                                    <i class="fas fa-search me-2"></i>
+                                    No members found matching your search.
+                                </div>
+                            {% else %}
+                                <div class="text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    No users available for selection.
+                                </div>
+                            {% endif %}
+                        </div>
+                        {% if form.members.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.members.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">
+                            <i class="fas fa-exclamation-triangle text-warning me-1"></i>{{ form.members.help_text }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            {% if object %}Update Team{% else %}Create Team{% endif %}
+                        </button>
+                        <a href="{% url 'organizations:teams' %}" class="btn btn-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const organizationSelect = document.getElementById('id_organization');
+    const managerSelect = document.getElementById('id_manager');
+    const memberCheckboxes = document.querySelectorAll('input[name="{{ form.members.name }}"]');
+    const membersContainer = document.getElementById('membersContainer');
+    const memberSearch = document.getElementById('memberSearch');
+    const clearSearchBtn = document.getElementById('clearSearch');
+    const selectedMembersContainer = document.getElementById('selectedMembersContainer');
+    const selectedMembersList = document.getElementById('selectedMembersList');
+    const noMembersFound = document.getElementById('noMembersFound');
+
+    // Organization filtering functionality
+    function filterByOrganization(organizationId) {
+        if (!organizationId) {
+            // Clear both manager and members lists when no organization selected
+            clearManagerOptions();
+            clearMembersOptions();
+            return;
+        }
+
+        // Fetch users for the selected organization
+        fetch(`/organizations/ajax/get-users/${organizationId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateManagerOptions(data.users);
+                    updateMembersOptions(data.users);
+                } else {
+                    console.error('Failed to fetch users for organization');
+                    clearManagerOptions();
+                    clearMembersOptions();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching users:', error);
+                clearManagerOptions();
+                clearMembersOptions();
+            });
+    }
+
+    function clearManagerOptions() {
+        managerSelect.innerHTML = '<option value="">Select Team Manager</option>';
+    }
+
+    function clearMembersOptions() {
+        membersContainer.innerHTML = '<div class="text-muted"><i class="fas fa-info-circle me-2"></i>Please select an organization first.</div>';
+    }
+
+    function updateManagerOptions(users) {
+        managerSelect.innerHTML = '<option value="">Select Team Manager</option>';
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = user.name;
+            managerSelect.appendChild(option);
+        });
+    }
+
+    function updateMembersOptions(users) {
+        if (users.length === 0) {
+            membersContainer.innerHTML = '<div class="text-muted"><i class="fas fa-info-circle me-2"></i>No users available in this organization.</div>';
+            return;
+        }
+
+        let membersHtml = '';
+        users.forEach(user => {
+            membersHtml += `
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="{{ form.members.name }}"
+                           value="${user.id}" id="member_${user.id}">
+                    <label class="form-check-label" for="member_${user.id}">
+                        ${user.name}
+                    </label>
+                </div>
+            `;
+        });
+
+        membersHtml += '<div id="noMembersFound" class="text-muted text-center py-3" style="display: none;"><i class="fas fa-search me-2"></i>No members found matching your search.</div>';
+
+        membersContainer.innerHTML = membersHtml;
+
+        // Re-attach event listeners to new checkboxes
+        attachMemberEventListeners();
+    }
+
+    function attachMemberEventListeners() {
+        const newMemberCheckboxes = document.querySelectorAll('input[name="{{ form.members.name }}"]');
+        newMemberCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateSelectedMembersDisplay);
+        });
+    }
+
+    function updateMemberOptions() {
+        const selectedManagerId = managerSelect.value;
+        const currentMemberCheckboxes = document.querySelectorAll('input[name="{{ form.members.name }}"]');
+
+        currentMemberCheckboxes.forEach(checkbox => {
+            const checkboxContainer = checkbox.closest('.form-check');
+            const memberValue = checkbox.value;
+
+            if (selectedManagerId && memberValue === selectedManagerId) {
+                // Hide and uncheck manager from member list
+                checkboxContainer.style.display = 'none';
+                checkbox.checked = false;
+                checkbox.disabled = true;
+            } else {
+                // Show other members (if they match current search)
+                const searchTerm = memberSearch.value.toLowerCase();
+                const shouldShow = searchTerm === '' || matchesSearch(checkboxContainer, searchTerm);
+                checkboxContainer.style.display = shouldShow ? 'block' : 'none';
+                checkbox.disabled = false;
+            }
+        });
+
+        // Update search results display
+        updateSearchResults();
+    }
+
+    function matchesSearch(container, searchTerm) {
+        const label = container.querySelector('label');
+        const labelText = label ? label.textContent.toLowerCase() : '';
+        return labelText.includes(searchTerm);
+    }
+
+    function updateSearchResults() {
+        const searchTerm = memberSearch.value.toLowerCase();
+        let visibleCount = 0;
+        const currentMemberCheckboxes = document.querySelectorAll('input[name="{{ form.members.name }}"]');
+
+        currentMemberCheckboxes.forEach(checkbox => {
+            const checkboxContainer = checkbox.closest('.form-check');
+            const isManager = managerSelect.value && checkbox.value === managerSelect.value;
+
+            if (!isManager) {
+                const shouldShow = searchTerm === '' || matchesSearch(checkboxContainer, searchTerm);
+                checkboxContainer.style.display = shouldShow ? 'block' : 'none';
+                if (shouldShow) visibleCount++;
+            }
+        });
+
+        // Show/hide "no results" message
+        const currentNoMembersFound = document.getElementById('noMembersFound');
+        if (currentNoMembersFound) {
+            currentNoMembersFound.style.display = (visibleCount === 0 && searchTerm !== '') ? 'block' : 'none';
+        }
+    }
+
+    function updateSelectedMembersDisplay() {
+        const selectedMembers = [];
+        const currentMemberCheckboxes = document.querySelectorAll('input[name="{{ form.members.name }}"]');
+
+        currentMemberCheckboxes.forEach(checkbox => {
+            if (checkbox.checked) {
+                const label = checkbox.nextElementSibling.textContent.trim();
+                selectedMembers.push({
+                    id: checkbox.value,
+                    label: label,
+                    checkbox: checkbox
+                });
+            }
+        });
+
+        if (selectedMembers.length > 0) {
+            selectedMembersContainer.style.display = 'block';
+            selectedMembersList.innerHTML = selectedMembers.map(member =>
+                `<span class="badge bg-primary me-1 mb-1">
+                    ${member.label}
+                    <button type="button" class="btn-close btn-close-white ms-1"
+                            style="font-size: 0.7em;" onclick="unselectMember('${member.id}')"></button>
+                </span>`
+            ).join('');
+        } else {
+            selectedMembersContainer.style.display = 'none';
+        }
+    }
+
+    // Global function for removing selected members
+    window.unselectMember = function(memberId) {
+        const checkbox = document.getElementById('member_' + memberId);
+        if (checkbox) {
+            checkbox.checked = false;
+            updateSelectedMembersDisplay();
+        }
+    };
+
+    // Search functionality
+    memberSearch.addEventListener('input', function() {
+        updateSearchResults();
+    });
+
+    // Clear search
+    clearSearchBtn.addEventListener('click', function() {
+        memberSearch.value = '';
+        updateSearchResults();
+        memberSearch.focus();
+    });
+
+    // Track member selection changes (for initial load)
+    memberCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectedMembersDisplay);
+    });
+
+    // Organization change handler
+    organizationSelect.addEventListener('change', function() {
+        const selectedOrgId = this.value;
+        memberSearch.value = ''; // Clear search
+        selectedMembersContainer.style.display = 'none'; // Clear selected members
+        filterByOrganization(selectedOrgId);
+    });
+
+    // Initialize on page load
+    const initialOrgId = organizationSelect.value;
+    if (initialOrgId) {
+        filterByOrganization(initialOrgId);
+    } else {
+        clearManagerOptions();
+        clearMembersOptions();
+    }
+    updateSelectedMembersDisplay();
+
+    // Update when manager selection changes
+    managerSelect.addEventListener('change', function() {
+        updateMemberOptions();
+        updateSelectedMembersDisplay();
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,258 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Review - PRE System{% endblock %}
+
+{% block content %}
+<div class="style-3">
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1><i class="fas fa-search me-2"></i>Review</h1>
+    <a href="{% url 'reviews:new_review' %}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>New Review
+    </a>
+</div>
+
+<!-- Filter Section as per PRD -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-filter me-2"></i>Filters
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Team</label>
+                        <select name="team" class="form-select">
+                            <option value="">All Teams</option>
+                            {% for team in user_teams %}
+                            <option value="{{ team.id }}" {% if current_filters.team == team.id|stringformat:"s" %}selected{% endif %}>
+                                {{ team.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Review Type</label>
+                        <select name="review_type" class="form-select">
+                            <option value="">All Types</option>
+                            {% for type_key, type_name in review_types %}
+                            <option value="{{ type_key }}" {% if current_filters.review_type == type_key %}selected{% endif %}>
+                                {{ type_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Month/Year</label>
+                        <select name="month_year" class="form-select">
+                            <option value="">All Months</option>
+                            {% for date in available_dates %}
+                            <option value="{{ date|date:'m-Y' }}" {% if current_filters.month_year == date|date:'m-Y' %}selected{% endif %}>
+                                {{ date|date:'F Y' }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-2"></i>Search
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Review Meetings Grid as per PRD -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-list me-2"></i>Review Meetings
+                    </h5>
+                    <span class="badge bg-primary">{{ meetings|length }} meeting{{ meetings|length|pluralize }}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if meetings %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Team</th>
+                                    <th>Review Type</th>
+                                    <th>Review Date & Time</th>
+                                    <th>Manager</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for meeting in meetings %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-users me-2 text-primary"></i>
+                                            <strong>{{ meeting.team.name }}</strong>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if meeting.review_type == 'daily' %}info{% elif meeting.review_type == 'weekly' %}warning{% else %}success{% endif %}">
+                                            {{ meeting.get_review_type_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <strong>{{ meeting.review_date|date:"M d, Y" }}</strong><br>
+                                            <small class="text-muted">{{ meeting.review_date|date:"g:i A" }}</small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-user me-2 text-secondary"></i>
+                                            {{ meeting.manager_name }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% now "Y-m-d H:i" as current_datetime %}
+                                        {% if meeting.review_date|date:"Y-m-d H:i" > current_datetime %}
+                                            <span class="badge bg-info">Scheduled</span>
+                                        {% else %}
+                                            <span class="badge bg-success">Completed</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'reviews:meeting' meeting.pk %}" class="btn btn-outline-primary"
+                                               data-bs-toggle="tooltip" data-bs-placement="top" title="Edit/View Review Meeting">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-outline-info"
+                                                    data-bs-toggle="modal" data-bs-target="#participantsModal{{ meeting.pk }}"
+                                                    data-bs-toggle="tooltip" data-bs-placement="top" title="View Participants">
+                                                <i class="fas fa-users"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination if needed -->
+                    {% if is_paginated %}
+                    <nav aria-label="Review meetings pagination">
+                        <ul class="pagination justify-content-center">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% if current_filters.team %}team={{ current_filters.team }}&{% endif %}{% if current_filters.review_type %}review_type={{ current_filters.review_type }}&{% endif %}{% if current_filters.month_year %}month_year={{ current_filters.month_year }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+                                </li>
+                            {% endif %}
+
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ num }}</span>
+                                    </li>
+                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?{% if current_filters.team %}team={{ current_filters.team }}&{% endif %}{% if current_filters.review_type %}review_type={{ current_filters.review_type }}&{% endif %}{% if current_filters.month_year %}month_year={{ current_filters.month_year }}&{% endif %}page={{ num }}">{{ num }}</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% if current_filters.team %}team={{ current_filters.team }}&{% endif %}{% if current_filters.review_type %}review_type={{ current_filters.review_type }}&{% endif %}{% if current_filters.month_year %}month_year={{ current_filters.month_year }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-calendar-times fa-4x text-muted mb-3"></i>
+                        <h5 class="text-muted mb-3">No Review Meetings Found</h5>
+                        <p class="text-muted mb-4">
+                            {% if current_filters.team or current_filters.review_type or current_filters.month_year %}
+                                No meetings found matching your filter criteria. Try adjusting your filters or create a new review meeting.
+                            {% else %}
+                                Get started by creating your first review meeting.
+                            {% endif %}
+                        </p>
+                        <a href="{% url 'reviews:new_review' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Create First Review Meeting
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Participants Modal -->
+{% for meeting in meetings %}
+<div class="modal fade" id="participantsModal{{ meeting.pk }}" tabindex="-1" aria-labelledby="participantsModalLabel{{ meeting.pk }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="participantsModalLabel{{ meeting.pk }}">
+                    <i class="fas fa-users me-2"></i>Meeting Participants
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="mb-3">{{ meeting.team.name }} - {{ meeting.get_review_type_display }}</h6>
+                <p class="mb-3"><strong>Date:</strong> {{ meeting.review_date|date:"M d, Y g:i A" }}</p>
+
+                <h6 class="mb-2">Participants:</h6>
+                {% if meeting.participants.exists %}
+                    <ul class="list-group list-group-flush">
+                        {% for participant in meeting.participants.all %}
+                        <li class="list-group-item px-0">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-user-circle me-2 text-primary"></i>
+                                <div>
+                                    <strong>{{ participant.get_full_name|default:participant.username }}</strong>
+                                    {% if participant.email %}
+                                        <br><small class="text-muted">{{ participant.email }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No participants assigned to this meeting.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+</div>
+{% endblock %}

@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+
+{% block title %}Improve - PRE System{% endblock %}
+
+{% block content %}
+<div class="style-3">
+<div class="page-header">
+    <h1><i class="fas fa-arrow-trend-up me-2"></i>Improve</h1>
+</div>
+
+
+<!-- Main Content -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Improvement Analysis Dashboard</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Team</label>
+                            <select class="form-control" id="teamSelect">
+                                <option value="">Select Team</option>
+                                {% for team in user_teams %}
+                                <option value="{{ team.id }}">{{ team.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label class="form-label">Plan Year and Quarter</label>
+                            <input type="text" class="form-control" value="{{ current_quarter }}" readonly style="background-color: #f8f9fa;">
+                            <input type="hidden" id="currentQuarter" value="{{ current_quarter_value }}">
+                            <input type="hidden" id="currentFinancialYear" value="{% if financial_years %}{{ financial_years.first.id }}{% endif %}">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Select File</label>
+                            <input type="file" class="form-control" id="improvementFile" accept=".xlsx,.xls,.csv">
+                            <div class="form-text">Upload Excel file with PPI sheet</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mb-4">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-success" onclick="downloadTemplate()">
+                            <i class="fas fa-download me-2"></i>Download Template
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="viewHistory()">
+                            <i class="fas fa-history me-2"></i>View History
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="uploadFile()" disabled id="uploadBtn">
+                        <i class="fas fa-upload me-2"></i>Upload
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="uploadStatus" class="alert mt-3" style="display: none;"></div>
+
+<!-- Include the new issue and action modals -->
+{% include 'includes/new_issue_modal.html' %}
+{% include 'includes/new_action_modal.html' %}
+
+<script>
+// Enable upload button when file is selected
+document.getElementById('improvementFile').addEventListener('change', function() {
+    const uploadBtn = document.getElementById('uploadBtn');
+    const teamSelect = document.getElementById('teamSelect');
+
+    uploadBtn.disabled = !(this.files.length && teamSelect.value);
+});
+
+// Enable upload button when team is selected
+document.getElementById('teamSelect').addEventListener('change', checkUploadReady);
+
+function checkUploadReady() {
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileInput = document.getElementById('improvementFile');
+    const teamSelect = document.getElementById('teamSelect');
+
+    uploadBtn.disabled = !(fileInput.files.length && teamSelect.value);
+}
+
+function downloadTemplate() {
+    window.location.href = '{% url "improve:download_template" %}';
+}
+
+function uploadFile() {
+    const formData = new FormData();
+    const fileInput = document.getElementById('improvementFile');
+    const teamSelect = document.getElementById('teamSelect');
+    const currentQuarter = document.getElementById('currentQuarter').value;
+    const currentFinancialYear = document.getElementById('currentFinancialYear').value;
+
+    formData.append('file', fileInput.files[0]);
+    formData.append('team', teamSelect.value);
+    formData.append('quarter', currentQuarter);
+    formData.append('financial_year', currentFinancialYear);
+
+    const statusDiv = document.getElementById('uploadStatus');
+    statusDiv.className = 'alert alert-info';
+    statusDiv.textContent = 'Uploading and processing file...';
+    statusDiv.style.display = 'block';
+
+    fetch('{% url "improve:upload" %}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.className = 'alert alert-success';
+            statusDiv.textContent = data.message;
+
+            // Reset form and refresh page
+            fileInput.value = '';
+            teamSelect.value = '';
+            document.getElementById('uploadBtn').disabled = true;
+
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            statusDiv.className = 'alert alert-danger';
+            statusDiv.textContent = data.error;
+        }
+    })
+    .catch(error => {
+        statusDiv.className = 'alert alert-danger';
+        statusDiv.textContent = 'Upload failed: ' + error.message;
+    });
+}
+
+function viewHistory() {
+    window.location.href = '{% url "improve:history" %}';
+}
+
+// These functions are handled by the included JavaScript file
+function createIssue() {
+    openNewIssueModal();
+}
+
+function addAction() {
+    openNewActionModal();
+}
+
+// CSRF token helper
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+</div>
+{% endblock %}

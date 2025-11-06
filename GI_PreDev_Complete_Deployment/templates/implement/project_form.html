@@ -1,0 +1,128 @@
+<!-- Edit Project Modal -->
+<div class="modal fade" id="editProjectModal" tabindex="-1" aria-labelledby="editProjectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editProjectModalLabel">Edit Project</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="confirmCancel(event)" aria-label="Close"></button>
+            </div>
+            <form method="post" id="editProjectForm" action="{% url 'implement:project_edit' object.pk %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <!-- Read-only fields -->
+                            <div class="mb-3">
+                                <label class="form-label">Team</label>
+                                <input type="text" class="form-control" value="{{ object.quarterly_plan.team.name }}" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Source</label>
+                                <input type="text" class="form-control" value="PPI Task" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Project Name</label>
+                                <input type="text" class="form-control" value="{{ object.name }}" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Responsibility</label>
+                                <input type="text" class="form-control" value="{{ object.responsible_user.get_full_name }}" readonly>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Original Due Date</label>
+                                <input type="text" class="form-control" value="{{ object.end_date|date:'d-m-Y' }}" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="editProjectStatus" class="form-label">Status <span class="text-danger">*</span></label>
+                                <select class="form-select" id="editProjectStatus" name="status" required>
+                                    <option value="">Select</option>
+                                    <option value="on_track" {% if latest_status.status == 'on_track' %}selected{% endif %}>On Track</option>
+                                    <option value="at_risk" {% if latest_status.status == 'at_risk' %}selected{% endif %}>At Risk</option>
+                                    <option value="danger" {% if latest_status.status == 'danger' %}selected{% endif %}>Danger</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3" id="revisedDueDateGroup" style="display: none;">
+                                <label for="editProjectRevisedDueDate" class="form-label">Revised Due Date</label>
+                                <input type="date" class="form-control" id="editProjectRevisedDueDate" name="revised_due_date" value="{% if latest_status.revised_due_date %}{{ latest_status.revised_due_date|date:'Y-m-d' }}{% endif %}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Completion Criteria</label>
+                        <textarea class="form-control" rows="3" readonly>{{ object.completion_criteria }}</textarea>
+                    </div>
+
+                    <div class="mb-3" id="challengeGroup" style="display: none;">
+                        <label for="editProjectChallenge" class="form-label">Challenge</label>
+                        <textarea class="form-control" id="editProjectChallenge" name="challenge" rows="3" placeholder="Describe the challenges faced...">{% if latest_status.challenge %}{{ latest_status.challenge }}{% endif %}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editProjectComments" class="form-label">Comments</label>
+                        <textarea class="form-control" id="editProjectComments" name="comments" rows="3" placeholder="Add your comments...">{% if latest_status.comments %}{{ latest_status.comments }}{% endif %}</textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-info" onclick="viewProjectHistory({{ object.pk }})">
+                        <i class="fas fa-history me-2"></i>View History
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Save
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="confirmCancel(event)">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+
+function confirmCancel(event) {
+    // Check if form has unsaved changes
+    const form = document.getElementById('editProjectForm');
+    const hasChanges = isFormDirty(form);
+
+    if (hasChanges) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (confirm('You will lose the data entered. Do you wish to continue?')) {
+            // Close modal - user clicked OK (wants to continue)
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editProjectModal'));
+            modal.hide();
+        }
+    }
+    // If no changes, let the modal close normally
+}
+
+// Helper function to check if form is dirty
+function isFormDirty(form) {
+    if (!form) return false;
+    const inputs = form.querySelectorAll('input, textarea, select');
+    for (let input of inputs) {
+        if (input.type === 'hidden' || input.name === 'csrfmiddlewaretoken') continue;
+        if (input.value && input.value.trim() !== '' && input.value !== input.defaultValue) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function viewProjectHistory(projectId) {
+    window.location.href = `/implement/project/${projectId}/history/`;
+}
+
+// This function is now defined in dashboard.html for global access
+</script>

@@ -1,0 +1,80 @@
+<!-- New Action Modal -->
+<div class="modal fade" id="newActionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus-circle me-2 text-primary"></i>New Action
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newActionForm">
+                    {% csrf_token %}
+                    <!-- Hidden fields for parameter linking -->
+                    <input type="hidden" id="actionParameterType" name="parameter_type" value="">
+                    <input type="hidden" id="actionParameterId" name="parameter_id" value="">
+
+                    <div class="mb-3">
+                        <label class="form-label">Action <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="actionTitle" name="action" rows="2" required placeholder="Describe the action to be taken"></textarea>
+                        <div class="invalid-feedback" id="actionTitleError"></div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Priority</label>
+                                <select class="form-control" id="actionPriority" name="priority">
+                                    <option value="">Select</option>
+                                    <option value="high">High</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="low">Low</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Due Date</label>
+                                <input type="date" class="form-control" id="actionDueDate" name="due_date">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Assigned To Team <span class="text-danger">*</span></label>
+                        <select class="form-control" id="actionTeam" name="team" required>
+                            <option value="">Select</option>
+                            <!-- Teams will be populated by JavaScript -->
+                        </select>
+                        <div class="invalid-feedback" id="actionTeamError"></div>
+                        <div class="form-text">Teams where you are in charge or a member</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Assigned to member <span class="text-danger">*</span></label>
+                        <select class="form-control" id="actionMember" name="assigned_to" required>
+                            <option value="">Select</option>
+                            <!-- Members will be populated when team is selected -->
+                        </select>
+                        <div class="invalid-feedback" id="actionMemberError"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Comments</label>
+                        <textarea class="form-control" id="actionComments" name="comments" rows="3" placeholder="Optional comments"></textarea>
+                    </div>
+                </form>
+
+                <div id="actionFormError" class="alert alert-danger d-none"></div>
+                <div id="actionFormSuccess" class="alert alert-success d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveActionBtn">
+                    <i class="fas fa-save me-2"></i>Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

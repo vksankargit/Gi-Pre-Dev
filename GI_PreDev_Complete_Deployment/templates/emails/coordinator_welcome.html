@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Welcome to PRE System</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #007bff; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background-color: #f8f9fa; }
+        .credentials { background-color: #e9ecef; padding: 15px; margin: 15px 0; border-radius: 5px; }
+        .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to PRE System</h1>
+        </div>
+
+        <div class="content">
+            <h2>Hello {{ coordinator.get_full_name|default:coordinator.username }},</h2>
+
+            <p>You have been assigned as a coordinator for <strong>{{ organization.name }}</strong> in the PRE (Periodic Review Environment) system.</p>
+
+            <p>Your account has been created with the following details:</p>
+
+            <div class="credentials">
+                <strong>Login Credentials:</strong><br>
+                <strong>Email:</strong> {{ coordinator.email }}<br>
+                <strong>Password:</strong> changeme123<br>
+                <strong>Role:</strong> Coordinator
+            </div>
+
+            <p><strong>Important:</strong> Please login and change your password immediately for security purposes.</p>
+
+            <p>You can access the system at: <a href="{{ system_url }}">{{ system_url }}</a></p>
+
+            <h3>As a Coordinator, you can:</h3>
+            <ul>
+                <li>Manage general users in your organization</li>
+                <li>Create and manage teams</li>
+                <li>Login as general users for assistance</li>
+                <li>Access all organizational data and reports</li>
+            </ul>
+
+            <p>If you have any questions or need assistance, please contact your system administrator.</p>
+
+            <p>Welcome aboard!<br>
+            <strong>PRE System Team</strong></p>
+        </div>
+
+        <div class="footer">
+            <p>This is an automated message from PRE - Periodic Review Environment v1.0</p>
+        </div>
+    </div>
+</body>
+</html>

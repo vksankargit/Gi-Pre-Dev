@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+
+{% block title %}Team Members - {{ team.name }} - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{% url 'organizations:teams' %}" class="btn btn-outline-secondary me-3">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-users me-2"></i>
+                Team Members - {{ team.name }}
+            </h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-list me-2"></i>Members
+                </h5>
+                <div>
+                    <span class="badge bg-info me-2">Organization: {{ team.organization.name }}</span>
+                    <span class="badge bg-success">Manager: {{ team.manager.get_full_name|default:team.manager.username }}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if members %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Member Name</th>
+                                <th>Email</th>
+                                <th>Mobile Number</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for member in members %}
+                            <tr>
+                                <td>{{ member.member.get_full_name|default:member.member.username }}</td>
+                                <td>{{ member.member.email }}</td>
+                                <td>{{ member.member.mobile_number|default:"-" }}</td>
+                                <td>{{ member.member.role|title }}</td>
+                                <td>
+                                    {% if member.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">Inactive</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No Members Found</h5>
+                    <p class="text-muted">This team doesn't have any members yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

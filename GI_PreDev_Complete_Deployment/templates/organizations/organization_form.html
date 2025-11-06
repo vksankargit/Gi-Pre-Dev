@@ -1,0 +1,515 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+{% if object %}Edit Organization{% else %}Create Organization{% endif %} - PRE System
+{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{% url 'organizations:list' %}" class="btn btn-outline-secondary me-3">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-building me-2"></i>
+                {% if object %}Edit Organization{% else %}New Organization{% endif %}
+            </h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    {% if object %}Organization Details{% else %}Organization Information{% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">
+                            <i class="fas fa-building me-2"></i>Organization Name
+                        </label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.name.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">
+                            Enter a unique name for this organization.
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            {% if object %}Update Organization{% else %}Create Organization{% endif %}
+                        </button>
+                        <a href="{% url 'organizations:list' %}" class="btn btn-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if object %}
+        <!-- Coordinators Grid (Only shown when editing) -->
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Coordinators</h5>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addCoordinatorModal">
+                    Add New Coordinator
+                </button>
+            </div>
+            <div class="card-body">
+                {% if object.coordinators.all %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name of Coordinator</th>
+                                <th>Mobile Number</th>
+                                <th>Email ID</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for coordinator_rel in object.coordinators.all %}
+                            <tr>
+                                <td>{{ coordinator_rel.coordinator.get_full_name|default:coordinator_rel.coordinator.username }}</td>
+                                <td>{{ coordinator_rel.coordinator.mobile_number|default:"-" }}</td>
+                                <td>{{ coordinator_rel.coordinator.email }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-primary btn-sm" onclick="editCoordinator({{ coordinator_rel.id }})">
+                                            Edit
+                                        </button>
+                                        <button class="btn btn-{% if coordinator_rel.is_active %}warning{% else %}success{% endif %} btn-sm"
+                                                onclick="toggleCoordinator({{ coordinator_rel.id }})">
+                                            {% if coordinator_rel.is_active %}Inactivate{% else %}Reactivate{% endif %}
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No Coordinators Assigned</h5>
+                    <p class="text-muted">Add coordinators to help manage this organization.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Coordinator Modal -->
+<div class="modal fade" id="addCoordinatorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Coordinator</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Coordinator Type Selection -->
+                <div class="mb-4">
+                    <label class="form-label">Coordinator Type</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="coordinatorType" id="existingCoordinator" value="existing" checked>
+                        <label class="btn btn-outline-primary" for="existingCoordinator">
+                            <i class="fas fa-user me-2"></i>Existing Coordinator
+                        </label>
+
+                        <input type="radio" class="btn-check" name="coordinatorType" id="newCoordinator" value="new">
+                        <label class="btn btn-outline-primary" for="newCoordinator">
+                            <i class="fas fa-user-plus me-2"></i>New Coordinator
+                        </label>
+                    </div>
+                </div>
+
+                <form id="coordinatorForm">
+                    <!-- Existing Coordinator Section -->
+                    <div id="existingCoordinatorSection">
+                        <div class="mb-3">
+                            <label class="form-label">Select Existing Coordinator <span class="text-danger">*</span></label>
+                            <select class="form-control" id="existingCoordinatorSelect" required>
+                                <option value="">Loading coordinators...</option>
+                            </select>
+                            <div class="form-text">Choose from coordinators already in the system</div>
+                        </div>
+                    </div>
+
+                    <!-- New Coordinator Section -->
+                    <div id="newCoordinatorSection" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="coordinatorName">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email Address <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="coordinatorEmail">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Mobile Number</label>
+                            <input type="tel" class="form-control" id="coordinatorMobile">
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            A new coordinator account will be created with the default password <strong>"changeme123"</strong>.
+                            A welcome email will be sent to the coordinator with login instructions.
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveCoordinator()">
+                    <span class="spinner-border spinner-border-sm d-none me-2" id="saveCoordinatorSpinner"></span>
+                    Add Coordinator
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Coordinator Modal -->
+<div class="modal fade" id="editCoordinatorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Coordinator</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editCoordinatorForm">
+                    <input type="hidden" id="editCoordinatorId">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" id="editCoordinatorName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Mobile Number</label>
+                        <input type="tel" class="form-control" id="editCoordinatorMobile">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email ID</label>
+                        <input type="email" class="form-control" id="editCoordinatorEmail" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="updateCoordinator()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize when modal is shown
+document.addEventListener('DOMContentLoaded', function() {
+    const addCoordinatorModal = document.getElementById('addCoordinatorModal');
+    addCoordinatorModal.addEventListener('shown.bs.modal', function() {
+        loadAvailableCoordinators();
+    });
+
+    // Handle coordinator type toggle
+    document.querySelectorAll('input[name="coordinatorType"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            toggleCoordinatorSections();
+        });
+    });
+});
+
+function toggleCoordinatorSections() {
+    const coordinatorType = document.querySelector('input[name="coordinatorType"]:checked').value;
+    const existingSection = document.getElementById('existingCoordinatorSection');
+    const newSection = document.getElementById('newCoordinatorSection');
+
+    if (coordinatorType === 'existing') {
+        existingSection.style.display = 'block';
+        newSection.style.display = 'none';
+        // Clear new coordinator fields
+        document.getElementById('coordinatorName').value = '';
+        document.getElementById('coordinatorEmail').value = '';
+        document.getElementById('coordinatorMobile').value = '';
+    } else {
+        existingSection.style.display = 'none';
+        newSection.style.display = 'block';
+        // Clear existing coordinator selection
+        document.getElementById('existingCoordinatorSelect').value = '';
+    }
+}
+
+function loadAvailableCoordinators() {
+    const organizationId = {{ object.id|default:0 }};
+    if (!organizationId) {
+        document.getElementById('existingCoordinatorSelect').innerHTML = '<option value="">Organization ID not found</option>';
+        return;
+    }
+
+    const select = document.getElementById('existingCoordinatorSelect');
+    select.innerHTML = '<option value="">Loading coordinators...</option>';
+
+    fetch(`/organizations/ajax/get-available-coordinators/${organizationId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                select.innerHTML = '<option value="">Select a coordinator</option>';
+                data.coordinators.forEach(coord => {
+                    const option = document.createElement('option');
+                    option.value = coord.id;
+                    option.textContent = `${coord.name} (${coord.email})`;
+                    select.appendChild(option);
+                });
+
+                if (data.coordinators.length === 0) {
+                    select.innerHTML = '<option value="">No available coordinators found</option>';
+                }
+            } else {
+                select.innerHTML = '<option value="">Error loading coordinators</option>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            select.innerHTML = '<option value="">Error loading coordinators</option>';
+        });
+}
+
+function saveCoordinator() {
+    const organizationId = {{ object.id|default:0 }};
+    if (!organizationId) {
+        alert('Organization ID not found.');
+        return;
+    }
+
+    const coordinatorType = document.querySelector('input[name="coordinatorType"]:checked').value;
+    const spinner = document.getElementById('saveCoordinatorSpinner');
+    const saveBtn = document.querySelector('button[onclick="saveCoordinator()"]');
+
+    // Show loading state
+    spinner.classList.remove('d-none');
+    saveBtn.disabled = true;
+
+    let requestData = {
+        organization_id: organizationId,
+        type: coordinatorType
+    };
+
+    // Validate and prepare data based on type
+    if (coordinatorType === 'existing') {
+        const coordinatorId = document.getElementById('existingCoordinatorSelect').value;
+        if (!coordinatorId) {
+            alert('Please select a coordinator.');
+            resetSaveButton();
+            return;
+        }
+        requestData.coordinator_id = coordinatorId;
+    } else {
+        const name = document.getElementById('coordinatorName').value.trim();
+        const email = document.getElementById('coordinatorEmail').value.trim();
+        const mobile = document.getElementById('coordinatorMobile').value.trim();
+
+        if (!name || !email) {
+            alert('Name and Email are required for new coordinator.');
+            resetSaveButton();
+            return;
+        }
+
+        requestData.name = name;
+        requestData.email = email;
+        requestData.mobile = mobile;
+    }
+
+    fetch('{% url "organizations:add_coordinator" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Close modal and reset form
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addCoordinatorModal'));
+            modal.hide();
+            resetForm();
+
+            // Show success message
+            let message = coordinatorType === 'existing'
+                ? 'Coordinator assigned successfully!'
+                : 'Coordinator created successfully!';
+
+            if (data.email_sent) {
+                message += ' Welcome email has been sent.';
+            }
+
+            alert(message);
+
+            // Refresh the page to show the new coordinator
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while saving the coordinator.');
+    })
+    .finally(() => {
+        resetSaveButton();
+    });
+}
+
+function resetSaveButton() {
+    const spinner = document.getElementById('saveCoordinatorSpinner');
+    const saveBtn = document.querySelector('button[onclick="saveCoordinator()"]');
+    spinner.classList.add('d-none');
+    saveBtn.disabled = false;
+}
+
+function resetForm() {
+    document.getElementById('coordinatorForm').reset();
+    document.getElementById('existingCoordinator').checked = true;
+    toggleCoordinatorSections();
+}
+
+// Helper function to get CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function editCoordinator(coordinatorId) {
+    // Fetch coordinator data
+    fetch(`/organizations/ajax/get-coordinator/${coordinatorId}/`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Populate edit modal with data
+            document.getElementById('editCoordinatorId').value = coordinatorId;
+            document.getElementById('editCoordinatorName').value = data.coordinator.name;
+            document.getElementById('editCoordinatorMobile').value = data.coordinator.mobile || '';
+            document.getElementById('editCoordinatorEmail').value = data.coordinator.email;
+
+            // Show edit modal
+            const modal = new bootstrap.Modal(document.getElementById('editCoordinatorModal'));
+            modal.show();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while fetching coordinator data.');
+    });
+}
+
+function updateCoordinator() {
+    const coordinatorId = document.getElementById('editCoordinatorId').value;
+    const name = document.getElementById('editCoordinatorName').value.trim();
+    const mobile = document.getElementById('editCoordinatorMobile').value.trim();
+    const email = document.getElementById('editCoordinatorEmail').value.trim();
+
+    if (!name || !email) {
+        alert('Name and Email are required.');
+        return;
+    }
+
+    fetch(`/organizations/ajax/edit-coordinator/${coordinatorId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name: name,
+            mobile: mobile,
+            email: email
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Close modal and reset form
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editCoordinatorModal'));
+            modal.hide();
+            document.getElementById('editCoordinatorForm').reset();
+
+            // Show success message with email status
+            let message = 'Coordinator updated successfully!';
+            if (data.email_sent) {
+                message += ' Update notification email has been sent to ' + email + '.';
+            } else {
+                message += ' Note: Update notification email could not be sent.';
+            }
+            alert(message);
+
+            // Refresh the page to show the updated coordinator
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while updating the coordinator.');
+    });
+}
+
+function toggleCoordinator(coordinatorId) {
+    if (!confirm('Are you sure you want to change this coordinator\'s status?')) {
+        return;
+    }
+
+    fetch(`/organizations/ajax/toggle-coordinator/${coordinatorId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Refresh the page to show updated status
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while updating coordinator status.');
+    });
+}
+</script>
+{% endblock %}

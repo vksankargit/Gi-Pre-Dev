@@ -1,0 +1,30 @@
+Welcome to PRE System
+
+Hello {{ coordinator.get_full_name|default:coordinator.username }},
+
+You have been assigned as a coordinator for {{ organization.name }} in the PRE (Periodic Review Environment) system.
+
+Your account has been created with the following details:
+
+Login Credentials:
+Email: {{ coordinator.email }}
+Password: changeme123
+Role: Coordinator
+
+IMPORTANT: Please login and change your password immediately for security purposes.
+
+You can access the system at: {{ system_url }}
+
+As a Coordinator, you can:
+- Manage general users in your organization
+- Create and manage teams
+- Login as general users for assistance
+- Access all organizational data and reports
+
+If you have any questions or need assistance, please contact your system administrator.
+
+Welcome aboard!
+PRE System Team
+
+---
+This is an automated message from PRE - Periodic Review Environment v1.0

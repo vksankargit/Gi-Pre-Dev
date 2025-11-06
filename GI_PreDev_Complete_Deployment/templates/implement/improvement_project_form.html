@@ -1,0 +1,211 @@
+<!-- Edit Improvement Project Modal -->
+<div class="modal fade" id="editImprovementProjectModal" tabindex="-1" aria-labelledby="editImprovementProjectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editImprovementProjectModalLabel">Edit Improvement Project</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="confirmCancel(event)" aria-label="Close"></button>
+            </div>
+            <form method="post" id="editImprovementProjectForm" action="{% url 'implement:improvement_project_edit' object.pk %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <!-- Read-only fields -->
+                            <div class="mb-3">
+                                <label class="form-label">Team</label>
+                                <input type="text" class="form-control" value="{{ object.upload.team.name }}" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Source</label>
+                                <input type="text" class="form-control" value="Improvement Project" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Project Name</label>
+                                <input type="text" class="form-control" value="{{ object.name }}" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Responsibility</label>
+                                <input type="text" class="form-control" value="{{ object.responsible_user.get_full_name }}" readonly>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Original Due Date</label>
+                                <input type="text" class="form-control" value="{{ object.end_date|date:'d-m-Y' }}" readonly>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="editImprovementProjectStatus" class="form-label">Status <span class="text-danger">*</span></label>
+                                <select class="form-select" id="editImprovementProjectStatus" name="status" required>
+                                    <option value="">Select</option>
+                                    <option value="on_track" {% if object.status == 'on_track' %}selected{% endif %}>On Track</option>
+                                    <option value="at_risk" {% if object.status == 'at_risk' %}selected{% endif %}>At Risk</option>
+                                    <option value="danger" {% if object.status == 'danger' %}selected{% endif %}>Danger</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3" id="improvementRevisedDueDateGroup" style="display: none;">
+                                <label for="editImprovementProjectRevisedDueDate" class="form-label">Revised Due Date</label>
+                                <input type="date" class="form-control" id="editImprovementProjectRevisedDueDate" name="revised_due_date">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Completion Criteria</label>
+                        <textarea class="form-control" rows="3" readonly>{{ object.completion_criteria }}</textarea>
+                    </div>
+
+                    <div class="mb-3" id="improvementChallengeGroup" style="display: none;">
+                        <label for="editImprovementProjectChallenge" class="form-label">Challenge</label>
+                        <textarea class="form-control" id="editImprovementProjectChallenge" name="challenge" rows="3" placeholder="Describe the challenges faced..."></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="editImprovementProjectComments" class="form-label">Comments</label>
+                        <textarea class="form-control" id="editImprovementProjectComments" name="comments" rows="3" placeholder="Add your comments..."></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-info" onclick="viewImprovementProjectHistory({{ object.pk }})">
+                        <i class="fas fa-history me-2"></i>View History
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Save
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="confirmCancel(event)">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+
+function confirmCancel(event) {
+    // Check if form has unsaved changes
+    const form = document.getElementById('editImprovementProjectForm');
+    const hasChanges = isFormDirty(form);
+
+    if (hasChanges) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (confirm('You will lose the data entered. Do you wish to continue?')) {
+            // Close modal - user clicked OK (wants to continue)
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editImprovementProjectModal'));
+            modal.hide();
+        }
+    }
+    // If no changes, let the modal close normally
+}
+
+// Helper function to check if form is dirty
+function isFormDirty(form) {
+    if (!form) return false;
+    const inputs = form.querySelectorAll('input, textarea, select');
+    for (let input of inputs) {
+        if (input.type === 'hidden' || input.name === 'csrfmiddlewaretoken') continue;
+        if (input.value && input.value.trim() !== '' && input.value !== input.defaultValue) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function viewImprovementProjectHistory(projectId) {
+    window.location.href = `/implement/project/${projectId}/history/`;
+}
+
+// Initialize improvement project form
+document.addEventListener('DOMContentLoaded', function() {
+    initializeImprovementProjectForm();
+});
+
+function initializeImprovementProjectForm() {
+    const statusSelect = document.getElementById('editImprovementProjectStatus');
+    if (statusSelect) {
+        // Show/hide fields based on current status
+        toggleImprovementProjectFields();
+
+        // Add event listener for status changes
+        statusSelect.addEventListener('change', toggleImprovementProjectFields);
+    }
+}
+
+function toggleImprovementProjectFields() {
+    console.log('=== toggleImprovementProjectFields called ===');
+
+    const statusSelect = document.getElementById('editImprovementProjectStatus');
+    const challengeGroup = document.getElementById('improvementChallengeGroup');
+    const revisedDueDateGroup = document.getElementById('improvementRevisedDueDateGroup');
+    const challengeInput = document.getElementById('editImprovementProjectChallenge');
+    const revisedDueDateInput = document.getElementById('editImprovementProjectRevisedDueDate');
+
+    console.log('Elements found:');
+    console.log('- statusSelect:', statusSelect);
+    console.log('- challengeGroup:', challengeGroup);
+    console.log('- revisedDueDateGroup:', revisedDueDateGroup);
+    console.log('- challengeInput:', challengeInput);
+    console.log('- revisedDueDateInput:', revisedDueDateInput);
+
+    if (!statusSelect) {
+        console.error('Status select not found');
+        return;
+    }
+
+    const selectedStatus = statusSelect.value;
+    console.log('Selected status:', selectedStatus);
+
+    // Hide all conditional fields first
+    if (challengeGroup) {
+        challengeGroup.style.display = 'none';
+        console.log('Set challengeGroup display to none');
+    }
+    if (revisedDueDateGroup) {
+        revisedDueDateGroup.style.display = 'none';
+        console.log('Set revisedDueDateGroup display to none');
+    }
+
+    // Clear required attributes
+    if (challengeInput) challengeInput.removeAttribute('required');
+    if (revisedDueDateInput) revisedDueDateInput.removeAttribute('required');
+
+    // Show fields based on status
+    if (selectedStatus === 'at_risk') {
+        console.log('=== AT RISK SELECTED ===');
+        if (challengeGroup) {
+            challengeGroup.style.display = 'block';
+            console.log('Set challengeGroup display to block');
+        }
+        if (challengeInput) challengeInput.setAttribute('required', 'required');
+    } else if (selectedStatus === 'danger') {
+        console.log('=== DANGER SELECTED ===');
+        if (challengeGroup) {
+            challengeGroup.style.display = 'block';
+            console.log('Set challengeGroup display to block');
+        }
+        if (revisedDueDateGroup) {
+            revisedDueDateGroup.style.display = 'block';
+            console.log('Set revisedDueDateGroup display to block');
+        }
+        if (challengeInput) challengeInput.setAttribute('required', 'required');
+        if (revisedDueDateInput) revisedDueDateInput.setAttribute('required', 'required');
+    } else {
+        console.log('Other status selected, fields remain hidden');
+    }
+
+    console.log('Final states:');
+    console.log('- challengeGroup display:', challengeGroup ? challengeGroup.style.display : 'null');
+    console.log('- revisedDueDateGroup display:', revisedDueDateGroup ? revisedDueDateGroup.style.display : 'null');
+    console.log('=== End toggleImprovementProjectFields ===');
+}
+
+</script>

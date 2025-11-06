@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}New Review - PRE System{% endblock %}
+
+{% block content %}
+<div class="style-3">
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1><i class="fas fa-plus me-2"></i>New Review</h1>
+    <a href="{% url 'reviews:dashboard' %}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Reviews
+    </a>
+</div>
+
+<!-- New Review Form as per PRD -->
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-calendar-plus me-2"></i>Create New Review Meeting
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {% csrf_token %}
+
+                    <div class="row g-3">
+                        <!-- Team Selection -->
+                        <div class="col-md-6">
+                            <label for="team" class="form-label">Team <span class="text-danger">*</span></label>
+                            <select name="team" id="team" class="form-select" required>
+                                <option value="">Select Team</option>
+                                {% for team in teams %}
+                                <option value="{{ team.id }}">{{ team.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Review Type -->
+                        <div class="col-md-6">
+                            <label for="review_type" class="form-label">Review Type <span class="text-danger">*</span></label>
+                            <select name="review_type" id="review_type" class="form-select" required>
+                                <option value="">Select Type</option>
+                                {% for type_key, type_name in review_types %}
+                                <option value="{{ type_key }}">{{ type_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Review Date -->
+                        <div class="col-md-6">
+                            <label for="review_date" class="form-label">Review Date <span class="text-danger">*</span></label>
+                            <input type="date" name="review_date" id="review_date" class="form-control" required>
+                        </div>
+
+                        <!-- Review Time -->
+                        <div class="col-md-6">
+                            <label for="review_time" class="form-label">Review Time <span class="text-danger">*</span></label>
+                            <input type="time" name="review_time" id="review_time" class="form-control" required>
+                        </div>
+
+                        <!-- Manager Name -->
+                        <div class="col-12">
+                            <label for="manager_name" class="form-label">Manager Name <span class="text-danger">*</span></label>
+                            <input type="text" name="manager_name" id="manager_name" class="form-control"
+                                   value="{{ user.get_full_name|default:user.username }}" required>
+                        </div>
+
+                        <!-- Participants -->
+                        <div class="col-12">
+                            <label for="participants" class="form-label">Participants</label>
+                            <div id="participantsContainer" class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                <p class="text-muted mb-2">Select team members to participate in this review:</p>
+                                <div id="participantsList">
+                                    <div class="text-muted">Please select a team first</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-secondary" onclick="history.back()">
+                                    <i class="fas fa-times me-2"></i>Cancel
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-check me-2"></i>Create Review
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const teamSelect = document.getElementById('team');
+    const participantsList = document.getElementById('participantsList');
+
+    // Set default date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('review_date').value = today;
+
+    // Set default time to current hour
+    const now = new Date();
+    const currentTime = now.getHours().toString().padStart(2, '0') + ':00';
+    document.getElementById('review_time').value = currentTime;
+
+    // Load team members when team is selected
+    teamSelect.addEventListener('change', function() {
+        const teamId = this.value;
+
+        if (!teamId) {
+            participantsList.innerHTML = '<div class="text-muted">Please select a team first</div>';
+            return;
+        }
+
+        // Show loading
+        participantsList.innerHTML = '<div class="text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading team members...</div>';
+
+        // Fetch team members
+        fetch(`/api/team-members/${teamId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.members && data.members.length > 0) {
+                    let html = '';
+                    data.members.forEach(member => {
+                        html += `
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="participants"
+                                       value="${member.id}" id="participant_${member.id}">
+                                <label class="form-check-label" for="participant_${member.id}">
+                                    ${member.name} (${member.email})
+                                </label>
+                            </div>
+                        `;
+                    });
+                    participantsList.innerHTML = html;
+                } else if (data.success) {
+                    participantsList.innerHTML = '<div class="text-muted">No team members found</div>';
+                } else {
+                    participantsList.innerHTML = `<div class="text-danger">${data.error || 'Error loading team members'}</div>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading team members:', error);
+                participantsList.innerHTML = '<div class="text-danger">Error loading team members</div>';
+            });
+    });
+
+    // Form validation
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const team = document.getElementById('team').value;
+        const reviewType = document.getElementById('review_type').value;
+        const reviewDate = document.getElementById('review_date').value;
+        const reviewTime = document.getElementById('review_time').value;
+        const managerName = document.getElementById('manager_name').value.trim();
+
+        if (!team || !reviewType || !reviewDate || !reviewTime || !managerName) {
+            e.preventDefault();
+            alert('Please fill in all required fields.');
+            return false;
+        }
+
+        // Check if date is not in the past
+        const selectedDate = new Date(reviewDate + 'T' + reviewTime);
+        const now = new Date();
+
+        if (selectedDate < now) {
+            const confirmPast = confirm('The selected date and time is in the past. Do you want to continue?');
+            if (!confirmPast) {
+                e.preventDefault();
+                return false;
+            }
+        }
+    });
+});
+</script>
+</div>
+{% endblock %}

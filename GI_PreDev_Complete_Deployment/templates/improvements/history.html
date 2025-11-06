@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}Improvement History - PRE System{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <h1 class="h3 mb-4">
+            <i class="fas fa-history me-2"></i>Improvement Upload History
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Upload History</h5>
+            </div>
+            <div class="card-body">
+                {% if uploads %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Team</th>
+                                    <th>Financial Year</th>
+                                    <th>File Name</th>
+                                    <th>Uploaded Date</th>
+                                    <th>Uploaded By</th>
+                                    <th>Status</th>
+                                    <th>Records</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for upload in uploads %}
+                                <tr>
+                                    <td>{{ upload.team.name }}</td>
+                                    <td>{{ upload.financial_year.year }}</td>
+                                    <td>{{ upload.file_name }}</td>
+                                    <td>{{ upload.uploaded_at|date:"M d, Y H:i" }}</td>
+                                    <td>{{ upload.uploaded_by.get_full_name }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if upload.upload_status == 'successful' %}success{% elif upload.upload_status == 'failed' %}danger{% else %}warning{% endif %}">
+                                            {{ upload.get_upload_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small>
+                                            Total: {{ upload.total_records }}<br>
+                                            Processed: {{ upload.processed_records }}<br>
+                                            Errors: {{ upload.error_records }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {% if upload.file_path %}
+                                        <button class="btn btn-sm btn-outline-primary" onclick="downloadFile('{{ upload.id }}')">
+                                            <i class="fas fa-download me-1"></i>Download
+                                        </button>
+                                        {% endif %}
+                                        {% if upload.upload_status == 'failed' %}
+                                        <button class="btn btn-sm btn-outline-danger ms-1" onclick="viewErrorLog('{{ upload.id }}')">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>Errors
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-history fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No upload history found</h5>
+                        <p class="text-muted">No improvement files have been uploaded yet.</p>
+                        <a href="{% url 'improvements:dashboard' %}" class="btn btn-primary">
+                            <i class="fas fa-upload me-2"></i>Upload First File
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'improvements:dashboard' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function downloadFile(uploadId) {
+    // Implement file download functionality
+    window.location.href = `/improve/download/${uploadId}/`;
+}
+
+function viewErrorLog(uploadId) {
+    // Implement error log viewing functionality
+    window.location.href = `/improve/errors/${uploadId}/`;
+}
+</script>
+{% endblock %}

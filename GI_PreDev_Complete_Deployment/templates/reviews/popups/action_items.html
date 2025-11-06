@@ -1,0 +1,1021 @@
+{% load l10n %}
+<!-- Action Items Popup Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="mb-0">
+        <i class="fas fa-tasks me-2"></i>
+        {% if parameter_type and parameter_id %}
+            Action Items - {{ parameter_name|default:"Parameter" }}
+        {% else %}
+            Action Items - Review Meeting
+        {% endif %}
+        <span class="badge bg-secondary ms-2">{{ action_items|length }} item{{ action_items|length|pluralize }}</span>
+    </h6>
+    <button class="btn btn-success btn-sm" onclick="addActionItem()">
+        <i class="fas fa-plus me-1"></i>Add Action
+    </button>
+</div>
+
+{% if parameter_type and parameter_id %}
+<div class="alert alert-info py-2 mb-3">
+    <i class="fas fa-info-circle me-2"></i>
+    <small>Showing actions specific to: <strong>{{ parameter_name|default:"this parameter" }}</strong></small>
+</div>
+{% else %}
+<div class="alert alert-info py-2 mb-3">
+    <i class="fas fa-info-circle me-2"></i>
+    <small>Showing generic review meeting actions. Line item-specific actions are managed separately.</small>
+</div>
+{% endif %}
+
+<!-- Action Items Summary Cards -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-primary">{{ action_summary.total }}</h6>
+                <small class="text-muted">Total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-danger">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-danger">{{ action_summary.high_priority }}</h6>
+                <small class="text-muted">High Priority</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-warning">{{ action_summary.due_today }}</h6>
+                <small class="text-muted">Due Today</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1 text-success">{{ action_summary.completed }}</h6>
+                <small class="text-muted">Completed</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if action_items %}
+    <!-- Existing Action Items -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Current Action Items</h6>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="filterActions('all')">All</button>
+                    <button class="btn btn-outline-danger" onclick="filterActions('high')">High Priority</button>
+                    <button class="btn btn-outline-warning" onclick="filterActions('pending')">Pending</button>
+                    <button class="btn btn-outline-success" onclick="filterActions('completed')">Completed</button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 5%">S.No</th>
+                            <th style="width: 30%">Action</th>
+                            <th style="width: 10%">Priority</th>
+                            <th style="width: 12%">Due Date</th>
+                            <th style="width: 15%">Team</th>
+                            <th style="width: 13%">Member</th>
+                            <th style="width: 15%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="actionItemsTable">
+                        {% for action in action_items %}
+                        <tr class="action-item-row {% if action.priority == 'high' %}table-warning{% endif %}{% if action.is_overdue %}table-danger{% endif %}"
+                            data-priority="{{ action.priority }}"
+                            data-status="{{ action.status }}">
+                            <td>
+                                <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                            </td>
+                            <td>
+                                <div>
+                                    <strong>{{ action.action_description|truncatechars:50 }}</strong>
+                                    {% if action.action_description|length > 50 %}
+                                        <button class="btn btn-link btn-sm p-0 ms-1"
+                                                data-bs-toggle="tooltip"
+                                                data-bs-placement="top"
+                                                title="{{ action.action_description }}">
+                                            <i class="fas fa-info-circle"></i>
+                                        </button>
+                                    {% endif %}
+                                    {% if action.completion_notes %}
+                                        <br>
+                                        <small class="text-muted">{{ action.completion_notes|truncatechars:60 }}</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}info{% endif %}">
+                                    {{ action.get_priority_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <div>
+                                    {{ action.due_date|date:"M d, Y" }}
+                                    {% if action.is_overdue %}
+                                        <br><small class="text-danger">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>Overdue
+                                        </small>
+                                    {% elif action.due_date|date:'Y-m-d' == today %}
+                                        <br><small class="text-warning">
+                                            <i class="fas fa-clock me-1"></i>Due Today
+                                        </small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-users me-1"></i>
+                                    <small>{{ action.assigned_to_team.name|default:"-" }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user me-1"></i>
+                                    <small>{{ action.assigned_to.get_full_name|default:action.assigned_to.username }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary"
+                                            onclick="viewActionDetails({{ action.id|unlocalize }})"
+                                            data-bs-toggle="tooltip"
+                                            title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary"
+                                            onclick="editActionItem({{ action.id|unlocalize }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Edit Action">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger"
+                                            onclick="deleteActionItem({{ action.id|unlocalize }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Delete Action">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+    <div class="text-center py-4">
+        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+        <h6 class="text-muted mb-3">No Action Items</h6>
+        <p class="text-muted mb-3">
+            {% if parameter_type and parameter_id %}
+                No action items have been created for this {{ parameter_type|upper }} parameter yet.
+            {% else %}
+                No generic action items have been created for this review meeting yet.
+            {% endif %}
+        </p>
+        <button class="btn btn-outline-primary" onclick="addActionItem()">
+            <i class="fas fa-plus me-2"></i>Add First Action Item
+        </button>
+    </div>
+{% endif %}
+
+<!-- Add/Edit Action Item Form (Initially Hidden) -->
+<div class="mt-3" id="actionItemForm" style="display: none;">
+    <div class="card">
+        <div class="card-header">
+            <h6 class="mb-0" id="actionFormTitle">
+                <i class="fas fa-plus me-2"></i>Add New Action Item
+            </h6>
+        </div>
+        <div class="card-body">
+            <form onsubmit="saveActionItem(event)" id="actionForm">
+                {% csrf_token %}
+                <input type="hidden" id="actionItemId" name="action_item_id">
+                <input type="hidden" id="parameterType" name="parameter_type">
+                <input type="hidden" id="parameterId" name="parameter_id">
+
+                <div class="mb-3">
+                    <label class="form-label">Action <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="actionTitle" name="action" rows="2" required placeholder="Describe the action to be taken"></textarea>
+                    <div class="invalid-feedback" id="actionTitleError"></div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Priority</label>
+                            <select class="form-control" id="actionPriority" name="priority">
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="low">Low</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Due Date</label>
+                            <input type="date" class="form-control" id="actionDueDate" name="due_date">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Assigned To Team <span class="text-danger">*</span></label>
+                    <select class="form-control" id="actionItemTeam" name="team" required onchange="loadActionItemTeamMembers()">
+                        <option value="">Select</option>
+                        {% for team in available_teams %}
+                        <option value="{{ team.id }}">{{ team.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="invalid-feedback" id="actionItemTeamError"></div>
+                    <div class="form-text">Teams where you are in charge or a member</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Assigned to member <span class="text-danger">*</span></label>
+                    <select class="form-control" id="actionItemMember" name="assigned_to" required>
+                        <option value="">Select</option>
+                        <!-- Members will be populated when team is selected -->
+                    </select>
+                    <div class="invalid-feedback" id="actionItemMemberError"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Comments</label>
+                    <textarea class="form-control" id="actionComments" name="comments" rows="3" placeholder="Optional comments"></textarea>
+                </div>
+
+                <div id="actionFormError" class="alert alert-danger d-none"></div>
+                <div id="actionFormSuccess" class="alert alert-success d-none"></div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Save Action Item
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="cancelActionForm()">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+{% if action_items %}
+<div class="mt-3">
+    <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-outline-primary btn-sm" onclick="exportActionItems('pdf')">
+            <i class="fas fa-file-pdf me-1"></i>Export PDF
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="exportActionItems('excel')">
+            <i class="fas fa-file-excel me-1"></i>Export Excel
+        </button>
+        <button class="btn btn-outline-info btn-sm" onclick="emailActionItems()">
+            <i class="fas fa-envelope me-1"></i>Email Summary
+        </button>
+        <button class="btn btn-outline-success btn-sm" onclick="markAllCompleted()">
+            <i class="fas fa-check-double me-1"></i>Mark All Complete
+        </button>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function filterActions(filterType) {
+    const rows = document.querySelectorAll('.action-item-row');
+
+    // Update button states
+    document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    rows.forEach(row => {
+        let showRow = false;
+
+        switch(filterType) {
+            case 'all':
+                showRow = true;
+                break;
+            case 'high':
+                showRow = row.dataset.priority === 'high';
+                break;
+            case 'pending':
+                showRow = row.dataset.status !== 'completed';
+                break;
+            case 'completed':
+                showRow = row.dataset.status === 'completed';
+                break;
+        }
+
+        row.style.display = showRow ? '' : 'none';
+    });
+}
+
+window.addActionItem = function() {
+    console.log('addActionItem called - showing inline form');
+
+    // Reset form (teams already populated from template)
+    resetActionForm();
+
+    // Check if we have parameter context from line item click or URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramTypeFromUrl = urlParams.get('parameter_type');
+    const paramIdFromUrl = urlParams.get('parameter_id');
+
+    const paramType = window.currentParameterContext?.type || paramTypeFromUrl || '';
+    const paramId = window.currentParameterContext?.id || paramIdFromUrl || '';
+
+    console.log('Parameter context:', { paramType, paramId, currentContext: window.currentParameterContext });
+
+    if (paramType && paramId) {
+        console.log('Setting parameter context:', { paramType, paramId });
+        const parameterTypeField = document.getElementById('parameterType');
+        const parameterIdField = document.getElementById('parameterId');
+
+        if (parameterTypeField) parameterTypeField.value = paramType;
+        if (parameterIdField) parameterIdField.value = paramId;
+
+        // Update form title to show parameter context
+        const formTitle = document.getElementById('actionFormTitle');
+        if (formTitle) {
+            formTitle.innerHTML = `<i class="fas fa-plus me-2"></i>Add Action Item for ${paramType.toUpperCase()} ${paramId}`;
+        }
+    } else {
+        // Clear parameter context for general actions
+        const parameterTypeField = document.getElementById('parameterType');
+        const parameterIdField = document.getElementById('parameterId');
+        if (parameterTypeField) parameterTypeField.value = '';
+        if (parameterIdField) parameterIdField.value = '';
+    }
+
+    // Show the inline form
+    const formContainer = document.getElementById('actionItemForm');
+    console.log('Form container:', formContainer);
+
+    if (formContainer) {
+        console.log('Showing form container');
+        formContainer.style.display = 'block';
+        formContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        // Focus on the first input
+        const firstInput = formContainer.querySelector('#actionTitle');
+        console.log('First input field:', firstInput);
+
+        if (firstInput) {
+            setTimeout(() => {
+                firstInput.focus();
+                console.log('Focused on first input');
+            }, 300);
+        }
+    } else {
+        console.error('Form container not found!');
+    }
+}
+
+// Custom setup for Action Items context
+function setupCustomSaveForActionItems() {
+    console.log('Setting up custom save behavior for Action Items context');
+
+    const saveBtn = document.getElementById('saveActionBtn');
+    if (saveBtn) {
+        console.log('Found save button, replacing click handler');
+
+        // Clone the button to remove all existing event listeners
+        const newSaveBtn = saveBtn.cloneNode(true);
+        saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+
+        // Add our custom click handler
+        newSaveBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Custom save button clicked for Action Items');
+            saveActionForActionItems();
+        });
+    } else {
+        console.log('Save button not found, retrying...');
+        setTimeout(setupCustomSaveForActionItems, 200);
+    }
+}
+
+// Custom save function specifically for Action Items context
+function saveActionForActionItems() {
+    console.log('saveActionForActionItems called');
+
+    const form = document.getElementById('newActionForm');
+    const formData = new FormData(form);
+
+    // Clear previous errors
+    if (typeof clearFormErrors === 'function') {
+        clearFormErrors('action');
+    }
+
+    // Validate required fields
+    const action = document.getElementById('actionTitle').value.trim();
+    const team = document.getElementById('actionTeam').value;
+    const assignedTo = document.getElementById('actionMember').value;
+
+    if (!action) {
+        if (typeof showFieldError === 'function') {
+            showFieldError('actionTitle', 'Action is required');
+        }
+        return;
+    }
+
+    if (!team) {
+        if (typeof showFieldError === 'function') {
+            showFieldError('actionTeam', 'Please select a team');
+        }
+        return;
+    }
+
+    if (!assignedTo) {
+        if (typeof showFieldError === 'function') {
+            showFieldError('actionMember', 'Please select a member');
+        }
+        return;
+    }
+
+    // Disable save button
+    const saveBtn = document.getElementById('saveActionBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+
+    // Map standard action modal fields to ReviewActionItem fields
+    const actionDescription = formData.get('action');  // Standard modal uses 'action' field
+    const priority = 'medium';  // Default priority since standard modal doesn't have priority
+    const dueDate = formData.get('due_date');
+    const assignedToId = formData.get('assigned_to');
+    const comments = '';  // Standard modal doesn't have comments field
+
+    // Create new FormData with correct field names for ReviewActionItem
+    const reviewFormData = new FormData();
+    reviewFormData.append('action', 'add');
+    reviewFormData.append('action_description', actionDescription);
+    reviewFormData.append('priority', priority);
+    reviewFormData.append('due_date', dueDate);
+    reviewFormData.append('assigned_to', assignedToId);
+    reviewFormData.append('comments', comments);
+
+    fetch('{% url "reviews:action_items" meeting.pk %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken') || getCsrfToken(),
+        },
+        body: reviewFormData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (typeof showSuccessMessage === 'function') {
+                showSuccessMessage('Action created successfully!', 'action');
+            }
+
+            setTimeout(() => {
+                // Close the action modal
+                if (typeof currentModal !== 'undefined' && currentModal) {
+                    currentModal.hide();
+                }
+
+                console.log('Action saved from Action Items context - refreshing popup');
+                // Reset the flag
+                window.addingActionFromActionItems = false;
+
+                // Refresh the Action Items popup content
+                refreshActionItemsFromPopup();
+
+                // Show the Action Items modal again
+                setTimeout(() => {
+                    const actionItemsModal = new bootstrap.Modal(document.getElementById('actionItemsModal'));
+                    actionItemsModal.show();
+                }, 500);
+            }, 1500);
+        } else {
+            if (typeof showErrorMessage === 'function') {
+                showErrorMessage(data.error || 'Error creating action', 'action');
+            }
+            // Re-enable save button on error
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Action';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (typeof showErrorMessage === 'function') {
+            showErrorMessage('Error creating action: ' + error.message, 'action');
+        }
+        // Re-enable save button on error
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Action';
+    });
+}
+
+// Function to refresh Action Items popup from within popup context
+function refreshActionItemsFromPopup() {
+    console.log('Refreshing Action Items popup from popup context...');
+    const content = document.getElementById('actionItemsContent');
+    if (content) {
+        content.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                <p class="text-muted mt-2">Refreshing action items...</p>
+            </div>
+        `;
+
+        fetch('{% url "reviews:action_items" meeting.pk %}')
+            .then(response => response.text())
+            .then(html => {
+                content.innerHTML = html;
+
+                // Execute any script tags in the loaded content
+                const scripts = content.querySelectorAll('script');
+                scripts.forEach(script => {
+                    const newScript = document.createElement('script');
+                    if (script.src) {
+                        newScript.src = script.src;
+                    } else {
+                        newScript.textContent = script.textContent;
+                    }
+                    document.head.appendChild(newScript);
+                    setTimeout(() => document.head.removeChild(newScript), 100);
+                });
+
+                console.log('Action Items refreshed successfully from popup');
+            })
+            .catch(error => {
+                console.error('Error refreshing action items:', error);
+                content.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                        <p class="text-danger mt-2">Error refreshing action items: ${error.message}</p>
+                    </div>
+                `;
+            });
+    }
+}
+
+// Helper function to get CSRF token (fallback)
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
+}
+
+function editActionItem(actionId) {
+    // For now, show an alert. Edit functionality can be implemented
+    // by loading data into the standard action modal if needed
+    alert('Edit functionality coming soon - please delete and recreate the action for now');
+}
+
+function cancelActionForm() {
+    document.getElementById('actionItemForm').style.display = 'none';
+    document.getElementById('actionForm').reset();
+    document.getElementById('actionItemId').value = '';
+    document.getElementById('actionMember').innerHTML = '<option value="">Select</option>';
+    clearFormErrors('action');
+}
+
+function saveActionItem(event) {
+    event.preventDefault();
+
+    const form = document.getElementById('actionForm');
+    const formData = new FormData(form);
+
+    // Clear previous errors
+    clearFormErrors('action');
+
+    // Validate required fields
+    const action = document.getElementById('actionTitle').value.trim();
+    const team = document.getElementById('actionItemTeam').value;
+    const assignedTo = document.getElementById('actionItemMember').value;
+
+    if (!action) {
+        showFieldError('actionTitle', 'Action is required');
+        return;
+    }
+
+    if (!team) {
+        showFieldError('actionItemTeam', 'Please select a team');
+        return;
+    }
+
+    if (!assignedTo) {
+        showFieldError('actionItemMember', 'Please select a member');
+        return;
+    }
+
+    // Disable save button
+    const saveBtn = document.querySelector('#actionForm button[type="submit"]');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+
+    // Create review action item data
+    const reviewFormData = new FormData();
+    reviewFormData.append('action', 'add');
+    reviewFormData.append('action_description', document.getElementById('actionTitle').value);
+    reviewFormData.append('priority', document.getElementById('actionPriority').value);
+    reviewFormData.append('due_date', document.getElementById('actionDueDate').value);
+    reviewFormData.append('assigned_to', document.getElementById('actionItemMember').value);
+    reviewFormData.append('assigned_to_team', document.getElementById('actionItemTeam').value);
+    reviewFormData.append('comments', document.getElementById('actionComments').value);
+
+    // Include parameter context if available
+    const parameterType = document.getElementById('parameterType').value;
+    const parameterId = document.getElementById('parameterId').value;
+    if (parameterType && parameterId) {
+        reviewFormData.append('parameter_type', parameterType);
+        reviewFormData.append('parameter_id', parameterId);
+    }
+
+    reviewFormData.append('csrfmiddlewaretoken', getCsrfToken());
+
+    // Use the reviews action items endpoint
+    fetch('{% url "reviews:action_items" meeting.pk %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+        },
+        body: reviewFormData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage('Action created successfully!', 'action');
+            setTimeout(() => {
+                cancelActionForm();
+                // Refresh the action items list
+                refreshActionItems();
+            }, 1500);
+        } else {
+            showErrorMessage(data.error || 'Error creating action', 'action');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving action:', error);
+        showErrorMessage('Network error. Please try again.', 'action');
+    })
+    .finally(() => {
+        // Re-enable save button
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Action Item';
+    });
+}
+
+function viewActionDetails(actionId) {
+    // This would show a detailed view modal
+    alert('Action details view would be implemented here');
+}
+
+function deleteActionItem(actionId) {
+    if (confirm('Are you sure you want to delete this action item?')) {
+        const formData = new FormData();
+        formData.append('action_item_id', actionId);
+        formData.append('action', 'delete');
+
+        fetch('{% url "reviews:action_items" meeting.pk %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                refreshActionItems();
+            } else {
+                alert(data.error || 'Error deleting action item');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting action item');
+        });
+    }
+}
+
+function exportActionItems(format) {
+    const url = `{% url "reviews:action_items" meeting.pk %}?export=${format}`;
+    window.open(url, '_blank');
+}
+
+function emailActionItems() {
+    // This would trigger an email with action items summary
+    alert('Email functionality would be implemented here');
+}
+
+function markAllCompleted() {
+    if (confirm('Mark all action items as completed?')) {
+        fetch('{% url "reviews:action_items" meeting.pk %}', {
+            method: 'PATCH',
+            headers: {
+                'X-CSRFToken': getCsrfToken(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({action: 'mark_all_completed'})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                refreshActionItems();
+            } else {
+                alert(data.error || 'Error updating action items');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error updating action items');
+        });
+    }
+}
+
+function refreshActionItems() {
+    // Reload the entire action items modal content, preserving parameter context
+    let url = '{% url "reviews:action_items" meeting.pk %}';
+
+    // Check if we have parameter context to preserve
+    const parameterType = '{{ parameter_type|default:"" }}';
+    const parameterId = '{{ parameter_id|default:"" }}';
+
+    if (parameterType && parameterId) {
+        url += `?parameter_type=${parameterType}&parameter_id=${parameterId}`;
+        console.log('Refreshing with parameter context:', { parameterType, parameterId });
+    } else {
+        console.log('Refreshing generic action items');
+    }
+
+    const contentDiv = document.getElementById('actionItemsContent');
+    if (!contentDiv) {
+        console.error('actionItemsContent not found');
+        return;
+    }
+
+    // Show loading state
+    contentDiv.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Refreshing action items...</p>
+        </div>
+    `;
+
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.text();
+        })
+        .then(html => {
+            contentDiv.innerHTML = html;
+
+            // Reinitialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            console.log('Action items refreshed successfully');
+        })
+        .catch(error => {
+            console.error('Error refreshing action items:', error);
+            contentDiv.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error refreshing: ${error.message}</p>
+                    <button class="btn btn-outline-primary btn-sm" onclick="refreshActionItems()">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
+}
+
+// Helper functions to match standard action modal functionality
+function loadUserTeamsForActionItems() {
+    console.log('Loading user teams for action items...');
+    fetch('/api/user-teams/', {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            populateActionTeamDropdown(data.teams);
+        } else {
+            console.error('API returned error:', data.error || 'Unknown error');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading user teams:', error);
+    });
+}
+
+function populateActionTeamDropdown(teams) {
+    const teamSelect = document.getElementById('actionItemTeam');
+    if (teamSelect) {
+        teamSelect.innerHTML = '<option value="">Select</option>';
+        teams.forEach(team => {
+            teamSelect.innerHTML += `<option value="${team.id}">${team.name}</option>`;
+        });
+    }
+}
+
+function loadActionItemTeamMembers() {
+    const teamSelect = document.getElementById('actionItemTeam');
+    const memberSelect = document.getElementById('actionItemMember');
+
+    console.log('loadActionItemTeamMembers called');
+    console.log('Team select element:', teamSelect);
+    console.log('Member select element:', memberSelect);
+
+    if (!teamSelect || !memberSelect) {
+        console.error('Missing team or member select elements');
+        return;
+    }
+
+    const teamId = teamSelect.value;
+    console.log('Selected team ID:', teamId);
+
+    if (!teamId) {
+        memberSelect.innerHTML = '<option value="">Select</option>';
+        return;
+    }
+
+    console.log('Fetching team members for team ID:', teamId);
+
+    fetch(`/api/team-members/${teamId}/`, {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => {
+        console.log('API response received:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Team members data:', data);
+        if (data.success) {
+            memberSelect.innerHTML = '<option value="">Select</option>';
+            data.members.forEach(member => {
+                memberSelect.innerHTML += `<option value="${member.id}">${member.name}</option>`;
+            });
+            console.log('Team members populated successfully');
+        } else {
+            console.error('API returned error:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading team members:', error);
+    });
+}
+
+function resetActionForm() {
+    const form = document.getElementById('actionForm');
+    if (form) {
+        form.reset();
+    }
+
+    const memberSelect = document.getElementById('actionItemMember');
+    if (memberSelect) {
+        memberSelect.innerHTML = '<option value="">Select</option>';
+    }
+
+    // Clear parameter context
+    const parameterType = document.getElementById('parameterType');
+    const parameterId = document.getElementById('parameterId');
+    if (parameterType) parameterType.value = '';
+    if (parameterId) parameterId.value = '';
+
+    // Reset form title
+    const formTitle = document.getElementById('actionFormTitle');
+    if (formTitle) {
+        formTitle.innerHTML = '<i class="fas fa-plus me-2"></i>Add New Action Item';
+    }
+
+    clearFormErrors('action');
+}
+
+function clearFormErrors(formType) {
+    const errorDiv = document.getElementById(`${formType}FormError`);
+    const successDiv = document.getElementById(`${formType}FormSuccess`);
+
+    if (errorDiv) errorDiv.classList.add('d-none');
+    if (successDiv) successDiv.classList.add('d-none');
+
+    // Clear field-specific errors
+    const errorElements = document.querySelectorAll(`#${formType}TitleError, #${formType}ItemTeamError, #${formType}ItemMemberError`);
+    errorElements.forEach(el => {
+        el.textContent = '';
+        if (el.parentElement) {
+            el.parentElement.classList.remove('has-error');
+        }
+    });
+
+    // Clear Bootstrap validation classes
+    const fields = document.querySelectorAll(`#${formType}Title, #${formType}ItemTeam, #${formType}ItemMember`);
+    fields.forEach(field => {
+        field.classList.remove('is-invalid');
+    });
+}
+
+function showFieldError(fieldId, message) {
+    const field = document.getElementById(fieldId);
+    const errorElement = document.getElementById(fieldId + 'Error');
+
+    if (field) {
+        field.classList.add('is-invalid');
+    }
+    if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+    }
+}
+
+function showSuccessMessage(message, formType) {
+    const successDiv = document.getElementById(`${formType}FormSuccess`);
+    if (successDiv) {
+        successDiv.textContent = message;
+        successDiv.classList.remove('d-none');
+    }
+}
+
+function showErrorMessage(message, formType) {
+    const errorDiv = document.getElementById(`${formType}FormError`);
+    if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.classList.remove('d-none');
+    }
+}
+
+// Initialize tooltips and setup team change handler
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Set parameter context from URL parameters or global context
+    const urlParams = new URLSearchParams(window.location.search);
+    const parameterType = urlParams.get('parameter_type') || '{{ parameter_type|default:"" }}';
+    const parameterId = urlParams.get('parameter_id') || '{{ parameter_id|default:"" }}';
+
+    if (parameterType && parameterId) {
+        console.log('Setting parameter context from URL/template:', { parameterType, parameterId });
+
+        // Store in global context
+        window.currentParameterContext = {
+            type: parameterType,
+            id: parameterId
+        };
+
+        // Set hidden form fields if they exist
+        const parameterTypeField = document.getElementById('parameterType');
+        const parameterIdField = document.getElementById('parameterId');
+
+        if (parameterTypeField) parameterTypeField.value = parameterType;
+        if (parameterIdField) parameterIdField.value = parameterId;
+    }
+
+    // Team change handler is now handled via inline onchange attribute
+});
+</script>

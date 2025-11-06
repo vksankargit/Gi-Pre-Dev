@@ -1,0 +1,788 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Plan - PRE System{% endblock %}
+
+{% block extra_css %}
+<style id="customStyles">
+    /* Style Option 1: Modern Gradient (Default) */
+    .style-1 .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    }
+    .style-1 .page-header h1 {
+        color: white;
+        font-weight: 600;
+        margin: 0;
+    }
+    .style-1 .main-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    .style-1 .nav-tabs {
+        border-bottom: 2px solid #e9ecef;
+    }
+    .style-1 .nav-tabs .nav-link {
+        border: none;
+        color: #6c757d;
+        font-weight: 500;
+        padding: 1rem 1.5rem;
+        transition: all 0.3s ease;
+    }
+    .style-1 .nav-tabs .nav-link:hover {
+        color: #667eea;
+        background: #f8f9fa;
+    }
+    .style-1 .nav-tabs .nav-link.active {
+        color: #667eea;
+        background: transparent;
+        border-bottom: 3px solid #667eea;
+    }
+    .style-1 .form-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+    .style-1 .form-control, .style-1 .form-select {
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        padding: 0.625rem 0.875rem;
+        transition: all 0.3s ease;
+    }
+    .style-1 .form-control:focus, .style-1 .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+    .style-1 .btn {
+        border-radius: 8px;
+        padding: 0.625rem 1.25rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        border: none;
+    }
+    .style-1 .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+    .style-1 .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+        background: linear-gradient(135deg, #5568d3 0%, #6a3f8c 100%);
+    }
+    .style-1 .btn-success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
+    }
+    .style-1 .btn-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 25px rgba(17, 153, 142, 0.5);
+        background: linear-gradient(135deg, #0e8073 0%, #2dd66a 100%);
+    }
+    .style-1 .btn-secondary {
+        background: linear-gradient(135deg, #868f96 0%, #596164 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+    }
+    .style-1 .btn-secondary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 25px rgba(108, 117, 125, 0.5);
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    }
+    .style-1 .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none !important;
+    }
+
+    /* Style Option 2: Clean Minimal */
+    .style-2 .page-header {
+        background: white;
+        padding: 2rem;
+        border-bottom: 1px solid #e9ecef;
+        margin-bottom: 2rem;
+    }
+    .style-2 .page-header h1 {
+        color: #212529;
+        font-weight: 300;
+        font-size: 2.5rem;
+        margin: 0;
+    }
+    .style-2 .main-card {
+        border: 1px solid #e9ecef;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .style-2 .card-header {
+        background: white;
+        border-bottom: 1px solid #e9ecef;
+    }
+    .style-2 .nav-tabs {
+        border: none;
+    }
+    .style-2 .nav-tabs .nav-link {
+        border: none;
+        color: #6c757d;
+        font-weight: 400;
+        padding: 1rem 2rem;
+        border-radius: 0;
+    }
+    .style-2 .nav-tabs .nav-link.active {
+        color: #212529;
+        background: #f8f9fa;
+        border-bottom: 2px solid #212529;
+    }
+    .style-2 .form-label {
+        font-weight: 400;
+        color: #6c757d;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+    }
+    .style-2 .form-control, .style-2 .form-select {
+        border-radius: 0;
+        border: none;
+        border-bottom: 2px solid #dee2e6;
+        padding: 0.5rem 0;
+        background: transparent;
+    }
+    .style-2 .form-control:focus, .style-2 .form-select:focus {
+        border-bottom-color: #212529;
+        box-shadow: none;
+        background: transparent;
+    }
+    .style-2 .btn {
+        border-radius: 0;
+        padding: 0.625rem 1.5rem;
+        font-weight: 400;
+        text-transform: uppercase;
+        font-size: 0.875rem;
+        letter-spacing: 0.5px;
+        border: 2px solid;
+        transition: all 0.3s ease;
+    }
+    .style-2 .btn-primary {
+        background: #212529;
+        border-color: #212529;
+        color: white;
+    }
+    .style-2 .btn-primary:hover {
+        background: white;
+        color: #212529;
+    }
+    .style-2 .btn-success {
+        background: white;
+        border-color: #28a745;
+        color: #28a745;
+    }
+    .style-2 .btn-success:hover {
+        background: #28a745;
+        color: white;
+    }
+    .style-2 .btn-secondary {
+        background: white;
+        border-color: #6c757d;
+        color: #6c757d;
+    }
+    .style-2 .btn-secondary:hover {
+        background: #6c757d;
+        color: white;
+    }
+    .style-2 .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    /* Style Option 3: Corporate Blue */
+    .style-3 .page-header {
+        background: #0d47a1;
+        color: white;
+        padding: 2rem;
+        border-radius: 0;
+        margin-bottom: 2rem;
+        border-left: 5px solid #1976d2;
+    }
+    .style-3 .page-header h1 {
+        color: white;
+        font-weight: 600;
+        margin: 0;
+    }
+    .style-3 .main-card {
+        border: none;
+        border-radius: 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .style-3 .card-header {
+        background: #f5f5f5;
+        border-bottom: 3px solid #1976d2;
+    }
+    .style-3 .nav-tabs {
+        border: none;
+    }
+    .style-3 .nav-tabs .nav-link {
+        border: none;
+        color: #424242;
+        font-weight: 500;
+        padding: 1rem 1.5rem;
+        background: transparent;
+    }
+    .style-3 .nav-tabs .nav-link.active {
+        color: #1976d2;
+        background: white;
+        border-top: 3px solid #1976d2;
+    }
+    .style-3 .form-label {
+        font-weight: 600;
+        color: #0d47a1;
+    }
+    .style-3 .form-control, .style-3 .form-select {
+        border: 2px solid #e0e0e0;
+        border-radius: 4px;
+    }
+    .style-3 .form-control:focus, .style-3 .form-select:focus {
+        border-color: #1976d2;
+        box-shadow: 0 0 0 0.2rem rgba(25, 118, 210, 0.25);
+    }
+    .style-3 .btn {
+        border-radius: 4px;
+        padding: 0.625rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        font-size: 0.875rem;
+        letter-spacing: 0.3px;
+    }
+    .style-3 .btn-primary {
+        background: #1976d2;
+        border: 2px solid #1976d2;
+        color: white;
+        box-shadow: 0 2px 10px rgba(25, 118, 210, 0.3);
+    }
+    .style-3 .btn-primary:hover {
+        background: #0d47a1;
+        border-color: #0d47a1;
+        box-shadow: 0 4px 15px rgba(13, 71, 161, 0.4);
+    }
+    .style-3 .btn-success {
+        background: #2e7d32;
+        border: 2px solid #2e7d32;
+        color: white;
+        box-shadow: 0 2px 10px rgba(46, 125, 50, 0.3);
+    }
+    .style-3 .btn-success:hover {
+        background: #1b5e20;
+        border-color: #1b5e20;
+        box-shadow: 0 4px 15px rgba(27, 94, 32, 0.4);
+    }
+    .style-3 .btn-secondary {
+        background: #616161;
+        border: 2px solid #616161;
+        color: white;
+        box-shadow: 0 2px 10px rgba(97, 97, 97, 0.3);
+    }
+    .style-3 .btn-secondary:hover {
+        background: #424242;
+        border-color: #424242;
+        box-shadow: 0 4px 15px rgba(66, 66, 66, 0.4);
+    }
+    .style-3 .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Style Option 4: Dark Mode */
+    .style-4 .page-header {
+        background: #1a1a1a;
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        border: 1px solid #333;
+    }
+    .style-4 .page-header h1 {
+        color: white;
+        font-weight: 600;
+        margin: 0;
+    }
+    .style-4 .main-card {
+        background: #2a2a2a;
+        border: 1px solid #404040;
+        border-radius: 12px;
+        color: #e0e0e0;
+    }
+    .style-4 .card-header {
+        background: #1a1a1a;
+        border-bottom: 1px solid #404040;
+    }
+    .style-4 .nav-tabs {
+        border-bottom: 1px solid #404040;
+    }
+    .style-4 .nav-tabs .nav-link {
+        color: #999;
+        border: none;
+    }
+    .style-4 .nav-tabs .nav-link.active {
+        color: #4fc3f7;
+        background: #2a2a2a;
+        border-bottom: 2px solid #4fc3f7;
+    }
+    .style-4 .form-label {
+        color: #b0b0b0;
+        font-weight: 500;
+    }
+    .style-4 .form-control, .style-4 .form-select {
+        background: #1a1a1a;
+        border: 1px solid #404040;
+        color: #e0e0e0;
+        border-radius: 8px;
+    }
+    .style-4 .form-control:focus, .style-4 .form-select:focus {
+        background: #1a1a1a;
+        border-color: #4fc3f7;
+        color: #e0e0e0;
+        box-shadow: 0 0 0 0.2rem rgba(79, 195, 247, 0.25);
+    }
+    .style-4 .form-text {
+        color: #999;
+    }
+    .style-4 .btn {
+        border-radius: 8px;
+        padding: 0.625rem 1.25rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        border: 2px solid;
+    }
+    .style-4 .btn-primary {
+        background: #4fc3f7;
+        border-color: #4fc3f7;
+        color: #1a1a1a;
+        box-shadow: 0 4px 15px rgba(79, 195, 247, 0.4);
+    }
+    .style-4 .btn-primary:hover {
+        background: #29b6f6;
+        border-color: #29b6f6;
+        box-shadow: 0 6px 20px rgba(41, 182, 246, 0.5);
+        transform: translateY(-2px);
+    }
+    .style-4 .btn-success {
+        background: transparent;
+        border-color: #66bb6a;
+        color: #66bb6a;
+    }
+    .style-4 .btn-success:hover {
+        background: #66bb6a;
+        color: #1a1a1a;
+        box-shadow: 0 4px 15px rgba(102, 187, 106, 0.4);
+    }
+    .style-4 .btn-secondary {
+        background: transparent;
+        border-color: #78909c;
+        color: #78909c;
+    }
+    .style-4 .btn-secondary:hover {
+        background: #78909c;
+        color: #1a1a1a;
+        box-shadow: 0 4px 15px rgba(120, 144, 156, 0.4);
+    }
+    .style-4 .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none !important;
+    }
+
+    /* Style Option 5: Soft Pastel */
+    .style-5 .page-header {
+        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        color: #5a3e36;
+        padding: 2rem;
+        border-radius: 20px;
+        margin-bottom: 2rem;
+    }
+    .style-5 .page-header h1 {
+        color: #5a3e36;
+        font-weight: 600;
+        margin: 0;
+    }
+    .style-5 .main-card {
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.06);
+        background: #fffaf5;
+    }
+    .style-5 .card-header {
+        background: transparent;
+        border: none;
+    }
+    .style-5 .nav-tabs {
+        border: none;
+    }
+    .style-5 .nav-tabs .nav-link {
+        border: none;
+        color: #8d6e63;
+        font-weight: 500;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        margin-right: 0.5rem;
+    }
+    .style-5 .nav-tabs .nav-link.active {
+        color: #5a3e36;
+        background: #fff;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .style-5 .form-label {
+        font-weight: 600;
+        color: #5a3e36;
+    }
+    .style-5 .form-control, .style-5 .form-select {
+        border: 2px solid #f5e6db;
+        border-radius: 12px;
+        background: white;
+    }
+    .style-5 .form-control:focus, .style-5 .form-select:focus {
+        border-color: #fcb69f;
+        box-shadow: 0 0 0 0.2rem rgba(252, 182, 159, 0.25);
+    }
+    .style-5 .btn {
+        border-radius: 12px;
+        padding: 0.625rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+    }
+    .style-5 .btn-primary {
+        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        color: #5a3e36;
+        box-shadow: 0 4px 15px rgba(252, 182, 159, 0.4);
+    }
+    .style-5 .btn-primary:hover {
+        background: linear-gradient(135deg, #ffd9b8 0%, #fb9f87 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(252, 182, 159, 0.5);
+    }
+    .style-5 .btn-success {
+        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        color: #5a3e36;
+        box-shadow: 0 4px 15px rgba(168, 237, 234, 0.4);
+    }
+    .style-5 .btn-success:hover {
+        background: linear-gradient(135deg, #8fded9 0%, #fdc5d7 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(168, 237, 234, 0.5);
+    }
+    .style-5 .btn-secondary {
+        background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+        color: #5a3e36;
+        box-shadow: 0 4px 15px rgba(224, 195, 252, 0.4);
+    }
+    .style-5 .btn-secondary:hover {
+        background: linear-gradient(135deg, #d0b0ec 0%, #7eb5ec 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(224, 195, 252, 0.5);
+    }
+    .style-5 .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none !important;
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="style-3">
+    <div class="page-header">
+        <h1>
+            <i class="fas fa-clipboard-list me-2"></i>Plan
+        </h1>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card main-card">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" id="planTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="annual-plan-tab" data-bs-toggle="tab" data-bs-target="#annual-plan" type="button" role="tab">
+                                <i class="fas fa-calendar-alt me-2"></i>Upload Annual Plan
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="quarterly-plan-tab" data-bs-toggle="tab" data-bs-target="#quarterly-plan" type="button" role="tab">
+                                <i class="fas fa-calendar me-2"></i>Upload Quarterly Plan
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content" id="planTabContent">
+                        <!-- Annual Plan Tab -->
+                        <div class="tab-pane fade show active" id="annual-plan" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Team</label>
+                                        <select class="form-control" id="annualTeam" required>
+                                            <option value="">Select Team</option>
+                                            {% for team in managed_teams %}
+                                            <option value="{{ team.id }}">{{ team.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Plan Year</label>
+                                        <select class="form-control" id="annualPlanYear" required>
+                                            <option value="">Select Plan Year</option>
+                                            {% for year in financial_years %}
+                                            <option value="{{ year.id }}">{{ year.year }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Select File</label>
+                                        <input type="file" class="form-control" id="annualFile" accept=".xlsx,.xls">
+                                        <div class="form-text">Upload Excel file with FPI, GPI, and PPI sheets</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mb-4">
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-success" onclick="downloadAnnualTemplate()">
+                                        <i class="fas fa-download me-2"></i>Download Template
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" onclick="viewHistory('annual')">
+                                        <i class="fas fa-history me-2"></i>View History
+                                    </button>
+                                </div>
+                                <button type="button" class="btn btn-primary" id="uploadAnnualBtn" onclick="uploadAnnualPlan()" disabled>
+                                    <i class="fas fa-upload me-2"></i>Upload
+                                </button>
+                            </div>
+
+                            <div id="annualUploadStatus" class="alert" style="display: none;"></div>
+                        </div>
+
+                        <!-- Quarterly Plan Tab -->
+                        <div class="tab-pane fade" id="quarterly-plan" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Team</label>
+                                        <select class="form-control" id="quarterlyTeam" onchange="updateQuarterlyTemplate()" required>
+                                            <option value="">Select Team</option>
+                                            {% for team in managed_teams %}
+                                            <option value="{{ team.id }}">{{ team.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Plan Year & Quarter</label>
+                                        <select class="form-control" id="quarterlyQuarter" required>
+                                            <option value="">Select Quarter</option>
+                                            {% for quarter in quarters %}
+                                            <option value="{{ quarter.0 }}">{{ quarter.1 }}</option>
+                                            {% endfor %}
+                                            {% if not quarters %}
+                                            <option disabled>No quarters available</option>
+                                            {% endif %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Select File</label>
+                                        <input type="file" class="form-control" id="quarterlyFile" accept=".xlsx,.xls">
+                                        <div class="form-text">Upload Excel file with FPI, GPI-M, GPI-W, PPI sheets</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mb-4">
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-success" id="downloadQuarterlyBtn" onclick="downloadQuarterlyTemplate()" disabled>
+                                        <i class="fas fa-download me-2"></i>Download Template
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" onclick="viewHistory('quarterly')">
+                                        <i class="fas fa-history me-2"></i>View History
+                                    </button>
+                                </div>
+                                <button type="button" class="btn btn-primary" id="uploadQuarterlyBtn" onclick="uploadQuarterlyPlan()" disabled>
+                                    <i class="fas fa-upload me-2"></i>Upload
+                                </button>
+                            </div>
+
+                            <div id="quarterlyUploadStatus" class="alert" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View History Modal -->
+<div class="modal fade" id="historyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload History</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="historyContent">
+                <!-- History content will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Enable upload button when all required fields are filled
+document.getElementById('annualFile').addEventListener('change', checkAnnualUpload);
+document.getElementById('annualTeam').addEventListener('change', checkAnnualUpload);
+document.getElementById('annualPlanYear').addEventListener('change', checkAnnualUpload);
+
+function checkAnnualUpload() {
+    const file = document.getElementById('annualFile').files.length > 0;
+    const team = document.getElementById('annualTeam').value;
+    const year = document.getElementById('annualPlanYear').value;
+    document.getElementById('uploadAnnualBtn').disabled = !(file && team && year);
+}
+
+document.getElementById('quarterlyFile').addEventListener('change', checkQuarterlyUpload);
+document.getElementById('quarterlyTeam').addEventListener('change', checkQuarterlyUpload);
+document.getElementById('quarterlyQuarter').addEventListener('change', checkQuarterlyUpload);
+
+function checkQuarterlyUpload() {
+    const file = document.getElementById('quarterlyFile').files.length > 0;
+    const team = document.getElementById('quarterlyTeam').value;
+    const quarter = document.getElementById('quarterlyQuarter').value;
+    document.getElementById('uploadQuarterlyBtn').disabled = !(file && team && quarter);
+}
+
+function updateQuarterlyTemplate() {
+    const team = document.getElementById('quarterlyTeam').value;
+    document.getElementById('downloadQuarterlyBtn').disabled = !team;
+}
+
+function downloadAnnualTemplate() {
+    window.location.href = '{% url "plans:annual_template" %}';
+}
+
+function downloadQuarterlyTemplate() {
+    const teamId = document.getElementById('quarterlyTeam').value;
+    if (teamId) {
+        window.location.href = `/plans/quarterly/download-template/?team_id=${teamId}`;
+    }
+}
+
+function uploadAnnualPlan() {
+    const formData = new FormData();
+    const fileInput = document.getElementById('annualFile');
+    const teamId = document.getElementById('annualTeam').value;
+    const yearId = document.getElementById('annualPlanYear').value;
+
+    formData.append('file', fileInput.files[0]);
+    formData.append('team_id', teamId);
+    formData.append('financial_year_id', yearId);
+
+    const statusDiv = document.getElementById('annualUploadStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.className = 'alert alert-info';
+    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading and processing...';
+
+    fetch('{% url "plans:annual_upload" %}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.className = 'alert alert-success';
+            statusDiv.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + data.message;
+            fileInput.value = '';
+            document.getElementById('uploadAnnualBtn').disabled = true;
+        } else {
+            statusDiv.className = 'alert alert-danger';
+            statusDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>' + data.error;
+        }
+    })
+    .catch(error => {
+        statusDiv.className = 'alert alert-danger';
+        statusDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Upload failed: ' + error;
+    });
+}
+
+function uploadQuarterlyPlan(confirmDelete = false) {
+    const formData = new FormData();
+    const fileInput = document.getElementById('quarterlyFile');
+    const teamId = document.getElementById('quarterlyTeam').value;
+    const quarterId = document.getElementById('quarterlyQuarter').value;
+
+    formData.append('file', fileInput.files[0]);
+    formData.append('team_id', teamId);
+    formData.append('quarter_id', quarterId);
+
+    if (confirmDelete) {
+        formData.append('confirm_delete', 'true');
+    }
+
+    const statusDiv = document.getElementById('quarterlyUploadStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.className = 'alert alert-info';
+    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading and processing...';
+
+    fetch('{% url "plans:quarterly_upload" %}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.className = 'alert alert-success';
+            statusDiv.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + data.message;
+            fileInput.value = '';
+            document.getElementById('uploadQuarterlyBtn').disabled = true;
+        } else if (data.requires_confirmation) {
+            // Show confirmation dialog
+            statusDiv.className = 'alert alert-warning';
+            statusDiv.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>' + data.error +
+                '<div class="mt-3">' +
+                '<button class="btn btn-danger me-2" onclick="uploadQuarterlyPlan(true)">Yes, Delete and Upload</button>' +
+                '<button class="btn btn-secondary" onclick="document.getElementById(\'quarterlyUploadStatus\').style.display=\'none\'">Cancel</button>' +
+                '</div>';
+        } else {
+            statusDiv.className = 'alert alert-danger';
+            statusDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>' + data.error;
+        }
+    })
+    .catch(error => {
+        statusDiv.className = 'alert alert-danger';
+        statusDiv.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Upload failed: ' + error;
+    });
+}
+
+function viewHistory(type) {
+    // Navigate to the full page instead of showing in modal
+    const url = type === 'annual' ? '{% url "plans:annual_history" %}' : '{% url "plans:quarterly_history" %}';
+    window.location.href = url;
+}
+</script>
+{% endblock %}

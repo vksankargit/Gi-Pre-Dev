@@ -1,0 +1,405 @@
+<!-- Issues Tab Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">
+        <i class="fas fa-exclamation-triangle me-2"></i>Issues Log
+    </h5>
+    <div class="btn-group">
+        <button class="btn btn-success btn-sm" onclick="openNewIssueModal()">
+            <i class="fas fa-plus me-1"></i>Add Issue
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="window.location.reload()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
+</div>
+
+{% if issues %}
+    <!-- Issues Table -->
+    <div class="card">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-list me-2"></i>Issue Details
+                <span class="badge bg-secondary ms-2">{{ issues|length }} issue{{ issues|length|pluralize }}</span>
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
+                <table class="table table-hover mb-0" id="issuesTable">
+                    <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
+                        <tr>
+                            <th style="width: 5%">ID</th>
+                            <th style="width: 15%">Description</th>
+                            <th style="width: 20%">Source</th>
+                            <th style="width: 10%">Status</th>
+                            <th style="width: 10%">Reported By</th>
+                            <th style="width: 10%">Required By</th>
+                            <th style="width: 8%">Actions</th>
+                            <th style="width: 22%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for issue in issues %}
+                        <tr class="issue-row" data-issue-id="{{ issue.id }}" data-status="{{ issue.status }}">
+                            <td>
+                                <span class="badge bg-dark">#{{ issue.id }}</span>
+                            </td>
+                            <td>
+                                <div>
+                                    <strong>{{ issue.title|truncatechars:40 }}</strong>
+                                    {% if issue.title|length > 40 %}
+                                        <button class="btn btn-link btn-sm p-0 ms-1"
+                                                data-bs-toggle="tooltip"
+                                                data-bs-placement="top"
+                                                title="{{ issue.title }}">
+                                            <i class="fas fa-info-circle"></i>
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ issue.source_display }}</small>
+                            </td>
+                            <td>
+                                <span class="badge status-badge bg-{% if issue.status == 'resolved' %}success{% elif issue.status == 'open' %}secondary{% elif issue.status == 'on_hold' %}warning{% elif issue.status == 'dropped' %}danger{% elif issue.status == 'escalated' %}info{% endif %}">
+                                    {{ issue.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <small>{{ issue.reported_by.get_full_name|default:issue.reported_by.username }}</small>
+                            </td>
+                            <td>
+                                {% if issue.required_by %}
+                                    {{ issue.required_by|date:"M d, Y" }}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-light text-dark">{{ issue.action_count }}</span>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <!-- Add Action Button -->
+                                    <button class="btn btn-outline-primary"
+                                            onclick="addIssueAction({{ issue.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Add Action">
+                                        <i class="fas fa-plus-circle"></i> Action
+                                    </button>
+
+                                    <!-- Mark Resolved / Undo Resolved -->
+                                    {% if issue.status == 'resolved' %}
+                                    <button class="btn btn-outline-success"
+                                            onclick="revertIssueStatus({{ issue.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Undo Resolved">
+                                        <i class="fas fa-undo"></i> Undo
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-outline-success"
+                                            onclick="updateIssueStatus({{ issue.id }}, 'resolved')"
+                                            data-bs-toggle="tooltip"
+                                            title="Mark Resolved">
+                                        <i class="fas fa-check-circle"></i> Resolve
+                                    </button>
+                                    {% endif %}
+
+                                    <!-- Mark On Hold / Resume -->
+                                    {% if issue.status == 'on_hold' %}
+                                    <button class="btn btn-outline-warning"
+                                            onclick="revertIssueStatus({{ issue.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Resume">
+                                        <i class="fas fa-play"></i> Resume
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-outline-warning"
+                                            onclick="updateIssueStatus({{ issue.id }}, 'on_hold')"
+                                            data-bs-toggle="tooltip"
+                                            title="Mark On Hold">
+                                        <i class="fas fa-pause"></i> Hold
+                                    </button>
+                                    {% endif %}
+
+                                    <!-- Mark Drop / Mark Active -->
+                                    {% if issue.status == 'dropped' %}
+                                    <button class="btn btn-outline-danger"
+                                            onclick="revertIssueStatus({{ issue.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Mark Active">
+                                        <i class="fas fa-play-circle"></i> Activate
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-outline-danger"
+                                            onclick="updateIssueStatus({{ issue.id }}, 'dropped')"
+                                            data-bs-toggle="tooltip"
+                                            title="Mark Drop">
+                                        <i class="fas fa-ban"></i> Drop
+                                    </button>
+                                    {% endif %}
+
+                                    <!-- Escalate Button -->
+                                    <button class="btn btn-outline-info"
+                                            onclick="escalateIssue({{ issue.id }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Escalate">
+                                        <i class="fas fa-level-up-alt"></i> Escalate
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+        <h5 class="text-success mb-3">No Issues Found</h5>
+        <p class="text-muted">
+            Great! There are currently no issues logged for this team.
+        </p>
+        <button class="btn btn-outline-primary" onclick="openNewIssueModal()">
+            <i class="fas fa-plus me-2"></i>Report New Issue
+        </button>
+    </div>
+{% endif %}
+
+<!-- Escalate Issue Modal -->
+<div class="modal fade" id="escalateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Escalate Issue</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="escalateIssueId">
+                <div class="mb-3">
+                    <label class="form-label">Escalate to Team <span class="text-danger">*</span></label>
+                    <select class="form-select" id="escalateTeamId" required>
+                        <option value="">Select Team</option>
+                        {% for team in user_teams %}
+                        <option value="{{ team.id }}">{{ team.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-info" onclick="confirmEscalate()">
+                    <i class="fas fa-level-up-alt me-1"></i>Escalate
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const meetingId = {{ meeting.pk }};
+
+function addIssueAction(issueId) {
+    console.log(`Opening Action Items popup for issue ID: ${issueId}`);
+
+    // Set the parameter context for the issue
+    window.currentParameterContext = {
+        type: 'issue',
+        id: issueId
+    };
+
+    // Open the action items modal with parameter context (same as GPI/FPI)
+    openParameterActionItemsDirectly('issue', issueId);
+}
+
+function openParameterActionItemsDirectly(type, id) {
+    console.log(`Opening Action Items popup for ${type} parameter ID: ${id}`);
+
+    // Get the existing action items modal
+    const modal = document.getElementById('actionItemsModal');
+    const content = document.getElementById('actionItemsContent');
+
+    if (!modal) {
+        console.error('actionItemsModal not found!');
+        alert('Error: Action Items modal not found. Please refresh the page and try again.');
+        return;
+    }
+
+    if (!content) {
+        console.error('actionItemsContent not found!');
+        alert('Error: Action Items content area not found. Please refresh the page and try again.');
+        return;
+    }
+
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action items...</p>
+        </div>
+    `;
+
+    // Show the modal
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+
+    // Load action items with parameter context
+    const actionItemsUrl = `/review/${meetingId}/parameter-actions/?type=${type}&id=${id}`;
+
+    fetch(actionItemsUrl)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.head.appendChild(newScript);
+                setTimeout(() => {
+                    if (document.head.contains(newScript)) {
+                        document.head.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading action items:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action items</p>
+                    <button class="btn btn-outline-primary" onclick="openParameterActionItemsDirectly('${type}', '${id}')">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+
+    // Clear parameter context when modal is closed
+    modal.addEventListener('hidden.bs.modal', function () {
+        console.log('Action Items modal closed, clearing parameter context');
+        window.currentParameterContext = null;
+    }, { once: true });
+}
+
+function updateIssueStatus(issueId, status) {
+    fetch(`/review/${meetingId}/update-issue-status/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({
+            issue_id: issueId,
+            status: status
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error updating issue status: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating issue status');
+    });
+}
+
+function revertIssueStatus(issueId) {
+    fetch(`/review/${meetingId}/revert-issue-status/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({
+            issue_id: issueId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error reverting issue status: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error reverting issue status');
+    });
+}
+
+function escalateIssue(issueId) {
+    document.getElementById('escalateIssueId').value = issueId;
+    document.getElementById('escalateTeamId').value = '';
+    const modal = new bootstrap.Modal(document.getElementById('escalateModal'));
+    modal.show();
+}
+
+function confirmEscalate() {
+    const issueId = document.getElementById('escalateIssueId').value;
+    const escalatedTeamId = document.getElementById('escalateTeamId').value;
+
+    if (!escalatedTeamId) {
+        alert('Please select a team to escalate to');
+        return;
+    }
+
+    fetch(`/review/${meetingId}/update-issue-status/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({
+            issue_id: issueId,
+            status: 'escalated',
+            escalated_team_id: escalatedTeamId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('escalateModal')).hide();
+            location.reload();
+        } else {
+            alert('Error escalating issue: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error escalating issue');
+    });
+}
+
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
+}
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>

@@ -1,0 +1,537 @@
+{% load l10n %}
+<!-- Action Summary Tab Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">
+        <i class="fas fa-list-check me-2"></i>Actions Created in This Meeting
+    </h5>
+    <button class="btn btn-primary btn-sm" onclick="refreshActionSummary()">
+        <i class="fas fa-sync-alt me-1"></i>Refresh
+    </button>
+</div>
+
+<!-- Action Items Table -->
+{% if action_items %}
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-tasks me-2"></i>Action Items Details
+                    <span class="badge bg-secondary ms-2">{{ action_items|length }} item{{ action_items|length|pluralize }}</span>
+                </h6>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="toggleView('table')">
+                        <i class="fas fa-table"></i> Table
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="toggleView('cards')">
+                        <i class="fas fa-th-large"></i> Cards
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <!-- Table View -->
+            <div id="tableView" class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
+                        <tr>
+                            <th style="width: 5%">S.No</th>
+                            <th style="width: 35%">Action</th>
+                            <th style="width: 15%">Source</th>
+                            <th style="width: 10%">Priority</th>
+                            <th style="width: 15%">Assigned To</th>
+                            <th style="width: 12%">Due Date</th>
+                            <th style="width: 8%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for action in action_items %}
+                        <tr class="action-row {% if action.due_date < today and action.status not in 'completed,cancelled' %}table-danger{% elif action.due_date|date:'Y-m-d' == today %}table-warning{% endif %}"
+                            data-parameter-type="{{ action.parameter_type }}">
+                            <td>
+                                <span class="badge bg-secondary">{{ forloop.counter }}</span>
+                            </td>
+                            <td>
+                                <div>
+                                    <strong>{{ action.action_description|truncatechars:60 }}</strong>
+                                    {% if action.action_description|length > 60 %}
+                                        <button class="btn btn-link btn-sm p-0 ms-1"
+                                                data-bs-toggle="tooltip"
+                                                data-bs-placement="top"
+                                                title="{{ action.action_description }}">
+                                            <i class="fas fa-info-circle"></i>
+                                        </button>
+                                    {% endif %}
+                                    <br>
+                                    <small class="text-muted">
+                                        Created: {{ action.created_at|date:"M d, Y" }}
+                                    </small>
+                                </div>
+                            </td>
+                            <td>
+                                {% if action.parameter_type %}
+                                    <span class="badge bg-{% if action.parameter_type == 'fpi' %}primary{% elif action.parameter_type == 'gpi' %}info{% elif action.parameter_type == 'ppi' %}success{% else %}secondary{% endif %}">
+                                        {{ action.get_parameter_type_display }}
+                                    </span>
+                                    {% if action.get_parameter_name %}
+                                        <br><small class="text-muted">{{ action.get_parameter_name|truncatechars:30 }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-secondary">General</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}info{% endif %}">
+                                    {{ action.get_priority_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if action.assigned_to %}
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-user me-1"></i>
+                                        <small>{{ action.assigned_to.get_full_name|default:action.assigned_to.username }}</small>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">Unassigned</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div>
+                                    {{ action.due_date|date:"M d, Y" }}
+                                    {% if action.is_overdue %}
+                                        <br><small class="text-danger">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>Overdue
+                                        </small>
+                                    {% elif action.due_date|date:'Y-m-d' == today %}
+                                        <br><small class="text-warning">
+                                            <i class="fas fa-clock me-1"></i>Due Today
+                                        </small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary"
+                                            onclick="editActionItem({{ action.id|unlocalize }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger"
+                                            onclick="deleteAction({{ action.id|unlocalize }})"
+                                            data-bs-toggle="tooltip"
+                                            title="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Cards View (Hidden by default) -->
+            <div id="cardsView" class="p-3" style="display: none;">
+                <div class="row">
+                    {% for action in action_items %}
+                    <div class="col-md-6 mb-3 action-card" data-parameter-type="{{ action.parameter_type }}">
+                        <div class="card h-100 {% if action.due_date < today and action.status not in 'completed,cancelled' %}border-danger{% elif action.due_date|date:'Y-m-d' == today %}border-warning{% endif %}">
+                            <div class="card-header py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    {% if action.parameter_type %}
+                                        <span class="badge bg-{% if action.parameter_type == 'fpi' %}primary{% elif action.parameter_type == 'gpi' %}info{% elif action.parameter_type == 'ppi' %}success{% else %}secondary{% endif %}">
+                                            {{ action.get_parameter_type_display }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">General</span>
+                                    {% endif %}
+                                    <span class="badge bg-{% if action.priority == 'high' %}danger{% elif action.priority == 'medium' %}warning{% else %}info{% endif %}">
+                                        {{ action.get_priority_display }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <h6 class="card-title">{{ action.action_description|truncatechars:60 }}</h6>
+                                <div class="row text-center mb-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">Assigned To</small>
+                                        <br>
+                                        <strong>{{ action.assigned_to.get_full_name|default:action.assigned_to.username|default:"Unassigned" }}</strong>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Due Date</small>
+                                        <br>
+                                        <strong>{{ action.due_date|date:"M d, Y" }}</strong>
+                                    </div>
+                                </div>
+                                {% if action.status != 'completed' %}
+                                <div class="progress mb-2" style="height: 8px;">
+                                    <div class="progress-bar bg-primary"
+                                         style="width: {{ action.completion_percentage|default:0 }}%"></div>
+                                </div>
+                                <div class="text-center">
+                                    <small class="text-muted">{{ action.completion_percentage|default:0 }}% Complete</small>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="card-footer py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="badge bg-{% if action.status == 'completed' %}success{% elif action.status == 'in_progress' %}primary{% else %}secondary{% endif %}">
+                                        {{ action.get_status_display }}
+                                    </span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" onclick="editActionItem({{ action.id|unlocalize }})">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" onclick="deleteAction({{ action.id|unlocalize }})">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-clipboard-check fa-4x text-muted mb-3"></i>
+        <h5 class="text-muted mb-3">No Action Items Found</h5>
+        <p class="text-muted">
+            No action items have been created for this review meeting yet.
+        </p>
+        <button class="btn btn-outline-primary" onclick="addActionItem()">
+            <i class="fas fa-plus me-2"></i>Add First Action Item
+        </button>
+    </div>
+{% endif %}
+
+<!-- Action Item Modal -->
+<div class="modal fade" id="actionItemModal" tabindex="-1" aria-labelledby="actionItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionItemModalLabel">
+                    <i class="fas fa-plus me-2"></i>Add Action Item
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="actionItemContent">
+                <!-- Action item form loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Details Modal -->
+<div class="modal fade" id="actionDetailModal" tabindex="-1" aria-labelledby="actionDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionDetailModalLabel">
+                    <i class="fas fa-clipboard-list me-2"></i>Action Item Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="actionDetailContent">
+                <!-- Action details loaded via AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function filterCategory(category) {
+    const rows = document.querySelectorAll('.action-row');
+    const cards = document.querySelectorAll('.action-card');
+
+    // Update button states
+    document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // Filter table rows
+    rows.forEach(row => {
+        if (category === 'all' || row.dataset.category === category) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    // Filter cards
+    cards.forEach(card => {
+        if (category === 'all' || card.dataset.category === category) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function showAllCategories() {
+    document.querySelectorAll('.action-row').forEach(row => row.style.display = '');
+    document.querySelectorAll('.action-card').forEach(card => card.style.display = '');
+
+    document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+}
+
+function toggleView(viewType) {
+    const tableView = document.getElementById('tableView');
+    const cardsView = document.getElementById('cardsView');
+
+    if (viewType === 'table') {
+        tableView.style.display = '';
+        cardsView.style.display = 'none';
+    } else {
+        tableView.style.display = 'none';
+        cardsView.style.display = '';
+    }
+
+    // Update button states
+    document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+}
+
+function addActionItem() {
+    const modal = new bootstrap.Modal(document.getElementById('actionItemModal'));
+    const content = document.getElementById('actionItemContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action item form...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch('{% url "reviews:action_items" meeting.pk %}?action=new')
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading action item form:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading form</p>
+                </div>
+            `;
+        });
+}
+
+function editActionItem(actionId) {
+    const modal = new bootstrap.Modal(document.getElementById('actionItemModal'));
+    const content = document.getElementById('actionItemContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action item...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch(`{% url "reviews:action_items" meeting.pk %}?action=edit&id=${actionId}`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Attach submit handler to the form after it's loaded
+            const form = document.getElementById('editReviewActionForm');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+
+                    const meetingId = this.dataset.meetingId;
+                    const actionItemsUrl = `/review/${meetingId}/action-items/`;
+                    const formData = new FormData(this);
+
+                    fetch(actionItemsUrl, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCsrfToken()
+                        },
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            modal.hide();
+                            refreshActionSummary();
+                        } else {
+                            alert(data.error || 'Error updating action');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error updating action');
+                    });
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error loading action item:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action item</p>
+                </div>
+            `;
+        });
+}
+
+function viewActionDetails(actionId) {
+    const modal = new bootstrap.Modal(document.getElementById('actionDetailModal'));
+    const content = document.getElementById('actionDetailContent');
+
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action details...</p>
+        </div>
+    `;
+
+    modal.show();
+
+    fetch(`/api/actions/${actionId}/details/`)
+        .then(response => response.json())
+        .then(data => {
+            content.innerHTML = `
+                <div class="row">
+                    <div class="col-12">
+                        <h6>Action Information</h6>
+                        <table class="table table-borderless">
+                            <tr><td><strong>Action:</strong></td><td>${data.action}</td></tr>
+                            <tr><td><strong>Category:</strong></td><td><span class="badge bg-primary">${data.category}</span></td></tr>
+                            <tr><td><strong>Priority:</strong></td><td><span class="badge bg-warning">${data.priority}</span></td></tr>
+                            <tr><td><strong>Status:</strong></td><td><span class="badge bg-primary">${data.status}</span></td></tr>
+                            <tr><td><strong>Assigned To:</strong></td><td>${data.assigned_to || 'Unassigned'}</td></tr>
+                            <tr><td><strong>Due Date:</strong></td><td>${data.due_date}</td></tr>
+                            <tr><td><strong>Completion:</strong></td><td>${data.completion_percentage}%</td></tr>
+                        </table>
+                        ${data.comments ? `<h6>Comments</h6><p>${data.comments}</p>` : ''}
+                    </div>
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading action details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action details</p>
+                </div>
+            `;
+        });
+}
+
+function deleteAction(actionId) {
+    if (confirm('Are you sure you want to delete this action? This will also remove it from the associated parameter.')) {
+        fetch(`{% url "reviews:delete_action" meeting.pk %}?action_id=${actionId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken(),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                refreshActionSummary();
+            } else {
+                alert(data.error || 'Error deleting action');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting action');
+        });
+    }
+}
+
+function markCompleted(actionId) {
+    if (confirm('Mark this action item as completed?')) {
+        fetch(`/api/actions/${actionId}/complete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken(),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                refreshActionSummary();
+            } else {
+                alert('Error marking action as completed');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error marking action as completed');
+        });
+    }
+}
+
+function exportActionSummary() {
+    const url = `{% url "reviews:action_summary" meeting.pk %}?export=true`;
+    window.open(url, '_blank');
+}
+
+function refreshActionSummary() {
+    const actionSummaryContent = document.getElementById('action-summary-content');
+
+    // Show loading
+    actionSummaryContent.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Refreshing action summary...</p>
+        </div>
+    `;
+
+    // Reload action summary data
+    fetch('{% url "reviews:action_summary" meeting.pk %}')
+        .then(response => response.text())
+        .then(html => {
+            actionSummaryContent.innerHTML = html;
+
+            // Reinitialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        })
+        .catch(error => {
+            console.error('Error refreshing action summary:', error);
+            actionSummaryContent.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error refreshing action summary</p>
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshActionSummary()">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+function getCsrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+// Initialize tooltips when content loads
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>

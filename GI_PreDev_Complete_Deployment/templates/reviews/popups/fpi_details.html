@@ -1,0 +1,175 @@
+{% load l10n %}
+<!-- FPI Parameter Details Popup -->
+<div class="modal-header">
+    <h5 class="modal-title">FPI Details: {{ parameter.sub_head }}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<div class="modal-body">
+    <!-- Parameter Information -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <p><strong>Main Head:</strong> {{ parameter.get_main_head_display }}</p>
+            <p><strong>Sub Head:</strong> {{ parameter.sub_head }}</p>
+            <p><strong>Responsible:</strong> {{ parameter.responsible_user.get_full_name }}</p>
+        </div>
+        <div class="col-md-6">
+            <p><strong>Quarter:</strong> {{ quarter }}</p>
+            <p><strong>Financial Year:</strong> {{ financial_year }}</p>
+        </div>
+    </div>
+
+    <!-- Financial Data Grid -->
+    <div class="table-responsive">
+        <table class="table table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th>Metric</th>
+                    <th class="text-end">Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Last Month Data -->
+                <tr class="table-secondary">
+                    <td colspan="2"><strong>Last Month</strong></td>
+                </tr>
+                <tr>
+                    <td>Last Month Budget</td>
+                    <td class="text-end">{{ details.last_month_budget|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Last Month Goal</td>
+                    <td class="text-end">{{ details.last_month_goal|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Last Month Actual</td>
+                    <td class="text-end {% if details.last_month_actual < details.last_month_goal %}text-danger{% else %}text-success{% endif %}">
+                        {{ details.last_month_actual|floatformat:2 }}
+                    </td>
+                </tr>
+
+                <!-- QTD Data -->
+                <tr class="table-secondary">
+                    <td colspan="2"><strong>Quarter to Date (QTD)</strong></td>
+                </tr>
+                <tr>
+                    <td>QTD Budget</td>
+                    <td class="text-end">{{ details.qtd_budget|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>QTD Actual</td>
+                    <td class="text-end {% if details.qtd_actual < details.qtd_budget %}text-danger{% else %}text-success{% endif %}">
+                        {{ details.qtd_actual|floatformat:2 }}
+                    </td>
+                </tr>
+
+                <!-- YTD Data -->
+                <tr class="table-secondary">
+                    <td colspan="2"><strong>Year to Date (YTD)</strong></td>
+                </tr>
+                <tr>
+                    <td>YTD Budget</td>
+                    <td class="text-end">{{ details.ytd_budget|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>YTD Actual</td>
+                    <td class="text-end {% if details.ytd_actual < details.ytd_budget %}text-danger{% else %}text-success{% endif %}">
+                        {{ details.ytd_actual|floatformat:2 }}
+                    </td>
+                </tr>
+
+                <!-- Current Month Data -->
+                <tr class="table-secondary">
+                    <td colspan="2"><strong>Current Month</strong></td>
+                </tr>
+                <tr>
+                    <td>Current Month Budget</td>
+                    <td class="text-end">{{ details.current_month_budget|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Current Month Goal</td>
+                    <td class="text-end">{{ details.current_month_goal|floatformat:2 }}</td>
+                </tr>
+
+                <!-- Quarter & Year Totals -->
+                <tr class="table-secondary">
+                    <td colspan="2"><strong>Quarter & Year Budgets</strong></td>
+                </tr>
+                <tr>
+                    <td>Quarter Budget</td>
+                    <td class="text-end">{{ details.quarter_budget|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Year Budget</td>
+                    <td class="text-end">{{ details.year_budget|floatformat:2 }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Comments Section -->
+    {% if parameter.explanation %}
+    <div class="mt-3">
+        <h6>Comments:</h6>
+        <div class="card">
+            <div class="card-body">
+                <p class="mb-0">{{ parameter.explanation }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Variance Analysis -->
+    <div class="mt-4">
+        <h6>Variance Analysis:</h6>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card {% if details.last_month_variance >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <div class="card-body text-center">
+                        <h6 class="mb-1">Last Month Variance</h6>
+                        <h4 class="mb-0">{{ details.last_month_variance|floatformat:2 }}</h4>
+                        <small>{{ details.last_month_variance_percent|floatformat:1 }}%</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card {% if details.qtd_variance >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <div class="card-body text-center">
+                        <h6 class="mb-1">QTD Variance</h6>
+                        <h4 class="mb-0">{{ details.qtd_variance|floatformat:2 }}</h4>
+                        <small>{{ details.qtd_variance_percent|floatformat:1 }}%</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card {% if details.ytd_variance >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <div class="card-body text-center">
+                        <h6 class="mb-1">YTD Variance</h6>
+                        <h4 class="mb-0">{{ details.ytd_variance|floatformat:2 }}</h4>
+                        <small>{{ details.ytd_variance_percent|floatformat:1 }}%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+    <button type="button" class="btn btn-primary" onclick="addParameterAction('fpi', {{ parameter.id }}, {{ meeting.pk }})">
+        <i class="fas fa-plus me-1"></i>Add Action Item
+    </button>
+</div>
+
+<script>
+function addParameterAction(type, id, meetingId) {
+    // Close the current details modal
+    const detailsModal = bootstrap.Modal.getInstance(document.getElementById('fpiDetailsModal'));
+    if (detailsModal) {
+        detailsModal.hide();
+    }
+
+    // Open action items popup for this parameter
+    openParameterActionItemsDirectly(type, id);
+}
+</script>
