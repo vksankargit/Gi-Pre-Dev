@@ -76,14 +76,125 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         else:
             quarter_start_year = fy_start_year
 
-        quarter_start_date = date(quarter_start_year, quarter_start_month, 1)
+        # Start from the 1st of the quarter month
+        month_first_day = date(quarter_start_year, quarter_start_month, 1)
+
+        # Find the Monday on or before the 1st of the quarter month
+        # This ensures we get the first Monday of the quarter week system
+        # weekday() returns 0=Monday, 6=Sunday
+        if month_first_day.weekday() == 0:
+            # First day is Monday
+            quarter_start_date = month_first_day
+        else:
+            # Go back to the previous Monday
+            days_back_to_monday = month_first_day.weekday()
+            quarter_start_date = month_first_day - timedelta(days=days_back_to_monday)
+
+        # Calculate which week of the quarter we're in
         days_into_quarter = (today - quarter_start_date).days
         current_week_in_quarter = (days_into_quarter // 7) + 1  # Week 1-13
+
+        # Week selection for historical data viewing
+        # Get selected week from request (default to current week)
+        selected_week = int(self.request.GET.get('week', current_week_in_quarter))
+        # Ensure selected week is within valid range (1 to current week)
+        selected_week = max(1, min(selected_week, current_week_in_quarter))
+
+        # Generate list of available weeks with date ranges (1 to current week)
+        available_weeks_with_dates = []
+        for week_num in range(1, current_week_in_quarter + 1):
+            # Calculate week start date (Monday of that week)
+            week_start = quarter_start_date + timedelta(days=(week_num - 1) * 7)
+            week_end = week_start + timedelta(days=6)  # Sunday
+
+            # Calculate ISO week number for this week
+            iso_year, iso_week_num, iso_weekday = week_start.isocalendar()
+
+            # Format: "Week 43 (01-Oct-25 to 07-Oct-25)"
+            week_display = f"Week {iso_week_num} ({week_start.strftime('%d-%b-%y')} to {week_end.strftime('%d-%b-%y')})"
+            available_weeks_with_dates.append({
+                'number': week_num,  # Keep quarter week number for internal use
+                'display': week_display
+            })
+
+        # Debug: Print week selection info
+        print(f"DEBUG Week Selection: current_week={current_week_in_quarter}, selected_week={selected_week}, total_weeks={len(available_weeks_with_dates)}")
+
+        # Check if selected week is locked (based on weekly review completion)
+        # A week is locked if a weekly review has been completed for that week or any later week
+        from plans.models import GPIWeeklyRecord
+        is_week_locked = False
+        latest_locked_week = 0
+
+        # Check for any weekly review meetings that have been completed
+        # If a review for week N is done, weeks 1 to N are locked
+        weekly_reviews = ReviewMeeting.objects.filter(
+            review_type='weekly',
+            quarter_number=current_quarter_num,
+            financial_year=current_financial_year,
+            status='completed'
+        ).order_by('-week_number')
+
+        if weekly_reviews.exists():
+            latest_locked_week = weekly_reviews.first().week_number
+            is_week_locked = selected_week <= latest_locked_week
 
         # Calculate current month number within quarter (1-3)
         current_month_in_quarter = ((current_month_num - quarter_start_month) % 12) // 1 + 1
         if current_month_in_quarter > 3:
             current_month_in_quarter = ((current_month_num - quarter_start_month + 12) % 12) // 1 + 1
+
+        # Month selection for historical data viewing
+        # Get selected month from request (default to current month)
+        selected_month = int(self.request.GET.get('month', current_month_in_quarter))
+        # Ensure selected month is within valid range (1 to current month in quarter)
+        selected_month = max(1, min(selected_month, current_month_in_quarter))
+
+        # Generate list of available months with date ranges (1 to current month)
+        available_months_with_dates = []
+        for month_num in range(1, current_month_in_quarter + 1):
+            # Calculate the actual calendar month
+            actual_month_num = ((quarter_start_month + month_num - 2) % 12) + 1
+            if actual_month_num < quarter_start_month and current_quarter_num != 4:
+                actual_year = quarter_start_year + 1
+            elif actual_month_num < 4 and current_quarter_num == 4:
+                actual_year = quarter_start_year
+            else:
+                actual_year = quarter_start_year
+
+            # Get month name and calculate first and last day of month
+            month_start = date(actual_year, actual_month_num, 1)
+            # Get last day of month
+            if actual_month_num == 12:
+                month_end = date(actual_year, 12, 31)
+            else:
+                next_month = date(actual_year if actual_month_num < 12 else actual_year + 1,
+                                 (actual_month_num % 12) + 1, 1)
+                month_end = next_month - timedelta(days=1)
+
+            # Format: "October (01-Oct-25 to 31-Oct-25)"
+            month_name = calendar.month_name[actual_month_num]
+            month_display = f"{month_name} ({month_start.strftime('%d-%b-%y')} to {month_end.strftime('%d-%b-%y')})"
+            available_months_with_dates.append({
+                'number': month_num,  # Keep quarter month number for internal use
+                'display': month_display
+            })
+
+        # Check if selected month is locked (based on monthly review completion)
+        is_month_locked = False
+        latest_locked_month = 0
+
+        # Check for any monthly review meetings that have been completed
+        monthly_reviews = ReviewMeeting.objects.filter(
+            review_type='monthly',
+            quarter_number=current_quarter_num,
+            financial_year=current_financial_year,
+            status='completed'
+        ).order_by('-month_number')
+
+        if monthly_reviews.exists():
+            latest_locked_month = monthly_reviews.first().month_number
+            is_month_locked = selected_month <= latest_locked_month
 
         # Get user's teams (where user is a member OR manager)
         user_member_teams = user.team_memberships.filter(is_active=True).values_list('team_id', flat=True)
@@ -105,7 +216,7 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             tracking_type='weekly',
             quarterly_plan__quarter=current_quarter_num,
             quarterly_plan__financial_year=current_financial_year
-        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user', 'assigned_team').prefetch_related('milestones') if current_financial_year else GPIParameter.objects.none()
+        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user', 'assigned_team').prefetch_related('milestones', 'weekly_records') if current_financial_year else GPIParameter.objects.none()
 
         # Debug logging commented out to avoid Unicode encoding issues with special characters (₹, etc.)
         # print(f"DEBUG: Showing {weekly_numbers.count()} weekly parameters")
@@ -296,37 +407,59 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         actions = combined_actions
         # Actions are filtered and ready to be passed to template
 
-        # Enhance weekly numbers with budget data
+        # Enhance weekly numbers with budget data and weekly records
         enhanced_weekly_numbers = []
         for gpi in weekly_numbers:
-            # Use the already calculated current_week_in_quarter (1-13)
-            # This matches the period_number in GPIMilestone
+            # Load weekly record for selected week
+            weekly_record = gpi.weekly_records.filter(week_number=selected_week).first()
 
-            # Handle quarter boundary: if current week is 1, last week is in previous quarter
-            if current_week_in_quarter > 1:
+            # If no record exists, create a new one (not saved yet)
+            if not weekly_record:
+                weekly_record = GPIWeeklyRecord(
+                    gpi_parameter=gpi,
+                    week_number=selected_week,
+                    week_goal=None,
+                    week_actual=None,
+                    explanation='',
+                    is_locked=is_week_locked
+                )
+
+            # Attach weekly record data to GPI parameter for display
+            gpi.current_week_plan = weekly_record.week_goal
+            gpi.last_week_actual = None  # Will be set below
+            gpi.explanation = weekly_record.explanation
+            gpi.is_locked = weekly_record.is_locked or is_week_locked
+
+            # Get budget for selected week
+            selected_week_milestone = gpi.milestones.filter(period_number=selected_week).first()
+            gpi.current_week_budget = selected_week_milestone.budget_value if selected_week_milestone else 0
+
+            # Handle last week data
+            if selected_week > 1:
                 # Last week is in the same quarter
-                last_week_in_quarter = current_week_in_quarter - 1
-                last_week_milestone = gpi.milestones.filter(period_number=last_week_in_quarter).first()
+                last_week_number = selected_week - 1
+                last_week_milestone = gpi.milestones.filter(period_number=last_week_number).first()
                 gpi.last_week_budget = last_week_milestone.budget_value if last_week_milestone else 0
 
-                # For last_week_goal within same quarter, use the stored value from weekly_rollover
-                # This was set by the rollover command copying previous week's current_week_plan
-                if not gpi.last_week_goal:
+                # Get last week's record for goal and actual
+                last_week_record = gpi.weekly_records.filter(week_number=last_week_number).first()
+                if last_week_record:
+                    gpi.last_week_goal = last_week_record.week_goal if last_week_record.week_goal else 0
+                    gpi.last_week_actual = last_week_record.week_actual if last_week_record.week_actual else 0
+                else:
                     gpi.last_week_goal = 0
+                    gpi.last_week_actual = 0
             else:
-                # Last week is in the previous quarter (week 13)
-                # Get previous quarter's plan
+                # Week 1: Last week is in previous quarter (week 13)
                 previous_quarter_num = current_quarter_num - 1 if current_quarter_num > 1 else 4
 
                 # Determine FY for previous quarter
                 if current_quarter_num == 1:
-                    # Q1, so previous Q4 is from previous FY
                     prev_fy_start_year = fy_start_year - 1
                     prev_fy_end_year = prev_fy_start_year + 1
                     prev_fy_string = f"FY {prev_fy_start_year % 100:02d}-{prev_fy_end_year % 100:02d}"
                     prev_financial_year = FinancialYear.objects.filter(year=prev_fy_string).first()
                 else:
-                    # Previous quarter is in same FY
                     prev_financial_year = current_financial_year
 
                 # Get GPI parameter from previous quarter
@@ -335,7 +468,7 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                         quarterly_plan__team=gpi.quarterly_plan.team,
                         quarterly_plan__quarter=previous_quarter_num,
                         quarterly_plan__financial_year=prev_financial_year,
-                        name=gpi.name,  # Match by name to find same parameter
+                        name=gpi.name,
                         tracking_type='weekly'
                     ).first()
 
@@ -344,19 +477,22 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                         last_week_milestone = prev_quarter_gpi.milestones.filter(period_number=13).first()
                         gpi.last_week_budget = last_week_milestone.budget_value if last_week_milestone else 0
 
-                        # Get week 13 goal (current_week_plan) from previous quarter
-                        # This is the goal that was entered in week 13 of the previous quarter
-                        gpi.last_week_goal = prev_quarter_gpi.current_week_plan if prev_quarter_gpi.current_week_plan else 0
+                        # Get week 13 record from previous quarter
+                        prev_quarter_record = prev_quarter_gpi.weekly_records.filter(week_number=13).first()
+                        if prev_quarter_record:
+                            gpi.last_week_goal = prev_quarter_record.week_goal if prev_quarter_record.week_goal else 0
+                            gpi.last_week_actual = prev_quarter_record.week_actual if prev_quarter_record.week_actual else 0
+                        else:
+                            gpi.last_week_goal = 0
+                            gpi.last_week_actual = 0
                     else:
                         gpi.last_week_budget = 0
                         gpi.last_week_goal = 0
+                        gpi.last_week_actual = 0
                 else:
                     gpi.last_week_budget = 0
                     gpi.last_week_goal = 0
-
-            # Get current week milestone from current quarter
-            current_week_milestone = gpi.milestones.filter(period_number=current_week_in_quarter).first()
-            gpi.current_week_budget = current_week_milestone.budget_value if current_week_milestone else 0
+                    gpi.last_week_actual = 0
 
             enhanced_weekly_numbers.append(gpi)
 
@@ -660,6 +796,16 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             'next_week_start': next_week_start,
             'next_week_end': next_week_end,
             'selected_filters': filters,
+            # Week selection variables
+            'current_week_in_quarter': current_week_in_quarter,
+            'selected_week': selected_week,
+            'available_weeks_with_dates': available_weeks_with_dates,
+            'is_week_locked': is_week_locked,
+            # Month selection variables
+            'current_month_in_quarter': current_month_in_quarter,
+            'selected_month': selected_month,
+            'available_months_with_dates': available_months_with_dates,
+            'is_month_locked': is_month_locked,
         })
 
         return context
@@ -732,11 +878,14 @@ class MyNumbersView(LoginRequiredMixin, TemplateView):
 class SaveNumberView(LoginRequiredMixin, TemplateView):
     def post(self, request):
         try:
+            from plans.models import GPIWeeklyRecord, GPIMonthlyRecord, FPIMonthlyRecord
+
             # Handle both parameter naming conventions
             data_type = request.POST.get('type') or request.POST.get('param_type')  # 'gpi' or 'fpi'
             param_id = request.POST.get('id') or request.POST.get('param_id')
             field = request.POST.get('field')
             value = request.POST.get('value', '').strip()
+            week_number = request.POST.get('week_number')  # For weekly tracking
 
             # Determine if this is a numeric or text field
             numeric_fields = ['last_week_actual', 'last_week_goal', 'current_week_plan', 'last_month_actual', 'last_month_goal', 'current_month_plan']
@@ -758,18 +907,91 @@ class SaveNumberView(LoginRequiredMixin, TemplateView):
                 return JsonResponse({'success': False, 'error': f'Unknown field: {field}'})
 
             if data_type == 'gpi':
-                param = get_object_or_404(GPIParameter, id=param_id, responsible_user=request.user)
-                if field in ['last_week_actual', 'last_week_goal', 'current_week_plan', 'last_month_actual', 'last_month_goal', 'current_month_plan', 'explanation']:
+                # Get the parameter - allow if user is responsible OR if user manages the team
+                from django.db.models import Q
+                from organizations.models import Team
+
+                # Get teams managed by this user
+                user_managed_teams = Team.objects.filter(manager=request.user).values_list('id', flat=True)
+
+                # Allow access if user is responsible OR parameter is from a managed team
+                param = get_object_or_404(
+                    GPIParameter,
+                    Q(id=param_id) & (
+                        Q(responsible_user=request.user) |
+                        Q(quarterly_plan__team_id__in=user_managed_teams)
+                    )
+                )
+
+                # Handle weekly tracking - save to GPIWeeklyRecord
+                if field in ['current_week_plan', 'last_week_actual', 'explanation'] and week_number:
+                    week_number = int(week_number)
+                    print(f"DEBUG: Saving {field}={value} for GPI param {param_id}, current week={week_number}")
+
+                    # For last_week_actual, we need to save to the PREVIOUS week's record
+                    if field == 'last_week_actual':
+                        # Save to previous week's record
+                        save_week_number = week_number - 1
+                        print(f"DEBUG: last_week_actual - saving to week {save_week_number}")
+                        if save_week_number < 1:
+                            # If we're in week 1, last week is week 13 of previous quarter
+                            # For now, just return error - this case needs special handling
+                            print(f"DEBUG: Cannot save to week {save_week_number} - returning error")
+                            return JsonResponse({'success': False, 'error': 'Cannot edit previous quarter data from here'})
+                    else:
+                        save_week_number = week_number
+                        print(f"DEBUG: Saving to week {save_week_number}")
+
+                    # Check if week is locked
+                    # TODO: Add lock checking logic here
+
+                    # Get or create weekly record
+                    weekly_record, created = GPIWeeklyRecord.objects.get_or_create(
+                        gpi_parameter=param,
+                        week_number=save_week_number,
+                        defaults={'week_goal': None, 'week_actual': None, 'explanation': ''}
+                    )
+                    print(f"DEBUG: Weekly record {'created' if created else 'found'}: GPI {param.id}, Week {save_week_number}, is_locked={weekly_record.is_locked}")
+
+                    # Map field names to record field names
+                    if field == 'current_week_plan':
+                        weekly_record.week_goal = value
+                    elif field == 'last_week_actual':
+                        weekly_record.week_actual = value
+                    elif field == 'explanation':
+                        weekly_record.explanation = value
+
+                    weekly_record.save()
+                    print(f"GPI Weekly Save: {field}={value} for param {param_id}, week {save_week_number}")
+
+                # Handle monthly tracking - save to GPIMonthlyRecord
+                elif field in ['last_month_actual', 'last_month_goal', 'current_month_plan', 'explanation']:
+                    # For now, keep old behavior for monthly (will enhance later)
                     old_value = getattr(param, field, 'NOT_SET')
                     setattr(param, field, value)
                     param.save()
                     new_value = getattr(param, field, 'NOT_SET')
-                    print(f"GPI Save: {field} changed from '{old_value}' to '{new_value}' for param {param_id}")
+                    print(f"GPI Monthly Save: {field} changed from '{old_value}' to '{new_value}' for param {param_id}")
                 else:
                     return JsonResponse({'success': False, 'error': f'Invalid field for GPI: {field}'})
 
             elif data_type == 'fpi':
-                param = get_object_or_404(FPIParameter, id=param_id, responsible_user=request.user)
+                # Get the parameter - allow if user is responsible OR if user manages the team
+                from django.db.models import Q
+                from organizations.models import Team
+
+                # Get teams managed by this user
+                user_managed_teams = Team.objects.filter(manager=request.user).values_list('id', flat=True)
+
+                # Allow access if user is responsible OR parameter is from a managed team
+                param = get_object_or_404(
+                    FPIParameter,
+                    Q(id=param_id) & (
+                        Q(responsible_user=request.user) |
+                        Q(quarterly_plan__team_id__in=user_managed_teams)
+                    )
+                )
+                # FPI is monthly only - keep old behavior for now
                 if field in ['last_month_actual', 'last_month_goal', 'current_month_plan', 'explanation']:
                     old_value = getattr(param, field, 'NOT_SET')
                     setattr(param, field, value)
