@@ -1,0 +1,99 @@
+<!-- Unified Issues Modal - Matches the style of GPI item-level issues modal -->
+<div class="modal fade" id="unifiedIssuesModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Issues - <span id="issuesSourceDisplay"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Source Information (hidden, used for API calls) -->
+                <input type="hidden" id="issuesModalSource" value="">
+
+                <!-- Summary -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="alert alert-info">
+                            <strong>Total Issues:</strong> <span id="issuesTotalCount">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Existing Issues Grid -->
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>S.No</th>
+                                <th>Title</th>
+                                <th>Description</th>
+                                <th>Priority</th>
+                                <th>Required By</th>
+                                <th>Team</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="issuesTableBody">
+                            <!-- Loading spinner -->
+                            <tr id="issuesLoadingSpinner">
+                                <td colspan="8" class="text-center py-4">
+                                    <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                                    <p class="text-muted mt-2">Loading issues...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Add New Issue Form (Inline, at bottom like GPI modal) -->
+                <div class="border-top pt-3">
+                    <h6>Add New Issue</h6>
+                    <form id="unifiedIssueForm">
+                        {% csrf_token %}
+                        <div class="row mb-2">
+                            <div class="col-md-12">
+                                <input type="text" class="form-control" id="unifiedIssueTitle" name="title" placeholder="Issue title" required>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-md-12">
+                                <textarea class="form-control" id="unifiedIssueDescription" name="description" rows="2" placeholder="Description (optional)"></textarea>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-md-3">
+                                <select class="form-select" id="unifiedIssueTeam" name="team" required>
+                                    <option value="">Select Team</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="unifiedIssuePriority" name="priority">
+                                    <option value="">Priority</option>
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <input type="date" class="form-control" id="unifiedIssueRequiredBy" name="required_by" placeholder="Required by">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-success w-100" id="addMoreIssueBtn" onclick="addAnotherIssue()">
+                                    <i class="fas fa-plus me-1"></i>Add
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Error/Success Messages -->
+                    <div id="unifiedIssueFormError" class="alert alert-danger d-none mt-2"></div>
+                    <div id="unifiedIssueFormSuccess" class="alert alert-success d-none mt-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

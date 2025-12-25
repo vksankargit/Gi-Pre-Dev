@@ -98,14 +98,38 @@ console.log('###############################################');
                             </div>
                         </div>
 
+                        <!-- Action Buttons and GPI Filter -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-danger" onclick="openUnifiedIssuesModal({location: 'implement', screen: 'my_numbers', level: 'screen', period: 'weekly', periodNumber: {{ selected_week }}})">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Issues
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
+                                    <i class="fas fa-tasks me-2"></i>Action Items
+                                </button>
+                                <button type="button" class="btn btn-primary" onclick="refreshImplement()">
+                                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                                </button>
+                            </div>
+
+                            <!-- GPI Filter Radio Buttons -->
+                            <div class="btn-group" role="group" aria-label="GPI Filter">
+                                <input type="radio" class="btn-check" name="gpiFilter" id="myGPIs" value="my" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="myGPIs">My GPIs</label>
+
+                                <input type="radio" class="btn-check" name="gpiFilter" id="allGPIs" value="all" autocomplete="off" checked>
+                                <label class="btn btn-outline-primary" for="allGPIs">All GPIs</label>
+                            </div>
+                        </div>
+
                         <!-- Weekly Numbers Section -->
                         <div id="weeklyNumbersSection" class="numbers-section">
                             <div class="table-container" style="max-height: 400px; overflow-y: auto; overflow-x: auto; border: 2px solid #b8daff;">
                                 <table class="table table-bordered table-hover" style="margin-bottom: 0;">
                                     <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
                                         <tr>
-                                            <th>Team</th>
-                                            <th>GPI (including unit of measure)</th>
+                                            <th>Team Meeting</th>
+                                            <th>GPI</th>
                                             <th>Last Week Budget</th>
                                             <th>Last Week Goal</th>
                                             <th>Last Week Actual</th>
@@ -118,13 +142,14 @@ console.log('###############################################');
                                     </thead>
                                     <tbody>
                                         {% for gpi in weekly_numbers %}
-                                        <tr>
+                                        <tr class="gpi-row weekly-gpi-row" data-responsible-user="{{ gpi.responsible_user.id }}" data-gpi-id="{{ gpi.id }}">
                                             <td>{{ gpi.quarterly_plan.team.name }}</td>
                                             <td>
                                                 <strong>{{ gpi.name }}</strong>
                                                 {% if gpi.unit_of_measure %}
                                                 <br><small class="text-muted">({{ gpi.unit_of_measure }})</small>
                                                 {% endif %}
+                                                <br><small class="text-success">GPI - {{ gpi.get_indicator_type_display }}</small>
                                             </td>
                                             <td class="text-end">{{ gpi.last_week_budget|floatformat:2 }}</td>
                                             <td class="text-end">{{ gpi.last_week_goal|default:'0.00'|floatformat:2 }}</td>
@@ -134,7 +159,7 @@ console.log('###############################################');
                                                        data-gpi-id="{{ gpi.id }}"
                                                        data-field="last_week_actual"
                                                        onchange="autoSave(this)"
-                                                       {% if gpi.is_locked %}disabled title="Data locked - Weekly review has been saved"{% endif %}>
+                                                       {% if not gpi.can_edit_numbers %}disabled title="Only the responsible user can edit this field"{% endif %}>
                                             </td>
                                             <td class="text-end">{{ gpi.current_week_budget|floatformat:2 }}</td>
                                             <td class="text-end">
@@ -143,7 +168,7 @@ console.log('###############################################');
                                                        data-gpi-id="{{ gpi.id }}"
                                                        data-field="current_week_plan"
                                                        onchange="autoSave(this)"
-                                                       {% if gpi.is_locked %}disabled title="Data locked - Weekly review has been saved"{% endif %}>
+                                                       {% if not gpi.can_edit_numbers %}disabled title="Only the responsible user can edit this field"{% endif %}>
                                             </td>
                                             <td>
                                                 <textarea class="form-control form-control-sm" rows="1"
@@ -151,29 +176,35 @@ console.log('###############################################');
                                                           data-field="explanation"
                                                           onchange="autoSave(this)"
                                                           placeholder="Add comments..."
-                                                          {% if gpi.is_locked %}disabled title="Data locked - Weekly review has been saved"{% endif %}>{{ gpi.explanation|default:"" }}</textarea>
+                                                          {% if not gpi.can_edit_numbers %}disabled title="Only the responsible user can edit this field"{% endif %}>{{ gpi.explanation|default:"" }}</textarea>
                                             </td>
                                             <td>
                                                 {{ gpi.quarterly_plan.team.name }} - {{ gpi.responsible_user.get_full_name }}
                                             </td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <button class="btn btn-outline-success" onclick="openParameterActions('gpi', {{ gpi.id }}, {{ current_week_in_quarter }}, null)"
-                                                            data-bs-toggle="tooltip" title="Action Items">
-                                                        <i class="fas fa-plus-circle"></i>
-                                                    </button>
                                                     <button class="btn btn-outline-danger" onclick="openParameterIssues('gpi', {{ gpi.id }}, {{ current_week_in_quarter }}, null)"
-                                                            data-bs-toggle="tooltip" title="Issues">
+                                                            data-bs-toggle="tooltip" title="{% if gpi.can_create_actions_issues %}Issues{% else %}View Issues{% endif %}">
                                                         <i class="fas fa-exclamation-triangle"></i>
                                                     </button>
+                                                    <button class="btn btn-outline-success" onclick="openParameterActions('gpi', {{ gpi.id }}, {{ current_week_in_quarter }}, null)"
+                                                            data-bs-toggle="tooltip" title="{% if gpi.can_create_actions_issues %}Action Items{% else %}View Action Items{% endif %}">
+                                                        <i class="fas fa-plus-circle"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-info" onclick="viewParameterDetails({{ gpi.id }}, 'gpi')"
+                                                            data-bs-toggle="tooltip" title="Details">
+                                                        <i class="fas fa-info-circle"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary" onclick="viewParameterHistory({{ gpi.id }}, 'gpi')"
+                                                            data-bs-toggle="tooltip" title="View History">
+                                                        <i class="fas fa-history"></i>
+                                                    </button>
+                                                    {% if gpi.can_reassign %}
                                                     <button class="btn btn-outline-warning" onclick="reassignParameter({{ gpi.id }})"
                                                             data-bs-toggle="tooltip" title="Reassign">
                                                         <i class="fas fa-user-edit"></i>
                                                     </button>
-                                                    <button class="btn btn-outline-info" onclick="viewComments({{ gpi.id }})"
-                                                            data-bs-toggle="tooltip" title="View Comments">
-                                                        <i class="fas fa-comment"></i>
-                                                    </button>
+                                                    {% endif %}
                                                 </div>
                                             </td>
                                         </tr>
@@ -193,8 +224,8 @@ console.log('###############################################');
                                 <table class="table table-bordered table-hover" style="margin-bottom: 0;">
                                     <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
                                         <tr>
-                                            <th>Team</th>
-                                            <th>FPI/GPI</th>
+                                            <th>Team Meeting</th>
+                                            <th>GPI</th>
                                             <th>Last Month Budget</th>
                                             <th>Last Month Goal</th>
                                             <th>Last Month Actual</th>
@@ -207,7 +238,7 @@ console.log('###############################################');
                                     </thead>
                                     <tbody>
                                         {% for param in monthly_numbers %}
-                                        <tr>
+                                        <tr class="gpi-row monthly-gpi-row" data-responsible-user="{{ param.responsible_user.id }}" data-gpi-id="{{ param.id }}">
                                             <td>{{ param.quarterly_plan.team.name }}</td>
                                             <td>
                                                 {% if param.main_head %}
@@ -242,7 +273,7 @@ console.log('###############################################');
                                                        data-param-type="{% if param.main_head %}fpi{% else %}gpi{% endif %}"
                                                        data-field="last_month_actual"
                                                        onchange="autoSave(this)"
-                                                       {% if param.is_locked %}disabled title="Data locked - Monthly review has been saved"{% endif %}>
+                                                       {% if not param.can_edit_numbers %}disabled title="Only the responsible user can edit this field"{% endif %}>
                                             </td>
                                             <td class="text-end">
                                                 {% if param.main_head %}
@@ -258,7 +289,7 @@ console.log('###############################################');
                                                        data-param-type="{% if param.main_head %}fpi{% else %}gpi{% endif %}"
                                                        data-field="current_month_plan"
                                                        onchange="autoSave(this)"
-                                                       {% if param.is_locked %}disabled title="Data locked - Monthly review has been saved"{% endif %}>
+                                                       {% if not param.can_edit_numbers %}disabled title="Only the responsible user can edit this field"{% endif %}>
                                             </td>
                                             <td>
                                                 <textarea class="form-control form-control-sm" rows="1"
@@ -267,35 +298,41 @@ console.log('###############################################');
                                                           data-field="explanation"
                                                           onchange="autoSave(this)"
                                                           placeholder="Add comments..."
-                                                          {% if param.is_locked %}disabled title="Data locked - Monthly review has been saved"{% endif %}>{{ param.explanation|default:"" }}</textarea>
+                                                          {% if not param.can_edit_numbers %}disabled title="Only the responsible user can edit this field"{% endif %}>{{ param.explanation|default:"" }}</textarea>
                                             </td>
                                             <td>
                                                 {{ param.quarterly_plan.team.name }} - {{ param.responsible_user.get_full_name }}
                                             </td>
                                             <td>
                                                 <div class="btn-group btn-group-sm">
-                                                    <button class="btn btn-outline-success" onclick="openParameterActions('{% if param.main_head %}fpi{% else %}gpi{% endif %}', {{ param.id }}, null, {{ current_month_in_quarter }})"
-                                                            data-bs-toggle="tooltip" title="Action Items">
-                                                        <i class="fas fa-plus-circle"></i>
-                                                    </button>
                                                     <button class="btn btn-outline-danger" onclick="openParameterIssues('{% if param.main_head %}fpi{% else %}gpi{% endif %}', {{ param.id }}, null, {{ current_month_in_quarter }})"
-                                                            data-bs-toggle="tooltip" title="Issues">
+                                                            data-bs-toggle="tooltip" title="{% if param.can_create_actions_issues %}Issues{% else %}View Issues{% endif %}">
                                                         <i class="fas fa-exclamation-triangle"></i>
                                                     </button>
+                                                    <button class="btn btn-outline-success" onclick="openParameterActions('{% if param.main_head %}fpi{% else %}gpi{% endif %}', {{ param.id }}, null, {{ current_month_in_quarter }})"
+                                                            data-bs-toggle="tooltip" title="{% if param.can_create_actions_issues %}Action Items{% else %}View Action Items{% endif %}">
+                                                        <i class="fas fa-plus-circle"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-info" onclick="viewParameterDetails({{ param.id }}, '{% if param.main_head %}fpi{% else %}gpi{% endif %}')"
+                                                            data-bs-toggle="tooltip" title="Details">
+                                                        <i class="fas fa-info-circle"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary" onclick="viewParameterHistory({{ param.id }}, '{% if param.main_head %}fpi{% else %}gpi{% endif %}')"
+                                                            data-bs-toggle="tooltip" title="View History">
+                                                        <i class="fas fa-history"></i>
+                                                    </button>
+                                                    {% if param.can_reassign %}
                                                     <button class="btn btn-outline-warning" onclick="reassignParameter({{ param.id }}, '{% if param.main_head %}fpi{% else %}gpi{% endif %}')"
                                                             data-bs-toggle="tooltip" title="Reassign">
                                                         <i class="fas fa-user-edit"></i>
                                                     </button>
-                                                    <button class="btn btn-outline-info" onclick="viewComments({{ param.id }}, '{% if param.main_head %}fpi{% else %}gpi{% endif %}')"
-                                                            data-bs-toggle="tooltip" title="View Comments">
-                                                        <i class="fas fa-comment"></i>
-                                                    </button>
+                                                    {% endif %}
                                                 </div>
                                             </td>
                                         </tr>
                                         {% empty %}
                                         <tr>
-                                            <td colspan="11" class="text-center text-muted">No monthly FPI/GPI parameters assigned to you</td>
+                                            <td colspan="11" class="text-center text-muted">No monthly GPI parameters assigned to you</td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>
@@ -306,20 +343,64 @@ console.log('###############################################');
 
                     <!-- My Projects Tab -->
                     <div class="tab-pane fade" id="my-projects" role="tabpanel">
-                        <!-- Current Quarter Display -->
-                        <div class="mb-3">
-                            <h5 class="mb-2">My Projects</h5>
-                            <p class="text-muted mb-0">{{ current_quarter_display }}</p>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">My Projects</h5>
+                            <div class="btn-group" role="group">
+                                <input type="radio" class="btn-check" name="ppiType" id="weeklyPPI" value="weekly" checked autocomplete="off">
+                                <label class="btn btn-outline-primary" for="weeklyPPI">Weekly PPI</label>
+                                <input type="radio" class="btn-check" name="ppiType" id="monthlyPPI" value="monthly" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="monthlyPPI">Monthly PPI</label>
+                            </div>
                         </div>
 
-                        <!-- Action Buttons -->
+                        <!-- Period Display with Quarter Selector -->
+                        <div class="alert alert-info mb-3">
+                            <div class="row align-items-center">
+                                <div class="col-md-3">
+                                    <label for="projectQuarterSelect" class="form-label mb-0"><strong>Select Quarter:</strong></label>
+                                </div>
+                                <div class="col-md-9">
+                                    <select id="projectQuarterSelect" class="form-select">
+                                        {% if previous_quarter_display %}
+                                        <option value="previous">{{ previous_quarter_display }}</option>
+                                        {% endif %}
+                                        <option value="current" selected>{{ current_quarter_display }}</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons and PPI Filter -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-danger" onclick="openUnifiedIssuesModal({location: 'implement', screen: 'my_projects', level: 'screen', period: 'quarterly', periodNumber: {{ current_quarter_num }}})">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Issues
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
+                                    <i class="fas fa-tasks me-2"></i>Action Items
+                                </button>
+                                <button type="button" class="btn btn-primary" onclick="refreshMyProjects()">
+                                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                                </button>
+                            </div>
+
+                            <!-- PPI Filter Radio Buttons -->
+                            <div class="btn-group" role="group" aria-label="PPI Filter">
+                                <input type="radio" class="btn-check" name="ppiFilter" id="myPPIs" value="my" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="myPPIs">My PPIs</label>
+
+                                <input type="radio" class="btn-check" name="ppiFilter" id="allPPIs" value="all" autocomplete="off" checked>
+                                <label class="btn btn-outline-primary" for="allPPIs">All PPIs</label>
+                            </div>
+                        </div>
+
                         <!-- Projects Grid -->
                         <div style="max-height: 400px; overflow-y: auto; overflow-x: auto; border: 2px solid #b8daff;">
                             <table class="table table-bordered table-hover" style="margin-bottom: 0;">
                                 <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
                                     <tr>
-                                        <th>Team</th>
-                                        <th>PPI (Project) Name</th>
+                                        <th>Team Meeting</th>
+                                        <th>PPI</th>
                                         <th>Completion Criteria</th>
                                         <th>Original Due Date</th>
                                         <th>% Completion</th>
@@ -331,14 +412,13 @@ console.log('###############################################');
                                 </thead>
                                 <tbody>
                                     {% for project in projects %}
-                                    <tr id="project-row-{{ project.id }}">
+                                    <tr id="project-row-{{ project.id }}" class="project-row" data-tracking-type="{{ project.tracking_type }}" data-quarter="{{ project.quarterly_plan.quarter }}" data-fy="{{ project.quarterly_plan.financial_year.id }}" data-responsible-user="{{ project.responsible_user.id }}">
                                         <td>{{ project.quarterly_plan.team.name }}</td>
                                         <td>
                                             <strong>{{ project.name }}</strong>
                                             {% if project.project_type %}
                                             <span class="badge bg-{% if project.project_type == 'PPI' %}primary{% else %}warning{% endif %} ms-2">{{ project.project_type }}</span>
                                             {% endif %}
-                                            <br><small class="text-muted">Q{{ project.quarterly_plan.quarter }} - {{ project.quarterly_plan.financial_year.year|unlocalize }}</small>
                                         </td>
                                         <td>{{ project.completion_criteria|truncatechars:80 }}</td>
                                         <td>{{ project.end_date|date:"M d, Y" }}</td>
@@ -396,35 +476,37 @@ console.log('###############################################');
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
-                                                <button class="btn btn-outline-success" onclick="openProjectActions({{ project.id }}, '{{ project.project_type }}')"
-                                                        data-bs-toggle="tooltip" title="Action Items">
-                                                    <i class="fas fa-plus-circle"></i>
-                                                </button>
-                                                <button class="btn btn-outline-danger" onclick="openProjectIssues({{ project.id }}, '{{ project.project_type }}')"
-                                                        data-bs-toggle="tooltip" title="Issues">
+                                                <button class="btn btn-outline-danger" onclick="openProjectIssues({{ project.id }}, '{{ project.project_type }}', {{ current_quarter_num }})"
+                                                        data-bs-toggle="tooltip" title="{% if project.can_create_actions_issues %}Issues{% else %}View Issues{% endif %}">
                                                     <i class="fas fa-exclamation-triangle"></i>
+                                                </button>
+                                                <button class="btn btn-outline-success" onclick="openProjectActions({{ project.id }}, '{{ project.project_type }}', {{ current_quarter_num }})"
+                                                        data-bs-toggle="tooltip" title="{% if project.can_create_actions_issues %}Action Items{% else %}View Action Items{% endif %}">
+                                                    <i class="fas fa-plus-circle"></i>
                                                 </button>
                                                 <button class="btn btn-outline-info" onclick="viewProjectDetailsFromDashboard({{ project.id }}, '{{ project.project_type }}')"
                                                         data-bs-toggle="tooltip" title="Details">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
+                                                {% if project.can_edit %}
                                                 <button class="btn btn-outline-primary" onclick="editProject({{ project.id }}, '{{ project.project_type }}')"
                                                         data-bs-toggle="tooltip" title="Edit">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
-                                                {% if project.responsible_user == user %}
+                                                {% endif %}
+                                                {% if project.can_reassign %}
                                                 <button class="btn btn-outline-warning" onclick="reassignProject({{ project.id }})"
                                                         data-bs-toggle="tooltip" title="Reassign">
                                                     <i class="fas fa-user-edit"></i>
                                                 </button>
-                                                {% if project.completion_percentage == 100 %}
+                                                {% endif %}
+                                                {% if project.can_mark_done and project.completion_percentage == 100 %}
                                                 <button class="btn btn-outline-success" onclick="markProjectComplete({{ project.id }})"
-                                                        data-bs-toggle="tooltip" title="Mark Complete">
+                                                        data-bs-toggle="tooltip" title="Mark Done">
                                                     <i class="fas fa-check"></i>
                                                 </button>
                                                 {% endif %}
-                                                {% endif %}
-                                                <button class="btn btn-outline-info" onclick="viewProjectHistory({{ project.id }}, '{{ project.project_type }}')"
+                                                <button class="btn btn-outline-secondary" onclick="viewProjectHistory({{ project.id }}, '{{ project.project_type }}')"
                                                         data-bs-toggle="tooltip" title="View History">
                                                     <i class="fas fa-history"></i>
                                                 </button>
@@ -445,6 +527,30 @@ console.log('###############################################');
                     <div class="tab-pane fade" id="my-todo" role="tabpanel">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="mb-0">My Action Items</h5>
+                        </div>
+
+                        <!-- Action Buttons and Action Filter -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-danger" onclick="openUnifiedIssuesModal({location: 'implement', screen: 'my_todo', level: 'screen', period: 'manual'})">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Issues
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
+                                    <i class="fas fa-tasks me-2"></i>Action Items
+                                </button>
+                                <button type="button" class="btn btn-primary" onclick="refreshMyTodo()">
+                                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                                </button>
+                            </div>
+
+                            <!-- Action Filter Radio Buttons -->
+                            <div class="btn-group" role="group" aria-label="Action Filter">
+                                <input type="radio" class="btn-check" name="actionFilter" id="myActions" value="my" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="myActions">My Actions</label>
+
+                                <input type="radio" class="btn-check" name="actionFilter" id="allActions" value="all" autocomplete="off" checked>
+                                <label class="btn btn-outline-primary" for="allActions">All Actions</label>
+                            </div>
                         </div>
 
                         <!-- Due Date Filter -->
@@ -485,7 +591,7 @@ console.log('###############################################');
                             <table class="table table-bordered table-hover" style="margin-bottom: 0;">
                                 <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
                                     <tr>
-                                        <th>Team</th>
+                                        <th>Team Meeting</th>
                                         <th>Source</th>
                                         <th>Action</th>
                                         <th>Priority</th>
@@ -498,7 +604,7 @@ console.log('###############################################');
                                 </thead>
                                 <tbody>
                                     {% for action in actions %}
-                                    <tr class="{% if action.original_due_date < today and action.status != 'completed' %}table-warning{% endif %}">
+                                    <tr class="action-row {% if action.original_due_date < today and action.status != 'completed' %}table-warning{% endif %}" data-assigned-to="{{ action.assigned_to.id }}">
                                         <td>{{ action.team.name|default:"-" }}</td>
                                         <td>
                                             <span class="badge bg-{% if action.action_type == 'review' %}warning{% else %}info{% endif %}">
@@ -520,7 +626,11 @@ console.log('###############################################');
                                             </span>
                                         </td>
                                         <td>
-                                            {{ action.team.name }} - {{ action.assigned_to.get_full_name }}
+                                            {% if action.next_assignee %}
+                                                {{ action.team.name }} - {{ action.next_assignee.get_full_name }}
+                                            {% else %}
+                                                {{ action.team.name }} - {{ action.assigned_to.get_full_name }}
+                                            {% endif %}
                                         </td>
                                         <td>{{ action.original_due_date|date:"M d, Y" }}</td>
                                         <td>
@@ -537,12 +647,26 @@ console.log('###############################################');
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
-                                                <button class="btn btn-outline-success" onclick="openActionActions({{ action.id|unlocalize }})" title="Action Items">
-                                                    <i class="fas fa-plus-circle"></i>
-                                                </button>
-                                                <button class="btn btn-outline-danger" onclick="openActionIssues({{ action.id|unlocalize }})" title="Issues">
+                                                {% if action.can_create_sub %}
+                                                <!-- Create Issues/Actions buttons - Only for final assignee -->
+                                                <button class="btn btn-outline-danger" onclick="openActionIssues({{ action.id|unlocalize }}, true)" title="Issues">
                                                     <i class="fas fa-exclamation-triangle"></i>
                                                 </button>
+                                                <button class="btn btn-outline-success" onclick="openActionActions({{ action.id|unlocalize }}, true)" title="Action Items">
+                                                    <i class="fas fa-plus-circle"></i>
+                                                </button>
+                                                {% else %}
+                                                <!-- View Issues/Actions buttons - For users in chain but not final assignee -->
+                                                <button class="btn btn-outline-danger" onclick="openActionIssues({{ action.id|unlocalize }}, false)" title="View Issues (Read-Only)">
+                                                    <i class="fas fa-exclamation-triangle"></i>
+                                                </button>
+                                                <button class="btn btn-outline-success" onclick="openActionActions({{ action.id|unlocalize }}, false)" title="View Action Items (Read-Only)">
+                                                    <i class="fas fa-plus-circle"></i>
+                                                </button>
+                                                {% endif %}
+
+                                                {% if action.can_edit %}
+                                                <!-- Edit button - Only for final assignee -->
                                                 {% if action.id and action.id > 0 %}
                                                 <button class="btn btn-outline-primary" onclick="editAction({{ action.id|unlocalize }})" title="Edit (ID: {{ action.id }})">
                                                     <i class="fas fa-edit"></i>
@@ -552,21 +676,108 @@ console.log('###############################################');
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 {% endif %}
+                                                {% endif %}
+
+                                                {% if action.can_reassign %}
+                                                <!-- Reassign button - For users in chain but not final assignee -->
                                                 <button class="btn btn-outline-warning" onclick="reassignAction({{ action.id|unlocalize }})" title="Reassign">
                                                     <i class="fas fa-user-edit"></i>
                                                 </button>
-                                                <button class="btn btn-outline-success" onclick="toggleActionComplete({{ action.id|unlocalize }})" title="Toggle Complete">
-                                                    <i class="fas fa-check"></i>
-                                                </button>
-                                                <button class="btn btn-outline-danger" onclick="rejectAction({{ action.id|unlocalize }})" title="Reject">
-                                                    <i class="fas fa-times"></i>
-                                                </button>
+                                                {% endif %}
+
+                                                {% if action.can_edit %}
+                                                    <!-- Status change buttons - Only for final assignee -->
+                                                    {% if action.source == 'manual' %}
+                                                        {% if not action.ppi_task and not action.improvement_task %}
+                                                            <!-- Toggle buttons for Implement screen actions (manual source, no PPI/Improvement tasks) -->
+
+                                                            <!-- Mark Complete/Undo Button -->
+                                                            {% if action.status == 'completed' %}
+                                                            <button class="btn btn-outline-warning" onclick="undoActionComplete({{ action.id|unlocalize }})" title="Undo">
+                                                                <i class="fas fa-undo"></i>
+                                                            </button>
+                                                            {% else %}
+                                                            <button class="btn btn-outline-success" onclick="markActionComplete({{ action.id|unlocalize }})" title="Mark Complete">
+                                                                <i class="fas fa-check"></i>
+                                                            </button>
+                                                            {% endif %}
+
+                                                            <!-- Mark Reject Button - Only for Done/Completed/Rejected status and no sub-actions -->
+                                                            {% if action.status == 'done' or action.status == 'completed' or action.status == 'rejected' %}
+                                                                {% if not action.has_sub_actions %}
+                                                                <button class="btn btn-outline-danger" onclick="markActionReject({{ action.id|unlocalize }})" title="Mark Reject">
+                                                                    <i class="fas fa-times-circle"></i>
+                                                                </button>
+                                                                {% endif %}
+                                                            {% endif %}
+
+                                                            <!-- On-Hold/Resume Button -->
+                                                            {% if action.status == 'on_hold' %}
+                                                            <button class="btn btn-outline-primary" onclick="resumeAction({{ action.id|unlocalize }})" title="Resume">
+                                                                <i class="fas fa-play"></i>
+                                                            </button>
+                                                            {% else %}
+                                                            <button class="btn btn-outline-secondary" onclick="holdAction({{ action.id|unlocalize }})" title="On-Hold">
+                                                                <i class="fas fa-pause"></i>
+                                                            </button>
+                                                            {% endif %}
+
+                                                            <!-- Drop/Mark Active Button -->
+                                                            {% if action.status == 'dropped' %}
+                                                            <button class="btn btn-outline-success" onclick="activateAction({{ action.id|unlocalize }})" title="Mark Active">
+                                                                <i class="fas fa-play-circle"></i>
+                                                            </button>
+                                                            {% else %}
+                                                            <button class="btn btn-outline-danger" onclick="dropAction({{ action.id|unlocalize }})" title="Drop">
+                                                                <i class="fas fa-ban"></i>
+                                                            </button>
+                                                            {% endif %}
+                                                        {% else %}
+                                                            <!-- Original buttons for PPI/Improvement task actions -->
+                                                            <button class="btn btn-outline-success" onclick="toggleActionComplete({{ action.id|unlocalize }})" title="Mark Done">
+                                                                <i class="fas fa-check"></i>
+                                                            </button>
+                                                            <!-- Mark Reject Button - Only for Done/Completed/Rejected status and no sub-actions -->
+                                                            {% if action.status == 'done' or action.status == 'completed' or action.status == 'rejected' %}
+                                                                {% if not action.has_sub_actions %}
+                                                                <button class="btn btn-outline-danger" onclick="rejectAction({{ action.id|unlocalize }})" title="Reject">
+                                                                    <i class="fas fa-times"></i>
+                                                                </button>
+                                                                {% endif %}
+                                                            {% endif %}
+                                                        {% endif %}
+                                                    {% else %}
+                                                        <!-- Original buttons for Review and other source actions -->
+                                                        <button class="btn btn-outline-success" onclick="toggleActionComplete({{ action.id|unlocalize }})" title="Mark Done">
+                                                            <i class="fas fa-check"></i>
+                                                        </button>
+                                                        <!-- Mark Reject Button - Only for Done/Completed/Rejected status and no sub-actions -->
+                                                        {% if action.status == 'done' or action.status == 'completed' or action.status == 'rejected' %}
+                                                            {% if not action.has_sub_actions %}
+                                                            <button class="btn btn-outline-danger" onclick="rejectAction({{ action.id|unlocalize }})" title="Reject">
+                                                                <i class="fas fa-times"></i>
+                                                            </button>
+                                                            {% endif %}
+                                                        {% endif %}
+                                                    {% endif %}
+                                                {% endif %}
+
+                                                <!-- History button - Always visible for anyone in reassignment chain -->
                                                 <button class="btn btn-outline-info" onclick="viewActionHistory({{ action.id|unlocalize }})" title="History">
                                                     <i class="fas fa-history"></i>
                                                 </button>
+
+                                                {% if action.can_create_sub %}
+                                                <!-- Sub Actions button - Only for final assignee who can create -->
                                                 <button class="btn btn-outline-secondary" onclick="viewSubActions({{ action.id|unlocalize }})" title="Sub Actions">
                                                     <i class="fas fa-list"></i>
                                                 </button>
+                                                {% else %}
+                                                <!-- View Sub Actions button - For users in chain but not final assignee -->
+                                                <button class="btn btn-outline-secondary" onclick="viewSubActions({{ action.id|unlocalize }})" title="View Sub Actions">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                {% endif %}
                                             </div>
                                         </td>
                                     </tr>
@@ -623,6 +834,79 @@ function changeMonth(monthNumber) {
     url.searchParams.set('month', monthNumber);
     url.searchParams.delete('week');  // Clear week parameter when switching to monthly
     window.location.href = url.toString();
+}
+
+// Screen-level Issue modal using unified modal
+function openScreenLevelIssueModal() {
+    // Determine which tab is active
+    const myNumbersTab = document.getElementById('my-numbers-tab');
+    const myProjectsTab = document.getElementById('my-projects-tab');
+    const myTodoTab = document.getElementById('my-todo-tab');
+
+    const isMyNumbersActive = myNumbersTab && myNumbersTab.classList.contains('active');
+    const isMyProjectsActive = myProjectsTab && myProjectsTab.classList.contains('active');
+    const isMyTodoActive = myTodoTab && myTodoTab.classList.contains('active');
+
+    if (isMyProjectsActive) {
+        // My Projects tab - use quarter context
+        openUnifiedIssuesModal({
+            location: 'implement',
+            screen: 'my_projects',
+            level: 'screen',
+            period: 'quarterly',
+            periodNumber: {{ current_quarter_num }}
+        });
+    } else if (isMyTodoActive) {
+        // My To Do tab - manual context
+        openUnifiedIssuesModal({
+            location: 'implement',
+            screen: 'my_todo',
+            level: 'screen',
+            period: 'manual'
+        });
+    } else {
+        // My Numbers tab - use week/month context (fallback, shouldn't reach here from dashboard)
+        const weeklySection = document.getElementById('weeklyNumbersSection');
+        const isWeekly = weeklySection && weeklySection.style.display !== 'none';
+        const weekNumber = isWeekly ? {{ selected_week|default:'null' }} : null;
+        const monthNumber = !isWeekly ? {{ selected_month|default:'null' }} : null;
+
+        openUnifiedIssuesModal({
+            location: 'implement',
+            screen: 'my_numbers',
+            level: 'screen',
+            period: isWeekly ? 'weekly' : 'monthly',
+            periodNumber: isWeekly ? weekNumber : monthNumber
+        });
+    }
+}
+
+// Screen-level Action modal (linked to selected week, month, or quarter)
+function openScreenLevelActionModal() {
+    // Determine which tab is active
+    const myNumbersTab = document.getElementById('my-numbers-tab');
+    const myProjectsTab = document.getElementById('my-projects-tab');
+
+    const isMyNumbersActive = myNumbersTab && myNumbersTab.classList.contains('active');
+    const isMyProjectsActive = myProjectsTab && myProjectsTab.classList.contains('active');
+
+    if (isMyProjectsActive) {
+        // My Projects tab - use quarter context
+        const quarterNumber = {{ current_quarter_num }};
+        openProjectActions(null, 'screen', quarterNumber);  // null project ID = screen-level
+    } else {
+        // My Numbers tab - use week/month context
+        const weeklySection = document.getElementById('weeklyNumbersSection');
+        const isWeekly = weeklySection && weeklySection.style.display !== 'none';
+        const weekNumber = isWeekly ? {{ selected_week|default:'null' }} : null;
+        const monthNumber = !isWeekly ? {{ selected_month|default:'null' }} : null;
+        openParameterActions('screen', null, weekNumber, monthNumber);
+    }
+}
+
+// Refresh Implement screen to pick up changes
+function refreshImplement() {
+    window.location.reload();
 }
 
 // Auto save functionality for editable fields
@@ -690,6 +974,26 @@ function reassignParameter(paramId, paramType = 'gpi') {
     // Show the modal
     const modal = new bootstrap.Modal(document.getElementById('reassignModal'));
     modal.show();
+}
+
+function viewParameterDetails(paramId, paramType = 'gpi') {
+    // Show parameter details including cumulative data
+    alert('View Details functionality will be implemented. Parameter ID: ' + paramId + ', Type: ' + paramType);
+    // TODO: Implement modal showing:
+    // - Parameter name, unit of measure, indicator type
+    // - Quarterly budget breakdown
+    // - Cumulative data (sum of actuals to date)
+    // - Milestones and progress
+}
+
+function viewParameterHistory(paramId, paramType = 'gpi') {
+    // Show parameter history
+    alert('View History functionality will be implemented. Parameter ID: ' + paramId + ', Type: ' + paramType);
+    // TODO: Implement modal showing:
+    // - All historical values (week/month by week/month)
+    // - Changes in goals, actuals, comments
+    // - Reassignment history
+    // - Action items and issues created for this parameter
 }
 
 // Handle team selection to populate members
@@ -1689,6 +1993,10 @@ function reassignAction(actionId) {
     window.location.href = `/implement/action/${actionId}/reassign/`;
 }
 
+function markActionReject(actionId) {
+    window.location.href = `/implement/action/${actionId}/reject/`;
+}
+
 function toggleActionComplete(actionId) {
     if (confirm('Toggle action completion status?')) {
         fetch(`/implement/action/${actionId}/toggle-complete/`, {
@@ -1949,6 +2257,248 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+// Handle PPI type filtering and quarter selection in My Projects
+document.addEventListener('DOMContentLoaded', function() {
+    // GPI Filter Elements
+    const myGPIsRadio = document.getElementById('myGPIs');
+    const allGPIsRadio = document.getElementById('allGPIs');
+    const currentUserId = {{ current_user_id }};
+
+    // Filter GPIs based on user selection
+    function filterGPIs() {
+        const selectedFilter = document.querySelector('input[name="gpiFilter"]:checked').value;
+        console.log('Filtering GPIs:', selectedFilter, 'Current User ID:', currentUserId);
+
+        // Get all GPI rows (both weekly and monthly)
+        const gpiRows = document.querySelectorAll('.gpi-row');
+
+        gpiRows.forEach(row => {
+            const responsibleUserId = parseInt(row.getAttribute('data-responsible-user'));
+
+            if (selectedFilter === 'my') {
+                // Show only GPIs where current user is responsible
+                if (responsibleUserId === currentUserId) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            } else {
+                // Show all GPIs
+                row.style.display = '';
+            }
+        });
+
+        // Log counts
+        const visibleWeeklyRows = document.querySelectorAll('.weekly-gpi-row:not([style*="display: none"])').length;
+        const visibleMonthlyRows = document.querySelectorAll('.monthly-gpi-row:not([style*="display: none"])').length;
+        console.log('Visible Weekly GPIs:', visibleWeeklyRows, 'Visible Monthly GPIs:', visibleMonthlyRows);
+    }
+
+    // Add event listeners for GPI filter
+    if (myGPIsRadio && allGPIsRadio) {
+        myGPIsRadio.addEventListener('change', filterGPIs);
+        allGPIsRadio.addEventListener('change', filterGPIs);
+
+        // Apply initial filter on page load (All GPIs is default)
+        filterGPIs();
+    }
+
+    // Project Filter Elements
+    const weeklyPPIRadio = document.getElementById('weeklyPPI');
+    const monthlyPPIRadio = document.getElementById('monthlyPPI');
+    const myPPIsRadio = document.getElementById('myPPIs');
+    const allPPIsRadio = document.getElementById('allPPIs');
+    const quarterSelect = document.getElementById('projectQuarterSelect');
+
+    // Filter projects based on PPI type and responsible user
+    function filterProjects() {
+        const selectedType = document.querySelector('input[name="ppiType"]:checked').value;
+        const selectedFilter = document.querySelector('input[name="ppiFilter"]:checked').value;
+        console.log('Filtering projects by type:', selectedType, 'and filter:', selectedFilter);
+
+        // Get all project rows
+        const projectRows = document.querySelectorAll('.project-row');
+
+        // Show/hide based on tracking type AND responsible user
+        projectRows.forEach(row => {
+            const trackingType = row.getAttribute('data-tracking-type');
+            const responsibleUserId = parseInt(row.getAttribute('data-responsible-user'));
+
+            let showRow = false;
+
+            // First check tracking type
+            if (trackingType === selectedType) {
+                // Then check responsible user filter
+                if (selectedFilter === 'my') {
+                    // Show only projects where current user is responsible
+                    if (responsibleUserId === currentUserId) {
+                        showRow = true;
+                    }
+                } else {
+                    // Show all projects (All PPIs)
+                    showRow = true;
+                }
+            }
+
+            row.style.display = showRow ? '' : 'none';
+        });
+
+        // Update row count or show message if no projects
+        const visibleRows = document.querySelectorAll('.project-row:not([style*="display: none"])').length;
+        console.log('Visible projects:', visibleRows);
+    }
+
+    // Handle quarter selection change
+    function handleQuarterChange() {
+        const selectedQuarter = quarterSelect.value;
+        console.log('Selected quarter:', selectedQuarter);
+
+        // TODO: Reload projects for selected quarter via AJAX
+        // For now, show a message that this feature is pending
+        alert('Quarter filtering will reload projects via AJAX - to be implemented');
+    }
+
+    // Add event listeners for PPI type filter (Weekly/Monthly)
+    if (weeklyPPIRadio && monthlyPPIRadio) {
+        weeklyPPIRadio.addEventListener('change', filterProjects);
+        monthlyPPIRadio.addEventListener('change', filterProjects);
+    }
+
+    // Add event listeners for PPI ownership filter (My PPIs/All PPIs)
+    if (myPPIsRadio && allPPIsRadio) {
+        myPPIsRadio.addEventListener('change', filterProjects);
+        allPPIsRadio.addEventListener('change', filterProjects);
+    }
+
+    // Apply initial filter on page load if elements exist
+    if (weeklyPPIRadio && monthlyPPIRadio) {
+        filterProjects();
+    }
+
+    if (quarterSelect) {
+        quarterSelect.addEventListener('change', handleQuarterChange);
+    }
+});
+
+// Refresh My Projects function
+function refreshMyProjects() {
+    console.log('Refreshing My Projects tab...');
+    // Reload the page to refresh all data
+    location.reload();
+}
+
+// Refresh My To Do function
+function refreshMyTodo() {
+    console.log('Refreshing My To Do tab...');
+    // Reload the page to refresh all data
+    location.reload();
+}
+
+// Toggle Action Status Functions for Implement Actions
+
+// Mark Complete - changes status to completed
+function markActionComplete(actionId) {
+    updateActionStatus(actionId, 'completed', 'Action marked as completed');
+}
+
+// Undo - reverts to previous status
+function undoActionComplete(actionId) {
+    updateActionStatus(actionId, 'undo', 'Action status reverted');
+}
+
+// On-Hold - changes status to on_hold
+function holdAction(actionId) {
+    updateActionStatus(actionId, 'on_hold', 'Action marked as on-hold');
+}
+
+// Resume - reverts to previous status
+function resumeAction(actionId) {
+    updateActionStatus(actionId, 'resume', 'Action resumed');
+}
+
+// Drop - changes status to dropped
+function dropAction(actionId) {
+    updateActionStatus(actionId, 'dropped', 'Action dropped');
+}
+
+// Mark Active - reverts to previous status
+function activateAction(actionId) {
+    updateActionStatus(actionId, 'activate', 'Action marked as active');
+}
+
+// Generic function to update action status
+function updateActionStatus(actionId, newStatus, successMessage) {
+    const formData = new FormData();
+    formData.append('action_id', actionId);
+    formData.append('new_status', newStatus);
+
+    fetch('/implement/toggle-action-status/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Reload the page to show updated status and button
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to update action status'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating action status');
+    });
+}
+
+// Action Filter Elements for My To Do tab
+const myActionsRadio = document.getElementById('myActions');
+const allActionsRadio = document.getElementById('allActions');
+
+// Filter actions based on user selection
+function filterActions() {
+    const selectedFilter = document.querySelector('input[name="actionFilter"]:checked');
+    if (!selectedFilter) return;
+
+    const filterValue = selectedFilter.value;
+    console.log('Filtering actions:', filterValue, 'Current User ID:', {{ current_user_id }});
+
+    // Get all action rows
+    const actionRows = document.querySelectorAll('.action-row');
+
+    actionRows.forEach(row => {
+        const assignedToId = parseInt(row.getAttribute('data-assigned-to'));
+
+        if (filterValue === 'my') {
+            // Show only actions where current user is assigned
+            if (assignedToId === {{ current_user_id }}) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        } else {
+            // Show all actions
+            row.style.display = '';
+        }
+    });
+
+    // Log counts
+    const visibleRows = document.querySelectorAll('.action-row:not([style*="display: none"])').length;
+    console.log('Visible actions:', visibleRows);
+}
+
+// Add event listeners for action filter
+if (myActionsRadio && allActionsRadio) {
+    myActionsRadio.addEventListener('change', filterActions);
+    allActionsRadio.addEventListener('change', filterActions);
+
+    // Apply initial filter on page load (All Actions is default)
+    filterActions();
+}
 </script>
 
 <!-- Reassign Parameter Modal -->
@@ -1962,7 +2512,7 @@ function getCookie(name) {
             <div class="modal-body">
                 <form id="reassignForm">
                     <div class="mb-3">
-                        <label for="reassignTeam" class="form-label">Reassign Team</label>
+                        <label for="reassignTeam" class="form-label">Reassign Team Meeting</label>
                         <select class="form-select" id="reassignTeam" name="team">
                             <option value="">Select</option>
                             {% for team in user_teams %}

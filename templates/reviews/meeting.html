@@ -16,27 +16,104 @@
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Review Meeting Details
+                </h5>
+            </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <h6 class="text-muted mb-1">Team</h6>
+                <div class="row g-3">
+                    <!-- Row 1 -->
+                    <div class="col-md-4">
+                        <h6 class="text-muted mb-2"><i class="fas fa-users me-1"></i>Team Meeting</h6>
                         <p class="mb-0"><strong>{{ meeting.team.name }}</strong></p>
                     </div>
-                    <div class="col-md-3">
-                        <h6 class="text-muted mb-1">Review Type</h6>
-                        <span class="badge bg-{% if meeting.review_type == 'daily' %}info{% elif meeting.review_type == 'weekly' %}warning{% else %}success{% endif %} fs-6">
-                            {{ meeting.get_review_type_display }}
-                        </span>
+                    <div class="col-md-4">
+                        <h6 class="text-muted mb-2"><i class="fas fa-calendar-alt me-1"></i>Meeting Date & Time</h6>
+                        <p class="mb-0"><strong>{{ meeting.review_date|date:"d-M-Y" }}</strong> at <strong>{{ meeting.review_date|date:"g:i A" }}</strong></p>
                     </div>
-                    <div class="col-md-3">
-                        <h6 class="text-muted mb-1">Date & Time</h6>
-                        <p class="mb-0">{{ meeting.review_date|date:"M d, Y g:i A" }}</p>
-                    </div>
-                    <div class="col-md-3">
-                        <h6 class="text-muted mb-1">Manager</h6>
-                        <p class="mb-0">{{ meeting.manager_name }}</p>
+                    <div class="col-md-4">
+                        <h6 class="text-muted mb-2"><i class="fas fa-tag me-1"></i>Meeting Type</h6>
+                        <p class="mb-0">
+                            <span class="badge bg-secondary fs-6">
+                                {{ meeting.team.meeting_type.name|default:"N/A" }}
+                            </span>
+                        </p>
                     </div>
                 </div>
+                <div class="row g-3 mt-2">
+                    <!-- Row 2 -->
+                    <div class="col-md-4">
+                        <h6 class="text-muted mb-2"><i class="fas fa-clock me-1"></i>Cadence of Meeting</h6>
+                        <p class="mb-0">
+                            {% if meeting.is_adhoc %}
+                                <span class="badge bg-warning text-dark fs-6">Ad-Hoc</span>
+                            {% else %}
+                                <span class="badge bg-{% if meeting.team.cadence == 'weekly' %}info{% elif meeting.team.cadence == 'monthly' %}primary{% elif meeting.team.cadence == 'quarterly' %}success{% else %}dark{% endif %} fs-6">
+                                    {{ meeting.team.get_cadence_display|default:"N/A" }}
+                                </span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-muted mb-2"><i class="fas fa-user-tie me-1"></i>Manager Name</h6>
+                        <p class="mb-0"><strong>{{ meeting.manager_name }}</strong></p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-muted mb-2"><i class="fas fa-user-friends me-1"></i>Participants</h6>
+                        <p class="mb-0">
+                            {% if meeting.participants.exists %}
+                                <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#participantsModal">
+                                    <i class="fas fa-users me-1"></i>View {{ meeting.participants.count }} Participant{{ meeting.participants.count|pluralize }}
+                                </button>
+                            {% else %}
+                                <span class="text-muted">No participants</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Participants Modal -->
+<div class="modal fade" id="participantsModal" tabindex="-1" aria-labelledby="participantsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="participantsModalLabel">
+                    <i class="fas fa-users me-2"></i>Meeting Participants
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="mb-3">{{ meeting.team.name }}</h6>
+                <p class="mb-3"><strong>Date:</strong> {{ meeting.review_date|date:"M d, Y g:i A" }}</p>
+
+                <h6 class="mb-2">Participants:</h6>
+                {% if meeting.participants.exists %}
+                    <ul class="list-group list-group-flush">
+                        {% for participant in meeting.participants.all %}
+                        <li class="list-group-item px-0">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-user-circle me-2 text-primary"></i>
+                                <div>
+                                    <strong>{{ participant.get_full_name|default:participant.username }}</strong>
+                                    {% if participant.email %}
+                                        <br><small class="text-muted">{{ participant.email }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No participants assigned to this meeting.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -45,22 +122,47 @@
 <!-- Quick Actions Bar -->
 <div class="row mb-4">
     <div class="col-12">
-        <div class="d-flex gap-2 flex-wrap">
-            <button type="button" class="btn btn-outline-primary btn-sm" onclick="openReviewNotes()">
-                <i class="fas fa-sticky-note me-1"></i>Review Notes
-            </button>
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openDecisions()">
-                <i class="fas fa-gavel me-1"></i>Decisions
-            </button>
-            <button type="button" class="btn btn-outline-warning btn-sm" onclick="openGeneralIssues()">
-                <i class="fas fa-exclamation-triangle me-1"></i>Issues
-            </button>
-            <button type="button" class="btn btn-outline-info btn-sm" onclick="loadActionItems()">
-                <i class="fas fa-tasks me-1"></i>Action Items
-            </button>
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-primary" onclick="openReviewNotes()" data-bs-toggle="tooltip" title="Review Notes" {% if meeting.finalized_at %}disabled{% endif %}>
+                    <i class="fas fa-sticky-note"></i> Review Notes
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="openDecisions()" data-bs-toggle="tooltip" title="Decisions" {% if meeting.finalized_at %}disabled{% endif %}>
+                    <i class="fas fa-gavel"></i> Decisions
+                </button>
+                <button type="button" class="btn btn-outline-danger" onclick="openGeneralIssues()" data-bs-toggle="tooltip" title="Issues" {% if meeting.finalized_at %}disabled{% endif %}>
+                    <i class="fas fa-exclamation-triangle"></i> Issues
+                </button>
+                <button type="button" class="btn btn-outline-success" onclick="loadActionItems()" data-bs-toggle="tooltip" title="Action Items" {% if meeting.finalized_at %}disabled{% endif %}>
+                    <i class="fas fa-tasks"></i> Action Items
+                </button>
+            </div>
+
+            <!-- Finalization Status and Download PDF -->
+            {% if meeting.finalized_at %}
+            <div class="btn-group btn-group-sm" role="group">
+                <span class="badge bg-success fs-6 me-2">
+                    <i class="fas fa-lock me-1"></i>Finalized on {{ meeting.finalized_at|date:"d-M-Y g:i A" }} by {{ meeting.finalized_by.get_full_name|default:meeting.finalized_by.username }}
+                </span>
+                <button type="button" class="btn btn-outline-primary" onclick="downloadPDF()" data-bs-toggle="tooltip" title="Download PDF">
+                    <i class="fas fa-file-pdf"></i> Download PDF
+                </button>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
+
+{% if meeting.finalized_at %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="alert alert-info mb-0">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>This review meeting has been finalized and is now read-only.</strong> No further changes can be made to this record.
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Main Tabs Container -->
 <div class="row">
@@ -795,58 +897,30 @@ function openActionItems() {
 }
 
 function openGeneralIssues() {
-    console.log('openGeneralIssues called');
+    console.log('openGeneralIssues called - opening unified issues modal');
 
-    const modalElement = document.getElementById('issuesModal');
-    const content = document.getElementById('issuesContent');
+    // Determine the period based on review type
+    let period = '{{ meeting.review_type }}';  // 'weekly', 'monthly', 'quarterly', etc.
+    let periodNumber = null;
 
-    if (!modalElement || !content) {
-        console.error('Issues modal elements not found');
-        return;
-    }
+    {% if meeting.review_type == 'weekly' %}
+        periodNumber = {{ meeting.week_number|default:'null' }};
+    {% elif meeting.review_type == 'monthly' %}
+        periodNumber = {{ meeting.month_number|default:'null' }};
+    {% elif meeting.review_type == 'quarterly' %}
+        periodNumber = {{ meeting.quarter_number|default:'null' }};
+    {% endif %}
 
-    // Show the modal
-    const modal = new bootstrap.Modal(modalElement);
-    modal.show();
-
-    // Show loading spinner
-    content.innerHTML = `
-        <div class="text-center py-4">
-            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-            <p class="text-muted mt-2">Loading issues...</p>
-        </div>
-    `;
-
-    // Load the parameter issues popup content (from the reviews app)
-    fetch('{% url "reviews:issues" meeting.pk %}')
-        .then(response => response.text())
-        .then(html => {
-            content.innerHTML = html;
-
-            // Execute scripts in loaded content
-            const scripts = content.querySelectorAll('script');
-            scripts.forEach(script => {
-                const newScript = document.createElement('script');
-                if (script.src) {
-                    newScript.src = script.src;
-                } else {
-                    newScript.textContent = script.textContent;
-                }
-                document.head.appendChild(newScript);
-                document.head.removeChild(newScript);
-            });
-
-            console.log('Issues popup loaded successfully');
-        })
-        .catch(error => {
-            console.error('Error loading issues:', error);
-            content.innerHTML = `
-                <div class="text-center py-4">
-                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
-                    <p class="text-danger mt-2">Error loading issues: ${error.message}</p>
-                </div>
-            `;
-        });
+    // Open unified issues modal for review screen-level
+    openUnifiedIssuesModal({
+        location: 'review',
+        level: 'screen',
+        period: period,
+        periodNumber: periodNumber,
+        meetingId: {{ meeting.pk }},
+        teamId: {{ meeting.team.id }},
+        reviewDate: '{{ meeting.review_date|date:"M d, Y" }}'
+    });
 }
 
 // Flag to track if we're adding action from within Action Items popup - make it globally accessible
@@ -1039,10 +1113,114 @@ function refreshActionItems(parameterType, parameterId) {
             `;
         });
 }
+
+// Auto-finalize meeting when manager navigates away
+{% if is_manager and not meeting.finalized_at %}
+let hasDataChanged = false;
+let isNavigatingAway = false;
+
+// Track if any data has been entered or edited
+document.addEventListener('DOMContentLoaded', function() {
+    // Monitor any form submissions or data changes in the review
+    const observeDataChanges = function() {
+        hasDataChanged = true;
+    };
+
+    // Listen for any AJAX calls that save data
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+        // Check if this is a data-saving request
+        const url = args[0];
+        if (typeof url === 'string' && (
+            url.includes('save-') ||
+            url.includes('update-') ||
+            url.includes('create-') ||
+            url.includes('notes') ||
+            url.includes('decisions') ||
+            url.includes('action-items')
+        )) {
+            hasDataChanged = true;
+        }
+        return originalFetch.apply(this, args);
+    };
+});
+
+// Finalize meeting when navigating away
+window.addEventListener('beforeunload', function(e) {
+    // Only finalize if data has been changed and user is navigating away
+    if (hasDataChanged && !isNavigatingAway) {
+        isNavigatingAway = true;
+
+        // Use sendBeacon for reliable async call during page unload
+        const formData = new FormData();
+        const csrfToken = getCookie('csrftoken');
+
+        // Try sendBeacon first (most reliable for page unload)
+        const data = JSON.stringify({});
+        const blob = new Blob([data], { type: 'application/json' });
+
+        // Set a flag in sessionStorage to track finalization attempt
+        try {
+            navigator.sendBeacon(
+                '{% url "reviews:finalize_meeting" meeting.pk %}?csrf=' + encodeURIComponent(csrfToken),
+                blob
+            );
+        } catch (error) {
+            console.error('Error sending beacon:', error);
+        }
+    }
+});
+
+// Also finalize when clicking navigation links
+document.addEventListener('click', function(e) {
+    // Check if clicking a navigation link or the back button
+    const target = e.target.closest('a');
+    if (target && target.href && hasDataChanged && !isNavigatingAway) {
+        const href = target.getAttribute('href');
+
+        // Check if it's a navigation link (not a modal trigger or similar)
+        if (href && !href.startsWith('#') && !target.hasAttribute('data-bs-toggle')) {
+            isNavigatingAway = true;
+
+            // Prevent default navigation temporarily
+            e.preventDefault();
+
+            // Finalize the meeting
+            fetch('{% url "reviews:finalize_meeting" meeting.pk %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                },
+                keepalive: true  // Important for navigation requests
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Navigate to the intended location
+                window.location.href = target.href;
+            })
+            .catch(error => {
+                console.error('Error finalizing:', error);
+                // Navigate anyway
+                window.location.href = target.href;
+            });
+        }
+    }
+});
+{% endif %}
+
+// Download PDF Function
+function downloadPDF() {
+    window.location.href = '{% url "reviews:download_pdf" meeting.pk %}';
+}
 </script>
 
 <!-- Include standard Issue and Action modals -->
 {% include 'includes/new_issue_modal.html' %}
 {% include 'includes/new_action_modal.html' %}
+{% include 'includes/unified_issues_modal.html' %}
+
+<!-- Include unified issues modal JavaScript -->
+<script src="{% static 'js/unified_issues_modal.js' %}"></script>
 </div>
 {% endblock %}
