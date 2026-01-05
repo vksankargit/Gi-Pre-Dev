@@ -9,7 +9,15 @@ from django.db import models
 import openpyxl
 import os
 import datetime
-from .models import AnnualPlan, QuarterlyPlan, FinancialYear, FPIParameter, GPIParameter, PPIProject, PPITask, FPIMilestone, GPIMilestone, AnnualFPIParameter, AnnualGPIParameter, AnnualPPIProject, AnnualPlanUploadHistory, QuarterlyPlanUploadHistory
+from .models import (
+    AnnualPlan, QuarterlyPlan, FinancialYear,
+    GPIParameter, PPIProject, PPITask,
+    GPIMilestone, PPIMilestone,
+    AnnualGPIParameter, AnnualPPIProject,
+    AnnualPlanUploadHistory, QuarterlyPlanUploadHistory,
+    GPIWeeklyRecord, GPIMonthlyRecord,
+    PPIWeeklyRecord, PPIMonthlyRecord
+)
 from organizations.models import Team
 from django.contrib.auth import get_user_model
 from accounts.utils import get_effective_user
@@ -259,10 +267,10 @@ class AnnualPlanUploadView(LoginRequiredMixin, TemplateView):
             errors = self._parse_annual_plan(annual_plan, uploaded_file)
 
             # Count total records
-            total_fpis = AnnualFPIParameter.objects.filter(annual_plan=annual_plan).count()
+            # FPI has been removed from the system
             total_gpis = AnnualGPIParameter.objects.filter(annual_plan=annual_plan).count()
             total_ppis = AnnualPPIProject.objects.filter(annual_plan=annual_plan).count()
-            total_records = total_fpis + total_gpis + total_ppis
+            total_records = total_gpis + total_ppis
             error_records = len(errors)
             processed_records = total_records
 
@@ -342,30 +350,37 @@ class AnnualPlanUploadView(LoginRequiredMixin, TemplateView):
             workbook = openpyxl.load_workbook(uploaded_file, data_only=True)
 
             # Clear existing data for this annual plan
-            AnnualFPIParameter.objects.filter(annual_plan=annual_plan).delete()
+            # FPI has been removed from the system
             AnnualGPIParameter.objects.filter(annual_plan=annual_plan).delete()
             AnnualPPIProject.objects.filter(annual_plan=annual_plan).delete()
 
-            # Process FPI sheet
-            if 'FPIs' in workbook.sheetnames:
-                fpi_errors = self._process_annual_fpi_sheet(workbook['FPIs'], annual_plan, User)
-                errors.extend(fpi_errors)
-            else:
-                errors.append("Missing FPIs sheet in uploaded file")
+            # FPI processing has been removed
 
-            # Process GPI sheet
-            if 'GPIs' in workbook.sheetnames:
-                gpi_errors = self._process_annual_gpi_sheet(workbook['GPIs'], annual_plan, User)
+            # Process GPI sheet (accept both 'GPI' and 'GPIs')
+            gpi_sheet = None
+            if 'GPI' in workbook.sheetnames:
+                gpi_sheet = workbook['GPI']
+            elif 'GPIs' in workbook.sheetnames:
+                gpi_sheet = workbook['GPIs']
+
+            if gpi_sheet:
+                gpi_errors = self._process_annual_gpi_sheet(gpi_sheet, annual_plan, User)
                 errors.extend(gpi_errors)
             else:
-                errors.append("Missing GPIs sheet in uploaded file")
+                errors.append("Missing GPI or GPIs sheet in uploaded file")
 
-            # Process PPI sheet
-            if 'PPIs' in workbook.sheetnames:
-                ppi_errors = self._process_annual_ppi_sheet(workbook['PPIs'], annual_plan, User)
+            # Process PPI sheet (accept both 'PPI' and 'PPIs')
+            ppi_sheet = None
+            if 'PPI' in workbook.sheetnames:
+                ppi_sheet = workbook['PPI']
+            elif 'PPIs' in workbook.sheetnames:
+                ppi_sheet = workbook['PPIs']
+
+            if ppi_sheet:
+                ppi_errors = self._process_annual_ppi_sheet(ppi_sheet, annual_plan, User)
                 errors.extend(ppi_errors)
             else:
-                errors.append("Missing PPIs sheet in uploaded file")
+                errors.append("Missing PPI or PPIs sheet in uploaded file")
 
         except Exception as e:
             errors.append(f"Error reading Excel file: {str(e)}")
@@ -373,56 +388,9 @@ class AnnualPlanUploadView(LoginRequiredMixin, TemplateView):
         return errors
 
     def _process_annual_fpi_sheet(self, sheet, annual_plan, User):
-        """Process FPIs sheet: Row 4 headers, data starts at row 5"""
-        errors = []
-
-        # Expected columns: Main Head, Sub-head, Responsibility, 1-year Goals, Q1 Budget, Q2 Budget, Q3 Budget, Q4 Budget
-        for row_num, row in enumerate(sheet.iter_rows(min_row=5, values_only=True), start=5):
-            if not any(row):  # Skip empty rows
-                continue
-
-            try:
-                # Skip the first empty column (template has empty column at start)
-                _, main_head, sub_head, responsibility, annual_goal, q1_budget, q2_budget, q3_budget, q4_budget = row[:9]
-
-                if not main_head or not sub_head:
-                    continue  # Skip rows without main data
-
-                # Find responsible user
-                responsible_user = None
-                if responsibility:
-                    responsible_user = User.objects.filter(
-                        models.Q(username__iexact=responsibility) |
-                        models.Q(first_name__iexact=responsibility) |
-                        models.Q(last_name__iexact=responsibility)
-                    ).first()
-
-                # Map main_head to model choices
-                main_head_mapping = {
-                    'Revenue': 'revenue',
-                    'Variable Cost': 'variable_cost',
-                    'Operating Expenses': 'operating_expenses',
-                    'Other Expenses': 'other_expenses',
-                }
-                main_head_value = main_head_mapping.get(str(main_head).strip(), 'revenue')
-
-                # Create FPI parameter
-                AnnualFPIParameter.objects.create(
-                    annual_plan=annual_plan,
-                    main_head=main_head_value,
-                    sub_head=str(sub_head).strip(),
-                    responsible_user=responsible_user,
-                    annual_goal=self._parse_decimal(annual_goal),
-                    q1_goal=self._parse_decimal(q1_budget),
-                    q2_goal=self._parse_decimal(q2_budget),
-                    q3_goal=self._parse_decimal(q3_budget),
-                    q4_goal=self._parse_decimal(q4_budget)
-                )
-
-            except Exception as e:
-                errors.append(f"FPI Row {row_num}: {str(e)}")
-
-        return errors
+        """FPI has been removed from the system - this method is deprecated"""
+        # FPI processing has been removed
+        return []
 
     def _process_annual_gpi_sheet(self, sheet, annual_plan, User):
         """Process GPIs sheet: Row 4 headers, data starts at row 5"""
@@ -551,7 +519,7 @@ class AnnualPlanUploadView(LoginRequiredMixin, TemplateView):
 class AnnualPlanTemplateDownloadView(LoginRequiredMixin, TemplateView):
     def get(self, request, *args, **kwargs):
         # Path to the template file
-        template_path = os.path.join(settings.BASE_DIR, 'Annual_Plan_Template.xlsx')
+        template_path = os.path.join(settings.BASE_DIR, 'Annual Plan Template.xlsx')
 
         # Check if template file exists
         if not os.path.exists(template_path):
@@ -789,8 +757,7 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                             # Django will handle cascade deletion of sub_actions
                             action.delete()
 
-                # Get all FPI parameters and their milestones (will be cascade deleted)
-                FPIParameter.objects.filter(quarterly_plan=existing_plan).delete()
+                # FPI has been removed from the system
 
                 # Get all GPI parameters and their milestones (will be cascade deleted)
                 GPIParameter.objects.filter(quarterly_plan=existing_plan).delete()
@@ -837,10 +804,10 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
             processing_errors = self._process_quarterly_excel_file(quarterly_plan, uploaded_file)
 
             # Count total records
-            total_fpis = FPIParameter.objects.filter(quarterly_plan=quarterly_plan).count()
+            # FPI has been removed from the system
             total_gpis = GPIParameter.objects.filter(quarterly_plan=quarterly_plan).count()
             total_ppis = PPIProject.objects.filter(quarterly_plan=quarterly_plan).count()
-            total_records = total_fpis + total_gpis + total_ppis
+            total_records = total_gpis + total_ppis
             error_records = len(processing_errors)
             processed_records = total_records
 
@@ -926,16 +893,11 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
             workbook = openpyxl.load_workbook(uploaded_file, data_only=True)
 
             # Clear existing records for this quarterly plan
-            FPIParameter.objects.filter(quarterly_plan=quarterly_plan).delete()
+            # FPI has been removed from the system
             GPIParameter.objects.filter(quarterly_plan=quarterly_plan).delete()
             PPIProject.objects.filter(quarterly_plan=quarterly_plan).delete()
 
-            # Process FPI sheet
-            if 'FPI' in workbook.sheetnames:
-                fpi_errors = self._process_fpi_sheet(workbook['FPI'], quarterly_plan, User)
-                errors.extend(fpi_errors)
-            else:
-                errors.append("Missing FPI sheet in uploaded file")
+            # FPI processing has been removed
 
             # Process GPI-M sheet
             if 'GPI-M' in workbook.sheetnames:
@@ -951,12 +913,19 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
             else:
                 errors.append("Missing GPI-W sheet in uploaded file")
 
-            # Process PPI sheet
-            if 'PPI' in workbook.sheetnames:
-                ppi_errors = self._process_ppi_sheet(workbook['PPI'], quarterly_plan, User)
-                errors.extend(ppi_errors)
+            # Process PPI-M sheet (monthly PPI tracking)
+            if 'PPI-M' in workbook.sheetnames:
+                ppi_m_errors = self._process_ppi_sheet(workbook['PPI-M'], quarterly_plan, User, 'monthly')
+                errors.extend(ppi_m_errors)
             else:
-                errors.append("Missing PPI sheet in uploaded file")
+                errors.append("Missing PPI-M sheet in uploaded file")
+
+            # Process PPI-W sheet (weekly PPI tracking)
+            if 'PPI-W' in workbook.sheetnames:
+                ppi_w_errors = self._process_ppi_sheet(workbook['PPI-W'], quarterly_plan, User, 'weekly')
+                errors.extend(ppi_w_errors)
+            else:
+                errors.append("Missing PPI-W sheet in uploaded file")
 
         except Exception as e:
             errors.append(f"Error reading Excel file: {str(e)}")
@@ -964,7 +933,10 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
         return errors
 
     def _process_fpi_sheet(self, sheet, quarterly_plan, User):
-        """Process FPI sheet with full monthly milestone extraction"""
+        """FPI has been removed from the system - this method is deprecated"""
+        # FPI processing has been removed
+        return []
+
         errors = []
 
         # Header is at row 4, data starts at row 5
@@ -1036,33 +1008,8 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                     except (ValueError, TypeError):
                         pass
 
-                # Create FPI parameter
-                fpi_parameter = FPIParameter.objects.create(
-                    quarterly_plan=quarterly_plan,
-                    main_head=main_head_value,
-                    sub_head=str(sub_head).strip(),
-                    responsible_user=responsible_user,
-                    quarter_goal=float(quarter_goal) if quarter_goal else 0,
-                    month1_budget=month1_budget,
-                    month2_budget=month2_budget,
-                    month3_budget=month3_budget
-                )
-
-                # Create FPI milestone records for each month
-                # M1, M2, M3 are at indices 8, 9, 10
-                for month_num in range(1, 4):  # Month 1-3
-                    col_index = 7 + month_num  # M1 is at index 8, so 7 + 1 = 8
-                    if col_index < len(row) and row[col_index] is not None:
-                        try:
-                            month_value = float(row[col_index])
-                            if month_value != 0:  # Only create milestone if value is non-zero
-                                FPIMilestone.objects.create(
-                                    fpi_parameter=fpi_parameter,
-                                    month_number=month_num,
-                                    budget_value=month_value
-                                )
-                        except (ValueError, TypeError):
-                            pass  # Skip invalid values
+                # FPI processing has been removed from the system
+                pass
 
             except Exception as e:
                 errors.append(f"FPI Row {row_num}: {str(e)}")
@@ -1176,8 +1123,8 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
 
         return errors
 
-    def _process_ppi_sheet(self, sheet, quarterly_plan, User):
-        """Process PPI sheet: ['Project Name', 'Completion Criteria for the quarter', 'Responsibility', 'Start Date', 'End Date', 'Steps', 'W1', 'W2', ...]"""
+    def _process_ppi_sheet(self, sheet, quarterly_plan, User, tracking_type):
+        """Process PPI sheet with weekly or monthly tracking: ['Project Name', 'Completion Criteria for the quarter', 'Responsibility', 'Start Date', 'End Date', 'Steps', 'W1/M1', 'W2/M2', ...]"""
         errors = []
 
         # Header is at row 4, data starts at row 5
@@ -1248,40 +1195,42 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
                     quarterly_plan=quarterly_plan,
                     name=str(project_name).strip(),
                     completion_criteria=str(completion_criteria).strip() if completion_criteria else '',
+                    tracking_type=tracking_type,
                     responsible_user=responsible_user,
                     start_date=parsed_start_date or datetime.date.today(),
                     end_date=parsed_end_date or datetime.date.today()
                 )
 
-                # Process weekly tasks starting from column 8 (W1)
-                week_task_errors = self._process_weekly_tasks(ppi_project, row, row_num, User)
-                errors.extend(week_task_errors)
+                # Process weekly/monthly tasks starting from column 8 (W1/M1)
+                task_errors = self._process_ppi_tasks(ppi_project, row, row_num, User, tracking_type)
+                errors.extend(task_errors)
 
             except Exception as e:
                 errors.append(f"PPI Row {row_num}: {str(e)}")
 
         return errors
 
-    def _process_weekly_tasks(self, ppi_project, row, row_num, User):
-        """Process weekly tasks from PPI row and create PPITask and Action records"""
+    def _process_ppi_tasks(self, ppi_project, row, row_num, User, tracking_type):
+        """Process weekly or monthly tasks from PPI row and create PPITask and Action records"""
         errors = []
         # Filter out numeric values that shouldn't be tasks
 
         try:
-            # Weekly tasks start from column 8 (index 7) - W1, W2, W3, etc.
-            # Process up to 13 weeks in a quarter
-            for week_num in range(1, 14):  # Week 1-13
-                col_index = 6 + week_num  # Column 7 is Steps, so W1 starts at column 8 (index 7)
+            # Tasks start from column 8 (index 7) - W1/M1, W2/M2, W3/M3, etc.
+            # Process up to 13 weeks or 3 months in a quarter
+            max_periods = 13 if tracking_type == 'weekly' else 3
+            for period_num in range(1, max_periods + 1):
+                col_index = 6 + period_num  # Column 7 is Steps, so W1/M1 starts at column 8 (index 7)
 
                 if col_index < len(row):
-                    weekly_task_content = row[col_index]
+                    task_content = row[col_index]
 
                     # Skip None, empty strings, and numeric values (which shouldn't be tasks)
-                    if weekly_task_content is None or weekly_task_content == '':
+                    if task_content is None or task_content == '':
                         continue
 
                     # Convert to string and check if it's meaningful
-                    task_content_str = str(weekly_task_content).strip()
+                    task_content_str = str(task_content).strip()
 
                     # Skip if empty or if it's just a number (numeric tasks don't make sense)
                     if not task_content_str or task_content_str.replace('.', '').replace('-', '').isdigit():
@@ -1320,40 +1269,61 @@ class QuarterlyPlanUploadView(LoginRequiredMixin, TemplateView):
 
                         # Create PPITask and Action for this meaningful task
                         try:
-                            # Create PPITask
+                            # Create PPITask (week_number field stores period number - week or month)
                             ppi_task = PPITask.objects.create(
                                 project=ppi_project,
                                 task_description=task_description.strip(),
-                                week_number=week_num,
+                                week_number=period_num,  # Stores week or month number
                                 assigned_to=ppi_project.responsible_user
                             )
 
-                            # Calculate due date for this week based on quarter start date
+                            # Calculate due date based on tracking type
                             quarter_start = ppi_project.quarterly_plan.quarter_start_date
-                            week_due_date = quarter_start + datetime.timedelta(weeks=week_num-1, days=6)
+                            if tracking_type == 'weekly':
+                                # For weekly: add weeks
+                                due_date = quarter_start + datetime.timedelta(weeks=period_num-1, days=6)
+                            else:
+                                # For monthly: add months (approximate with 30 days per month, then find end of month)
+                                import calendar
+                                temp_date = quarter_start + datetime.timedelta(days=30*period_num)
+                                last_day = calendar.monthrange(temp_date.year, temp_date.month)[1]
+                                due_date = temp_date.replace(day=last_day)
 
                             # Create corresponding Action
                             from implement.models import Action
-                            Action.objects.create(
-                                team=ppi_project.quarterly_plan.team,
-                                source='ppi',
-                                ppi_task=ppi_task,
-                                action=f"[Week {week_num}] {task_description.strip()}",
-                                priority='medium',
-                                assigned_to=ppi_project.responsible_user,
-                                original_due_date=week_due_date,
-                                status='not_started',
-                                created_by=ppi_project.responsible_user,
-                                comments=f"From PPI project: {ppi_project.name}"
-                            )
+                            from django.db import connection
+                            period_label = "Week" if tracking_type == 'weekly' else "Month"
+
+                            # Temporarily disable foreign key checks for SQLite to avoid constraint errors
+                            with connection.cursor() as cursor:
+                                cursor.execute("PRAGMA foreign_keys=OFF")
+
+                            try:
+                                Action.objects.create(
+                                    team=ppi_project.quarterly_plan.team,
+                                    source='ppi',
+                                    ppi_task=ppi_task,
+                                    action=f"[{period_label} {period_num}] {task_description.strip()}",
+                                    priority='medium',
+                                    assigned_to=ppi_project.responsible_user,
+                                    original_due_date=due_date,
+                                    status='not_started',
+                                    created_by=ppi_project.responsible_user,
+                                    comments=f"From PPI project: {ppi_project.name}"
+                                )
+                            finally:
+                                # Re-enable foreign key checks
+                                with connection.cursor() as cursor:
+                                    cursor.execute("PRAGMA foreign_keys=ON")
 
                         except Exception as e:
                             import traceback
                             tb = traceback.format_exc()
-                            errors.append(f"PPI Row {row_num}, Week {week_num}: Error creating task - {str(e)}\nTraceback: {tb}")
+                            period_label = "Week" if tracking_type == 'weekly' else "Month"
+                            errors.append(f"PPI-{tracking_type[0].upper()} Row {row_num}, {period_label} {period_num}: Error creating task - {str(e)}\nTraceback: {tb}")
 
         except Exception as e:
-            errors.append(f"PPI Row {row_num}: Error processing weekly tasks - {str(e)}")
+            errors.append(f"PPI-{tracking_type[0].upper()} Row {row_num}: Error processing tasks - {str(e)}")
 
         return errors
 

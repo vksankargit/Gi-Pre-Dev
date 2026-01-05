@@ -3,150 +3,87 @@
     <h5 class="mb-0">
         <i class="fas fa-trophy me-2"></i>Goal Performance Indicators (GPI)
     </h5>
-    <button class="btn btn-primary btn-sm" onclick="window.location.reload()">
+    <button class="btn btn-primary btn-sm" onclick="refreshGPITab()">
         <i class="fas fa-sync-alt me-1"></i>Refresh
     </button>
 </div>
 
-<!-- Period Selection Tabs -->
-<ul class="nav nav-tabs" id="gpiTab" role="tablist">
-    <!-- Weekly tab - show for Weekly meetings -->
-    {% if meeting.review_type == 'weekly' %}
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="gpi-weekly-tab" data-bs-toggle="tab"
-                data-bs-target="#gpi-weekly" type="button" role="tab">
-            Weekly
-        </button>
-    </li>
-    {% endif %}
+<!-- Show for Weekly and Monthly meetings only -->
+{% if meeting.review_type == 'weekly' or meeting.review_type == 'monthly' %}
 
-    <!-- Monthly tab - show for Monthly meetings -->
-    {% if meeting.review_type == 'monthly' %}
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="gpi-monthly-tab" data-bs-toggle="tab"
-                data-bs-target="#gpi-monthly" type="button" role="tab">
-            Monthly
-        </button>
-    </li>
-    {% endif %}
-</ul>
+<!-- Radio Buttons for Weekly/Monthly GPI Selection -->
+<div class="mb-3">
+    <div class="btn-group" role="group" aria-label="GPI Type Selection">
+        <input type="radio" class="btn-check" name="gpiType" id="weeklyGPIRadio" value="weekly" checked autocomplete="off">
+        <label class="btn btn-outline-primary" for="weeklyGPIRadio">
+            <i class="fas fa-calendar-week me-1"></i>Weekly GPI
+        </label>
 
-<!-- Tab Content -->
-<div class="tab-content mt-3" id="gpiTabContent">
-    <!-- Weekly GPI Tab - show for Weekly meetings -->
-    {% if meeting.review_type == 'weekly' %}
-    <div class="tab-pane fade show active" id="gpi-weekly" role="tabpanel">
-        {% if weekly_gpi_data %}
+        <input type="radio" class="btn-check" name="gpiType" id="monthlyGPIRadio" value="monthly" autocomplete="off">
+        <label class="btn btn-outline-primary" for="monthlyGPIRadio">
+            <i class="fas fa-calendar-alt me-1"></i>Monthly GPI
+        </label>
+    </div>
+</div>
+
+<!-- Weekly GPI Section -->
+<div id="weeklyGPISection" style="display: block;">
+    <!-- Week Selector Dropdown -->
+    <div class="mb-3">
+        <label for="weekSelector" class="form-label fw-bold">Select Week:</label>
+        <select id="weekSelector" class="form-select" style="max-width: 400px;">
+            <option value="">Loading weeks...</option>
+        </select>
+    </div>
+
+    <!-- Weekly GPI Grid -->
+    <div id="weeklyGPIGrid">
         <div class="card">
             <div class="card-body p-0">
                 <div class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
                     <table class="table table-hover mb-0">
                         <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
                             <tr>
-                                <th>Parameter</th>
+                                <th>GPI</th>
                                 <th>Last Week Budget</th>
                                 <th>Last Week Goal</th>
                                 <th>Last Week Actual</th>
                                 <th>Current Week Budget</th>
                                 <th>Current Week Goal</th>
                                 <th>Comments</th>
+                                <th>Assigned To</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {% for param_data in weekly_gpi_data %}
-                            <tr>
-                                <td>
-                                    <strong>{{ param_data.parameter.name }}</strong>
-                                    <br><small class="text-muted">
-                                        {{ param_data.parameter.get_indicator_type_display }}
-                                        {% if param_data.parameter.unit_of_measure %}
-                                            - {{ param_data.parameter.unit_of_measure }}
-                                        {% endif %}
-                                    </small>
-                                </td>
-                                <td>{{ param_data.last_week_budget|default:"0" }}</td>
-                                <td>{{ param_data.last_week_goal|default:"" }}</td>
-                                <td>
-                                    <div class="editable-cell"
-                                         contenteditable="true"
-                                         data-type="gpi"
-                                         data-id="{{ param_data.parameter.id }}"
-                                         data-field="last_week_actual"
-                                         data-original-value="{{ param_data.last_week_actual|default:'' }}">
-                                        {{ param_data.last_week_actual|default:"" }}
-                                    </div>
-                                </td>
-                                <td>{{ param_data.current_week_budget|default:"0" }}</td>
-                                <td>
-                                    <div class="editable-cell"
-                                         contenteditable="true"
-                                         data-type="gpi"
-                                         data-id="{{ param_data.parameter.id }}"
-                                         data-field="current_week_plan"
-                                         data-original-value="{{ param_data.current_week_goal|default:'' }}">
-                                        {{ param_data.current_week_goal|default:"" }}
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="editable-cell"
-                                         contenteditable="true"
-                                         data-type="gpi"
-                                         data-id="{{ param_data.parameter.id }}"
-                                         data-field="explanation"
-                                         data-original-value="{{ param_data.comments|default:'' }}">
-                                        {{ param_data.comments|default:"" }}
-                                    </div>
-                                </td>
-                                <td class="action-buttons">
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-info"
-                                                onclick="viewDetails('gpi', {{ param_data.parameter.id }})"
-                                                title="Details View">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="btn btn-outline-success"
-                                                onclick="addGPIAction('gpi', {{ param_data.parameter.id }})"
-                                                title="Action Items">
-                                            <i class="fas fa-plus-circle"></i>
-                                        </button>
-                                        <button class="btn btn-outline-danger"
-                                                onclick="addGPIIssue('gpi', {{ param_data.parameter.id }})"
-                                                title="Issues">
-                                            <i class="fas fa-exclamation-triangle"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
+                        <tbody id="weeklyGPITableBody">
+                            <tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-        {% else %}
-        <div class="text-center py-5">
-            <i class="fas fa-trophy fa-4x text-muted mb-3"></i>
-            <h5 class="text-muted mb-3">No Weekly Goal Data Available</h5>
-            <p class="text-muted">
-                Weekly goal performance data is not available yet.
-            </p>
-        </div>
-        {% endif %}
     </div>
-    {% endif %}
+</div>
 
-    <!-- Monthly GPI Tab - show for Monthly meetings -->
-    {% if meeting.review_type == 'monthly' %}
-    <div class="tab-pane fade show active" id="gpi-monthly" role="tabpanel">
-        {% if monthly_gpi_data %}
+<!-- Monthly GPI Section -->
+<div id="monthlyGPISection" style="display: none;">
+    <!-- Month Selector Dropdown -->
+    <div class="mb-3">
+        <label for="monthSelector" class="form-label fw-bold">Select Month:</label>
+        <select id="monthSelector" class="form-select" style="max-width: 400px;">
+            <option value="">Loading months...</option>
+        </select>
+    </div>
+
+    <!-- Monthly GPI Grid -->
+    <div id="monthlyGPIGrid">
         <div class="card">
             <div class="card-body p-0">
                 <div class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
                     <table class="table table-hover mb-0">
                         <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
                             <tr>
-                                <th>Parameter</th>
+                                <th>GPI</th>
                                 <th>Last Month Budget</th>
                                 <th>Last Month Goal</th>
                                 <th>Last Month Actual</th>
@@ -156,89 +93,87 @@
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {% for param_data in monthly_gpi_data %}
-                            <tr>
-                                <td>
-                                    <strong>{{ param_data.parameter.name }}</strong>
-                                    <br><small class="text-muted">
-                                        {{ param_data.parameter.get_indicator_type_display }}
-                                        {% if param_data.parameter.unit_of_measure %}
-                                            - {{ param_data.parameter.unit_of_measure }}
-                                        {% endif %}
-                                    </small>
-                                </td>
-                                <td>{{ param_data.last_month_budget|default:"0" }}</td>
-                                <td>{{ param_data.last_month_goal|default:"" }}</td>
-                                <td>
-                                    <div class="editable-cell"
-                                         contenteditable="true"
-                                         data-type="gpi"
-                                         data-id="{{ param_data.parameter.id }}"
-                                         data-field="last_month_actual"
-                                         data-original-value="{{ param_data.last_month_actual|default:'' }}">
-                                        {{ param_data.last_month_actual|default:"" }}
-                                    </div>
-                                </td>
-                                <td>{{ param_data.current_month_budget|default:"0" }}</td>
-                                <td>
-                                    <div class="editable-cell"
-                                         contenteditable="true"
-                                         data-type="gpi"
-                                         data-id="{{ param_data.parameter.id }}"
-                                         data-field="current_month_plan"
-                                         data-original-value="{{ param_data.current_month_goal|default:'' }}">
-                                        {{ param_data.current_month_goal|default:"" }}
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="editable-cell"
-                                         contenteditable="true"
-                                         data-type="gpi"
-                                         data-id="{{ param_data.parameter.id }}"
-                                         data-field="explanation"
-                                         data-original-value="{{ param_data.comments|default:'' }}">
-                                        {{ param_data.comments|default:"" }}
-                                    </div>
-                                </td>
-                                <td class="action-buttons">
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-info"
-                                                onclick="viewDetails('gpi', {{ param_data.parameter.id }})"
-                                                title="Details View">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="btn btn-outline-success"
-                                                onclick="addGPIAction('gpi', {{ param_data.parameter.id }})"
-                                                title="Action Items">
-                                            <i class="fas fa-plus-circle"></i>
-                                        </button>
-                                        <button class="btn btn-outline-danger"
-                                                onclick="addGPIIssue('gpi', {{ param_data.parameter.id }})"
-                                                title="Issues">
-                                            <i class="fas fa-exclamation-triangle"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
+                        <tbody id="monthlyGPITableBody">
+                            <tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-        {% else %}
-        <div class="text-center py-5">
-            <i class="fas fa-trophy fa-4x text-muted mb-3"></i>
-            <h5 class="text-muted mb-3">No Monthly Goal Data Available</h5>
-            <p class="text-muted">
-                Monthly goal performance data is not available yet.
-            </p>
-        </div>
-        {% endif %}
     </div>
-    {% endif %}
 </div>
+
+{% elif meeting.review_type == 'quarterly' %}
+<!-- Quarterly GPI Section -->
+<div id="quarterlyGPISection">
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
+                        <tr>
+                            <th>GPI</th>
+                            <th>Quarterly Budget</th>
+                            <th>Quarterly Goal</th>
+                            <th>Quarterly Actuals</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="quarterlyGPITableBody">
+                        <tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% elif meeting.review_type == 'annually' %}
+<!-- Annual GPI Section -->
+<div id="annualGPISection">
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
+                        <tr>
+                            <th>GPI</th>
+                            <th>Annual Goal</th>
+                            <th>Annual Actuals</th>
+                            <th>Q1 Budget</th>
+                            <th>Q1 Goal</th>
+                            <th>Q1 Actuals</th>
+                            <th>Q2 Budget</th>
+                            <th>Q2 Goal</th>
+                            <th>Q2 Actuals</th>
+                            <th>Q3 Budget</th>
+                            <th>Q3 Goal</th>
+                            <th>Q3 Actuals</th>
+                            <th>Q4 Budget</th>
+                            <th>Q4 Goal</th>
+                            <th>Q4 Actuals</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="annualGPITableBody">
+                        <tr><td colspan="16" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- For other meeting types -->
+<div class="text-center py-5">
+    <i class="fas fa-info-circle fa-4x text-muted mb-3"></i>
+    <h5 class="text-muted mb-3">GPI Tab Not Available</h5>
+    <p class="text-muted">
+        GPI tracking is not available for this meeting type.
+    </p>
+</div>
+{% endif %}
 
 <style>
 .editable-cell {
@@ -274,9 +209,486 @@
     background-color: #f8d7da !important;
     border-color: #f5c6cb !important;
 }
+
+.editable-cell.readonly {
+    background-color: #e9ecef !important;
+    cursor: not-allowed !important;
+    opacity: 0.7;
+}
 </style>
 
 <script>
+// Global variables for GPI tab
+let currentGPIType = 'weekly';
+let currentWeekNumber = {{ current_week|default:1 }};
+let currentMonthNumber = {{ current_month|default:1 }};
+let reviewWeekNumber = {{ current_week|default:1 }};
+let reviewMonthNumber = {{ current_month|default:1 }};
+let availableWeeks = [];
+let availableMonths = [];
+
+// Initialize GPI tab immediately (since content is loaded via AJAX)
+(function() {
+    console.log('🎯 Initializing GPI tab');
+
+    const meetingType = '{{ meeting.review_type }}';
+
+    // Load data based on meeting type
+    if (meetingType === 'weekly' || meetingType === 'monthly') {
+        // Load available periods for weekly/monthly
+        loadAvailableWeeks();
+        loadAvailableMonths();
+    } else if (meetingType === 'quarterly') {
+        // Load quarterly GPI data
+        loadQuarterlyGPIData();
+    } else if (meetingType === 'annually') {
+        // Load annual GPI data
+        loadAnnualGPIData();
+    }
+
+    // Setup radio button listeners
+    const weeklyRadio = document.getElementById('weeklyGPIRadio');
+    const monthlyRadio = document.getElementById('monthlyGPIRadio');
+
+    if (weeklyRadio) {
+        weeklyRadio.addEventListener('change', function() {
+            if (this.checked) {
+                currentGPIType = 'weekly';
+                showWeeklyGPI();
+            }
+        });
+    }
+
+    if (monthlyRadio) {
+        monthlyRadio.addEventListener('change', function() {
+            if (this.checked) {
+                currentGPIType = 'monthly';
+                showMonthlyGPI();
+            }
+        });
+    }
+
+    // Setup week selector listener
+    const weekSelector = document.getElementById('weekSelector');
+    if (weekSelector) {
+        weekSelector.addEventListener('change', function() {
+            const selectedWeek = parseInt(this.value);
+            if (selectedWeek) {
+                currentWeekNumber = selectedWeek;
+                loadWeeklyGPIData(selectedWeek);
+            }
+        });
+    }
+
+    // Setup month selector listener
+    const monthSelector = document.getElementById('monthSelector');
+    if (monthSelector) {
+        monthSelector.addEventListener('change', function() {
+            const selectedMonth = parseInt(this.value);
+            if (selectedMonth) {
+                currentMonthNumber = selectedMonth;
+                loadMonthlyGPIData(selectedMonth);
+            }
+        });
+    }
+
+    // Initialize editable cells
+    initializeGPIEditableCells();
+})();
+
+function showWeeklyGPI() {
+    document.getElementById('weeklyGPISection').style.display = 'block';
+    document.getElementById('monthlyGPISection').style.display = 'none';
+    // Load weekly data if not already loaded
+    if (currentWeekNumber) {
+        loadWeeklyGPIData(currentWeekNumber);
+    }
+}
+
+function showMonthlyGPI() {
+    document.getElementById('weeklyGPISection').style.display = 'none';
+    document.getElementById('monthlyGPISection').style.display = 'block';
+    // Load monthly data when switching to monthly tab
+    if (currentMonthNumber) {
+        loadMonthlyGPIData(currentMonthNumber);
+    }
+}
+
+function loadAvailableWeeks() {
+    const meetingId = {{ meeting.pk }};
+    const teamId = {{ meeting.team.id }};
+
+    // Fetch available weeks from API
+    fetch(`/api/gpi-available-periods/?meeting_id=${meetingId}&team_id=${teamId}&period_type=week`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.periods) {
+                availableWeeks = data.periods;
+                populateWeekSelector(data.periods);
+            } else {
+                console.error('Failed to load available weeks');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading available weeks:', error);
+        });
+}
+
+function loadAvailableMonths() {
+    const meetingId = {{ meeting.pk }};
+    const teamId = {{ meeting.team.id }};
+
+    // Fetch available months from API
+    fetch(`/api/gpi-available-periods/?meeting_id=${meetingId}&team_id=${teamId}&period_type=month`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.periods) {
+                availableMonths = data.periods;
+                populateMonthSelector(data.periods);
+            } else {
+                console.error('Failed to load available months');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading available months:', error);
+        });
+}
+
+function populateWeekSelector(weeks) {
+    const selector = document.getElementById('weekSelector');
+    selector.innerHTML = '';
+
+    // Remove duplicate weeks (same ISO week number) - keep the most recent one
+    const uniqueWeeks = [];
+    const seenWeeks = new Set();
+
+    weeks.forEach(week => {
+        if (!seenWeeks.has(week.number)) {
+            seenWeeks.add(week.number);
+            uniqueWeeks.push(week);
+        }
+    });
+
+    uniqueWeeks.forEach(week => {
+        const option = document.createElement('option');
+        option.value = week.number;
+        option.textContent = `Week ${week.number} – ${week.date_range}`;
+
+        // Select the review week by default
+        if (week.number === reviewWeekNumber) {
+            option.selected = true;
+        }
+
+        selector.appendChild(option);
+    });
+
+    // Load data for the selected week after populating dropdown
+    if (reviewWeekNumber) {
+        loadWeeklyGPIData(reviewWeekNumber);
+    }
+}
+
+function populateMonthSelector(months) {
+    const selector = document.getElementById('monthSelector');
+    selector.innerHTML = '';
+
+    months.forEach(month => {
+        const option = document.createElement('option');
+        option.value = month.number;
+        option.textContent = month.name;
+
+        // Select the review month by default
+        if (month.number === reviewMonthNumber) {
+            option.selected = true;
+        }
+
+        selector.appendChild(option);
+    });
+
+    // Note: We don't auto-load monthly data here since Weekly is the default view
+}
+
+function loadWeeklyGPIData(weekNumber) {
+    const meetingId = {{ meeting.pk }};
+
+    // Show loading state
+    const tbody = document.getElementById('weeklyGPITableBody');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+    }
+
+    // Fetch weekly GPI data for the selected week
+    fetch(`/review/${meetingId}/gpi-weekly-data/?week=${weekNumber}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderWeeklyGPIData(data.data, weekNumber);
+            } else {
+                console.error('Failed to load weekly GPI data');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading weekly GPI data:', error);
+        });
+}
+
+function loadMonthlyGPIData(monthNumber) {
+    const meetingId = {{ meeting.pk }};
+
+    // Show loading state
+    const tbody = document.getElementById('monthlyGPITableBody');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+    }
+
+    // Fetch monthly GPI data for the selected month
+    fetch(`/review/${meetingId}/gpi-monthly-data/?month=${monthNumber}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderMonthlyGPIData(data.data, monthNumber);
+            } else {
+                console.error('Failed to load monthly GPI data');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading monthly GPI data:', error);
+        });
+}
+
+function renderWeeklyGPIData(data, weekNumber) {
+    console.log('Rendering weekly GPI data for week', weekNumber, data);
+
+    const tbody = document.getElementById('weeklyGPITableBody');
+    if (!tbody) {
+        console.error('weeklyGPITableBody not found');
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No weekly GPI data available for this week</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+
+    data.forEach(param_data => {
+        const row = document.createElement('tr');
+
+        // Color rows based on indicator type
+        // Outcome = light blue background, Activity = light green background
+        const rowClass = param_data.indicator_type === 'Outcome' ? 'table-info' : 'table-success';
+        row.className = rowClass;
+
+        // Determine if this is the review week (editable)
+        const isReviewWeek = weekNumber === reviewWeekNumber;
+        const editableClass = isReviewWeek ? 'editable-cell' : 'editable-cell readonly';
+        const editableAttr = isReviewWeek ? 'true' : 'false';
+
+        row.innerHTML = `
+            <td>
+                <strong>${param_data.name}</strong>
+                <br><small class="text-muted">
+                    ${param_data.indicator_type}
+                    ${param_data.unit_of_measure ? ' - ' + param_data.unit_of_measure : ''}
+                </small>
+            </td>
+            <td>${param_data.last_week_budget || 0}</td>
+            <td>${param_data.last_week_goal || ''}</td>
+            <td>
+                <div class="${editableClass}"
+                     contenteditable="${editableAttr}"
+                     data-type="gpi"
+                     data-tracking="weekly"
+                     data-id="${param_data.id}"
+                     data-field="last_week_actual"
+                     data-week="${param_data.last_week_number}"
+                     data-original-value="${param_data.last_week_actual || ''}"
+                     ${!isReviewWeek ? 'title="Read-only: Can only edit data for the current review period"' : ''}>
+                    ${param_data.last_week_actual || ''}
+                </div>
+            </td>
+            <td>${param_data.current_week_budget || 0}</td>
+            <td>
+                <div class="${editableClass}"
+                     contenteditable="${editableAttr}"
+                     data-type="gpi"
+                     data-tracking="weekly"
+                     data-id="${param_data.id}"
+                     data-field="current_week_plan"
+                     data-week="${param_data.current_week_number}"
+                     data-original-value="${param_data.current_week_goal || ''}"
+                     ${!isReviewWeek ? 'title="Read-only: Can only edit data for the current review period"' : ''}>
+                    ${param_data.current_week_goal || ''}
+                </div>
+            </td>
+            <td>
+                <div class="${editableClass}"
+                     contenteditable="${editableAttr}"
+                     data-type="gpi"
+                     data-tracking="weekly"
+                     data-id="${param_data.id}"
+                     data-field="explanation"
+                     data-week="${param_data.current_week_number}"
+                     data-original-value="${param_data.comments || ''}"
+                     ${!isReviewWeek ? 'title="Read-only: Can only edit data for the current review period"' : ''}>
+                    ${param_data.comments || ''}
+                </div>
+            </td>
+            <td>${param_data.assigned_to || '<span class="text-muted">Unassigned</span>'}</td>
+            <td class="action-buttons">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-danger"
+                            onclick="addGPIIssue('gpi', ${param_data.id}, '${param_data.name}')"
+                            title="Issues">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </button>
+                    <button class="btn btn-outline-success"
+                            onclick="addGPIAction('gpi', ${param_data.id})"
+                            title="Action Items">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                    <button class="btn btn-outline-info"
+                            onclick="viewGPIDetails('gpi', ${param_data.id})"
+                            title="Details View">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-warning"
+                            onclick="reassignGPI('gpi', ${param_data.id})"
+                            title="Reassign GPI">
+                        <i class="fas fa-user-edit"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+
+        tbody.appendChild(row);
+    });
+
+    // Re-initialize editable cells after rendering
+    initializeGPIEditableCells();
+}
+
+function renderMonthlyGPIData(data, monthNumber) {
+    console.log('Rendering monthly GPI data for month', monthNumber, data);
+
+    const tbody = document.getElementById('monthlyGPITableBody');
+    if (!tbody) {
+        console.error('monthlyGPITableBody not found');
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No monthly GPI data available for this month</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+
+    data.forEach(param_data => {
+        const row = document.createElement('tr');
+
+        // Color rows based on indicator type
+        // Outcome = light blue background, Activity = light green background
+        const rowClass = param_data.indicator_type === 'Outcome' ? 'table-info' : 'table-success';
+        row.className = rowClass;
+
+        // Determine if this is the review month (editable)
+        const isReviewMonth = monthNumber === reviewMonthNumber;
+        const editableClass = isReviewMonth ? 'editable-cell' : 'editable-cell readonly';
+        const editableAttr = isReviewMonth ? 'true' : 'false';
+
+        row.innerHTML = `
+            <td>
+                <strong>${param_data.name}</strong>
+                <br><small class="text-muted">
+                    ${param_data.indicator_type}
+                    ${param_data.unit_of_measure ? ' - ' + param_data.unit_of_measure : ''}
+                </small>
+            </td>
+            <td>${param_data.last_month_budget || 0}</td>
+            <td>${param_data.last_month_goal || ''}</td>
+            <td>
+                <div class="${editableClass}"
+                     contenteditable="${editableAttr}"
+                     data-type="gpi"
+                     data-tracking="monthly"
+                     data-id="${param_data.id}"
+                     data-field="last_month_actual"
+                     data-month="${param_data.last_month_number}"
+                     data-original-value="${param_data.last_month_actual || ''}"
+                     ${!isReviewMonth ? 'title="Read-only: Can only edit data for the current review period"' : ''}>
+                    ${param_data.last_month_actual || ''}
+                </div>
+            </td>
+            <td>${param_data.current_month_budget || 0}</td>
+            <td>
+                <div class="${editableClass}"
+                     contenteditable="${editableAttr}"
+                     data-type="gpi"
+                     data-tracking="monthly"
+                     data-id="${param_data.id}"
+                     data-field="current_month_plan"
+                     data-month="${param_data.current_month_number}"
+                     data-original-value="${param_data.current_month_goal || ''}"
+                     ${!isReviewMonth ? 'title="Read-only: Can only edit data for the current review period"' : ''}>
+                    ${param_data.current_month_goal || ''}
+                </div>
+            </td>
+            <td>
+                <div class="${editableClass}"
+                     contenteditable="${editableAttr}"
+                     data-type="gpi"
+                     data-tracking="monthly"
+                     data-id="${param_data.id}"
+                     data-field="explanation"
+                     data-month="${param_data.current_month_number}"
+                     data-original-value="${param_data.comments || ''}"
+                     ${!isReviewMonth ? 'title="Read-only: Can only edit data for the current review period"' : ''}>
+                    ${param_data.comments || ''}
+                </div>
+            </td>
+            <td class="action-buttons">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-danger"
+                            onclick="addGPIIssue('gpi', ${param_data.id}, '${param_data.name}')"
+                            title="Issues">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </button>
+                    <button class="btn btn-outline-success"
+                            onclick="addGPIAction('gpi', ${param_data.id})"
+                            title="Action Items">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                    <button class="btn btn-outline-info"
+                            onclick="viewGPIDetails('gpi', ${param_data.id})"
+                            title="Details View">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-warning"
+                            onclick="reassignGPI('gpi', ${param_data.id})"
+                            title="Reassign GPI">
+                        <i class="fas fa-user-edit"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+
+        tbody.appendChild(row);
+    });
+
+    // Re-initialize editable cells after rendering
+    initializeGPIEditableCells();
+}
+
+function refreshGPITab() {
+    if (currentGPIType === 'weekly') {
+        loadWeeklyGPIData(currentWeekNumber);
+    } else {
+        loadMonthlyGPIData(currentMonthNumber);
+    }
+}
+
 // GPI Action button function - similar to FPI
 window.addGPIAction = function(type, id) {
     console.log(`🎯 GPI addGPIAction called for ${type} parameter ID: ${id}`);
@@ -291,17 +703,51 @@ window.addGPIAction = function(type, id) {
     openParameterActionItemsDirectly(type, id);
 };
 
-window.addGPIIssue = function(type, id) {
-    console.log(`🎯 GPI addGPIIssue called for ${type} parameter ID: ${id}`);
+window.addGPIIssue = function(type, id, name) {
+    console.log(`🎯 GPI addGPIIssue called for ${type} parameter ID: ${id}, Name: ${name}`);
 
-    // Store the parameter context for the modal
-    window.currentParameterContext = {
-        type: type,
-        id: id
-    };
+    // Determine the period from the active GPI section
+    const weeklySection = document.getElementById('weeklyGPISection');
+    const monthlySection = document.getElementById('monthlyGPISection');
+    const quarterlySection = document.getElementById('quarterlyGPISection');
+    const annualSection = document.getElementById('annualGPISection');
 
-    // Open the issues modal with parameter context
-    openParameterIssuesDirectly(type, id);
+    let period = 'weekly';
+    let periodNumber = null;
+
+    if (weeklySection && weeklySection.style.display !== 'none') {
+        period = 'weekly';
+        // Get selected week from dropdown
+        const weekSelector = document.getElementById('weekSelector');
+        periodNumber = weekSelector ? parseInt(weekSelector.value) : null;
+    } else if (monthlySection && monthlySection.style.display !== 'none') {
+        period = 'monthly';
+        // Get selected month from dropdown
+        const monthSelector = document.getElementById('monthSelector');
+        periodNumber = monthSelector ? parseInt(monthSelector.value) : null;
+    } else if (quarterlySection && quarterlySection.style.display !== 'none') {
+        period = 'quarterly';
+        // Get selected quarter from dropdown
+        const quarterSelector = document.getElementById('quarterSelector');
+        periodNumber = quarterSelector ? parseInt(quarterSelector.value) : null;
+    } else if (annualSection && annualSection.style.display !== 'none') {
+        period = 'yearly';
+        periodNumber = null;
+    }
+
+    // Open unified issues modal
+    openUnifiedIssuesModal({
+        location: 'review',
+        level: 'item',
+        period: period,
+        periodNumber: periodNumber,
+        itemType: 'gpi',
+        itemId: id,
+        itemName: name,
+        meetingId: {{ meeting.pk }},
+        teamId: {{ meeting.team.id }},
+        reviewDate: '{{ meeting.review_date|date:"M d, Y" }}'
+    });
 };
 
 function openParameterIssuesDirectly(type, id) {
@@ -546,8 +992,97 @@ function viewDetails(type, id) {
         });
 }
 
+// Wrapper function for viewGPIDetails
+window.viewGPIDetails = function(type, id) {
+    console.log(`viewGPIDetails called for ${type} parameter ID: ${id}`);
+    viewDetails(type, id);
+};
+
+// Reassign GPI function
+window.reassignGPI = function(type, id) {
+    console.log(`Reassign GPI called for ${type} parameter ID: ${id}`);
+
+    // Show confirmation dialog
+    const confirmMessage = "All pending issues & actions created by the original user will be deleted if the GPI is reassigned. Do you wish to proceed?";
+
+    if (!confirm(confirmMessage)) {
+        console.log('GPI reassignment cancelled by user');
+        return;
+    }
+
+    // Get or create the reassign modal
+    let modal = document.getElementById('reassignGPIModal');
+    if (!modal) {
+        // Create modal if it doesn't exist
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'reassignGPIModal';
+        modal.setAttribute('tabindex', '-1');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content" id="reassignGPIContent">
+                    <div class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                        <p class="text-muted mt-2">Loading reassignment form...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    // Show modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    // Load reassignment form
+    const content = document.getElementById('reassignGPIContent');
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId || {{ meeting.pk }};
+
+    if (!meetingId) {
+        content.innerHTML = '<div class="text-center py-4"><p class="text-danger">Meeting ID not found</p></div>';
+        return;
+    }
+
+    // Fetch the reassignment form
+    fetch(`/review/${meetingId}/parameter-reassign/?parameter_type=${type}&parameter_id=${id}&delete_pending=true`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.body.appendChild(newScript);
+                setTimeout(() => {
+                    if (newScript.parentNode) {
+                        newScript.parentNode.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading reassignment form:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading reassignment form</p>
+                    <button class="btn btn-outline-primary" onclick="reassignGPI('${type}', ${id})">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+};
+
 // Initialize editable cells for GPI - called when tab content loads
-(function initializeGPIEditableCells() {
+function initializeGPIEditableCells() {
     console.log('🔧 Initializing GPI editable cells');
 
     // Initialize tooltips
@@ -561,38 +1096,59 @@ function viewDetails(type, id) {
     console.log(`Found ${editableCells.length} GPI editable cells`);
 
     editableCells.forEach(cell => {
-        // Store original value when cell gets focus
-        cell.addEventListener('focus', function() {
-            this.dataset.originalValue = this.textContent.trim();
-        });
+        // Check if this cell should be readonly (not the review week/month)
+        const tracking = cell.dataset.tracking;
+        const week = parseInt(cell.dataset.week);
+        const month = parseInt(cell.dataset.month);
 
-        // Auto-save when cell loses focus (tab out)
-        cell.addEventListener('blur', function() {
-            const newValue = this.textContent.trim();
-            const originalValue = this.dataset.originalValue || '';
+        let isReadOnly = false;
+        if (tracking === 'weekly' && week !== reviewWeekNumber) {
+            isReadOnly = true;
+        } else if (tracking === 'monthly' && month !== reviewMonthNumber) {
+            isReadOnly = true;
+        }
 
-            // Only save if value changed
-            if (newValue !== originalValue) {
-                console.log(`💾 Saving GPI cell - Field: ${this.dataset.field}, Value: ${newValue}`);
-                saveGPICell(this, newValue);
-            }
-        });
+        if (isReadOnly) {
+            cell.contentEditable = 'false';
+            cell.classList.add('readonly');
+            cell.title = 'Read-only: Can only edit data for the current review period';
+        } else {
+            // Store original value when cell gets focus
+            cell.addEventListener('focus', function() {
+                this.dataset.originalValue = this.textContent.trim();
+            });
 
-        // Allow Enter to save and move to next field
-        cell.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                this.blur();
-            }
-        });
+            // Auto-save when cell loses focus (tab out)
+            cell.addEventListener('blur', function() {
+                const newValue = this.textContent.trim();
+                const originalValue = this.dataset.originalValue || '';
+
+                // Only save if value changed
+                if (newValue !== originalValue) {
+                    console.log(`💾 Saving GPI cell - Field: ${this.dataset.field}, Value: ${newValue}`);
+                    saveGPICell(this, newValue);
+                }
+            });
+
+            // Allow Enter to save and move to next field
+            cell.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.blur();
+                }
+            });
+        }
     });
-})();
+}
 
 // Save GPI cell data
 function saveGPICell(cell, newValue) {
     const type = cell.dataset.type;
     const id = cell.dataset.id;
     const field = cell.dataset.field;
+    const tracking = cell.dataset.tracking;
+    const week = cell.dataset.week;
+    const month = cell.dataset.month;
 
     console.log(`Saving GPI ${field} for ID ${id}: ${newValue}`);
 
@@ -615,6 +1171,9 @@ function saveGPICell(cell, newValue) {
     formData.append('id', id);
     formData.append('field', field);
     formData.append('value', newValue);
+    formData.append('tracking', tracking);
+    if (week) formData.append('week', week);
+    if (month) formData.append('month', month);
     formData.append('csrfmiddlewaretoken', getCsrfToken());
 
     // Save to server
@@ -663,5 +1222,166 @@ function getCsrfToken() {
         }
     }
     return '';
+}
+
+// Load Quarterly GPI Data
+function loadQuarterlyGPIData() {
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        console.error('Meeting ID not found');
+        return;
+    }
+
+    fetch(`/review/${meetingId}/gpi-quarterly-data/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderQuarterlyGPIData(data.gpis);
+            } else {
+                console.error('Error loading quarterly GPI data:', data.error);
+                document.getElementById('quarterlyGPITableBody').innerHTML =
+                    `<tr><td colspan="5" class="text-center text-danger">Error loading data: ${data.error}</td></tr>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching quarterly GPI data:', error);
+            document.getElementById('quarterlyGPITableBody').innerHTML =
+                `<tr><td colspan="5" class="text-center text-danger">Error loading data</td></tr>`;
+        });
+}
+
+// Render Quarterly GPI Data
+function renderQuarterlyGPIData(gpis) {
+    const tbody = document.getElementById('quarterlyGPITableBody');
+
+    if (!gpis || gpis.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No GPI data available</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+    gpis.forEach(gpi => {
+        const row = document.createElement('tr');
+
+        // Color rows based on indicator type
+        const rowClass = gpi.indicator_type === 'Outcome' ? 'table-info' : 'table-success';
+        row.className = rowClass;
+
+        row.innerHTML = `
+            <td>
+                <strong>${gpi.name}</strong>
+                ${gpi.uom ? `<br><small class="text-muted">UOM: ${gpi.uom}</small>` : ''}
+            </td>
+            <td>${gpi.quarterly_budget !== null ? gpi.quarterly_budget : '-'}</td>
+            <td>${gpi.quarterly_goal !== null ? gpi.quarterly_goal : '-'}</td>
+            <td>${gpi.quarterly_actuals !== null ? gpi.quarterly_actuals : '-'}</td>
+            <td class="action-buttons">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-danger"
+                            onclick="addGPIIssue('gpi', ${gpi.id}, '${gpi.name}')"
+                            title="Issues">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </button>
+                    <button class="btn btn-outline-success"
+                            onclick="addGPIAction('gpi', ${gpi.id})"
+                            title="Action Items">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                    <button class="btn btn-outline-info"
+                            onclick="viewGPIDetails('gpi', ${gpi.id})"
+                            title="Details View">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Load Annual GPI Data
+function loadAnnualGPIData() {
+    const meetingId = document.querySelector('[data-meeting-id]')?.dataset.meetingId;
+    if (!meetingId) {
+        console.error('Meeting ID not found');
+        return;
+    }
+
+    fetch(`/review/${meetingId}/gpi-annual-data/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderAnnualGPIData(data.gpis);
+            } else {
+                console.error('Error loading annual GPI data:', data.error);
+                document.getElementById('annualGPITableBody').innerHTML =
+                    `<tr><td colspan="16" class="text-center text-danger">Error loading data: ${data.error}</td></tr>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching annual GPI data:', error);
+            document.getElementById('annualGPITableBody').innerHTML =
+                `<tr><td colspan="16" class="text-center text-danger">Error loading data</td></tr>`;
+        });
+}
+
+// Render Annual GPI Data
+function renderAnnualGPIData(gpis) {
+    const tbody = document.getElementById('annualGPITableBody');
+
+    if (!gpis || gpis.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="16" class="text-center text-muted">No GPI data available</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+    gpis.forEach(gpi => {
+        const row = document.createElement('tr');
+
+        // Color rows based on indicator type
+        const rowClass = gpi.indicator_type === 'Outcome' ? 'table-info' : 'table-success';
+        row.className = rowClass;
+
+        row.innerHTML = `
+            <td>
+                <strong>${gpi.name}</strong>
+                ${gpi.uom ? `<br><small class="text-muted">UOM: ${gpi.uom}</small>` : ''}
+            </td>
+            <td>${gpi.annual_goal !== null ? gpi.annual_goal : '-'}</td>
+            <td>${gpi.annual_actuals !== null ? gpi.annual_actuals : '-'}</td>
+            <td>${gpi.q1_budget !== null ? gpi.q1_budget : '-'}</td>
+            <td>${gpi.q1_goal !== null ? gpi.q1_goal : '-'}</td>
+            <td>${gpi.q1_actuals !== null ? gpi.q1_actuals : '-'}</td>
+            <td>${gpi.q2_budget !== null ? gpi.q2_budget : '-'}</td>
+            <td>${gpi.q2_goal !== null ? gpi.q2_goal : '-'}</td>
+            <td>${gpi.q2_actuals !== null ? gpi.q2_actuals : '-'}</td>
+            <td>${gpi.q3_budget !== null ? gpi.q3_budget : '-'}</td>
+            <td>${gpi.q3_goal !== null ? gpi.q3_goal : '-'}</td>
+            <td>${gpi.q3_actuals !== null ? gpi.q3_actuals : '-'}</td>
+            <td>${gpi.q4_budget !== null ? gpi.q4_budget : '-'}</td>
+            <td>${gpi.q4_goal !== null ? gpi.q4_goal : '-'}</td>
+            <td>${gpi.q4_actuals !== null ? gpi.q4_actuals : '-'}</td>
+            <td class="action-buttons">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-danger"
+                            onclick="addGPIIssue('gpi', ${gpi.id}, '${gpi.name}')"
+                            title="Issues">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </button>
+                    <button class="btn btn-outline-success"
+                            onclick="addGPIAction('gpi', ${gpi.id})"
+                            title="Action Items">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                    <button class="btn btn-outline-info"
+                            onclick="viewGPIDetails('gpi', ${gpi.id})"
+                            title="Details View">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
 }
 </script>

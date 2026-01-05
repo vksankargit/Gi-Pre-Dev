@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Review Meeting - {{ meeting.team.name }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #333;
+        }
+
+        h1 {
+            font-size: 18pt;
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            font-size: 14pt;
+            color: #2c3e50;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 5px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        h3 {
+            font-size: 12pt;
+            color: #34495e;
+            margin-top: 15px;
+            margin-bottom: 8px;
+        }
+
+        .header-info {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .header-info table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .header-info td {
+            padding: 5px 10px;
+        }
+
+        .header-info strong {
+            color: #2c3e50;
+            display: inline-block;
+            width: 150px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        table.data-table {
+            border: 1px solid #bdc3c7;
+        }
+
+        table.data-table th {
+            background-color: #34495e;
+            color: white;
+            padding: 8px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        table.data-table td {
+            border: 1px solid #bdc3c7;
+            padding: 8px;
+        }
+
+        table.data-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 9pt;
+            font-weight: bold;
+        }
+
+        .badge-success {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .badge-warning {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .badge-danger {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .badge-info {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .badge-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+
+        .text-muted {
+            color: #7f8c8d;
+        }
+
+        .section {
+            page-break-inside: avoid;
+            margin-bottom: 20px;
+        }
+
+        .finalized-stamp {
+            background-color: #27ae60;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Review Meeting Report</h1>
+
+    <!-- Finalized Stamp -->
+    {% if meeting.finalized_at %}
+    <div class="finalized-stamp">
+        ✓ FINALIZED on {{ meeting.finalized_at|date:"d-M-Y g:i A" }} by {{ meeting.finalized_by.get_full_name|default:meeting.finalized_by.username }}
+    </div>
+    {% endif %}
+
+    <!-- Meeting Details Header -->
+    <div class="header-info">
+        <table>
+            <tr>
+                <td><strong>Team Meeting:</strong> {{ meeting.team.name }}</td>
+                <td><strong>Meeting Date:</strong> {{ meeting.review_date|date:"d-M-Y g:i A" }}</td>
+            </tr>
+            <tr>
+                <td><strong>Meeting Type:</strong> {{ meeting.team.meeting_type.name|default:"N/A" }}</td>
+                <td><strong>Cadence:</strong>
+                    {% if meeting.is_adhoc %}
+                        Ad-Hoc
+                    {% else %}
+                        {{ meeting.team.get_cadence_display|default:"N/A" }}
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Manager:</strong> {{ meeting.manager_name }}</td>
+                <td><strong>Period:</strong>
+                    {% if meeting.week_number %}
+                        Week {{ meeting.week_number }}
+                    {% elif meeting.month_number %}
+                        Month {{ meeting.month_number }}
+                    {% elif meeting.quarter_number %}
+                        Q{{ meeting.quarter_number }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2"><strong>Participants:</strong>
+                    {% for participant in meeting.participants.all %}
+                        {{ participant.get_full_name|default:participant.username }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Review Notes -->
+    {% if notes %}
+    <div class="section">
+        <h2>Review Notes</h2>
+        {% for note in notes %}
+        <div style="margin-bottom: 10px;">
+            <strong>{{ forloop.counter }}. {{ note.get_note_type_display }}</strong><br>
+            <p style="margin: 5px 0 0 20px;">{{ note.review_note }}</p>
+            <p class="text-muted" style="margin: 0 0 0 20px; font-size: 9pt;">
+                By: {{ note.created_by.get_full_name|default:note.created_by.username }} |
+                {{ note.created_at|date:"d-M-Y g:i A" }}
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Decisions -->
+    {% if decisions %}
+    <div class="section">
+        <h2>Decisions</h2>
+        <ol>
+            {% for decision in decisions %}
+            <li>{{ decision.decision }}</li>
+            {% endfor %}
+        </ol>
+    </div>
+    {% endif %}
+
+    <!-- Commitments -->
+    {% if commitments %}
+    <div class="section">
+        <h2>Commitments</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Commitment</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Committed By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for commitment in commitments %}
+                <tr>
+                    <td>{{ commitment.commitment|default:"N/A" }}</td>
+                    <td>{{ commitment.due_date|date:"d-M-Y"|default:"-" }}</td>
+                    <td>
+                        {% if commitment.status == 'completed' %}
+                            <span class="badge badge-success">Completed</span>
+                        {% elif commitment.status == 'in_progress' %}
+                            <span class="badge badge-info">In Progress</span>
+                        {% elif commitment.status == 'delayed' %}
+                            <span class="badge badge-warning">Delayed</span>
+                        {% elif commitment.status == 'cancelled' %}
+                            <span class="badge badge-secondary">Cancelled</span>
+                        {% else %}
+                            <span class="badge badge-warning">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ commitment.committed_by.get_full_name|default:commitment.committed_by.username|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- GPI Data -->
+    {% if gpi_data %}
+    <div class="section">
+        <h2>GPI (Goal Performance Indicators)</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Target</th>
+                    <th>Actual</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in gpi_data %}
+                <tr>
+                    <td>{{ item.parameter.name }}</td>
+                    <td>{{ item.parameter.target_value|default:"-" }}</td>
+                    <td>{{ item.tracking.actual_value|default:"-" }}</td>
+                    <td>
+                        {% if item.tracking %}
+                            {% if item.tracking.status == 'achieved' %}
+                                <span class="badge badge-success">Achieved</span>
+                            {% elif item.tracking.status == 'not_achieved' %}
+                                <span class="badge badge-danger">Not Achieved</span>
+                            {% else %}
+                                <span class="badge badge-warning">In Progress</span>
+                            {% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- PPI Projects -->
+    {% if ppi_projects %}
+    <div class="section">
+        <h2>PPI (Project Performance Indicators)</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Project</th>
+                    <th>Owner</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for project in ppi_projects %}
+                <tr>
+                    <td>{{ project.name }}</td>
+                    <td>{{ project.owner.get_full_name|default:project.owner.username }}</td>
+                    <td>
+                        {% if project.status == 'completed' %}
+                            <span class="badge badge-success">Completed</span>
+                        {% elif project.status == 'in_progress' %}
+                            <span class="badge badge-info">In Progress</span>
+                        {% elif project.status == 'on_hold' %}
+                            <span class="badge badge-warning">On Hold</span>
+                        {% else %}
+                            <span class="badge badge-secondary">{{ project.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ project.completion_percentage|default:"0" }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Issues -->
+    {% if issues %}
+    <div class="section">
+        <h2>Issue Log</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Issue #</th>
+                    <th>Title</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for issue in issues %}
+                <tr>
+                    <td>{{ issue.id }}</td>
+                    <td>{{ issue.title }}</td>
+                    <td>
+                        {% if issue.priority == 'high' %}
+                            <span class="badge badge-danger">High</span>
+                        {% elif issue.priority == 'medium' %}
+                            <span class="badge badge-warning">Medium</span>
+                        {% else %}
+                            <span class="badge badge-info">Low</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if issue.status == 'open' %}
+                            <span class="badge badge-danger">Open</span>
+                        {% elif issue.status == 'in_progress' %}
+                            <span class="badge badge-info">In Progress</span>
+                        {% elif issue.status == 'on_hold' %}
+                            <span class="badge badge-warning">On Hold</span>
+                        {% else %}
+                            <span class="badge badge-success">{{ issue.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ issue.owner.get_full_name|default:issue.owner.username|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Action Items -->
+    {% if action_items %}
+    <div class="section">
+        <h2>Action Items</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Action</th>
+                    <th>Assigned To</th>
+                    <th>Priority</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for action in action_items %}
+                <tr>
+                    <td>{{ action.action_description }}</td>
+                    <td>{{ action.assigned_to.get_full_name|default:action.assigned_to.username }}</td>
+                    <td>
+                        {% if action.priority == 'high' %}
+                            <span class="badge badge-danger">High</span>
+                        {% elif action.priority == 'medium' %}
+                            <span class="badge badge-warning">Medium</span>
+                        {% else %}
+                            <span class="badge badge-info">Low</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ action.due_date|date:"d-M-Y" }}</td>
+                    <td>
+                        {% if action.status == 'completed' %}
+                            <span class="badge badge-success">Completed</span>
+                        {% elif action.status == 'in_progress' %}
+                            <span class="badge badge-info">In Progress</span>
+                        {% elif action.status == 'cancelled' %}
+                            <span class="badge badge-secondary">Cancelled</span>
+                        {% else %}
+                            <span class="badge badge-warning">Pending</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Footer -->
+    <div style="margin-top: 30px; padding-top: 10px; border-top: 1px solid #bdc3c7; font-size: 9pt; color: #7f8c8d;">
+        <p>Generated on {{ "now"|date:"d-M-Y g:i A" }} | PRE System - Review Meeting Report</p>
+    </div>
+</body>
+</html>

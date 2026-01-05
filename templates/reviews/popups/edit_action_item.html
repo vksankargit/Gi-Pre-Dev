@@ -28,9 +28,9 @@
 
     <div class="row">
         <div class="col-md-6 mb-3">
-            <label for="editAssignedToTeam" class="form-label">Assign to Team</label>
+            <label for="editAssignedToTeam" class="form-label">Assign to Team Meeting</label>
             <select class="form-select" id="editAssignedToTeam" name="assigned_to_team">
-                <option value="">Select Team</option>
+                <option value="">Select Team Meeting</option>
                 {% for team in available_teams %}
                     <option value="{{ team.id|unlocalize }}" {% if action.assigned_to_team and action.assigned_to_team.id == team.id %}selected{% endif %}>{{ team.name }}</option>
                 {% endfor %}

@@ -614,9 +614,11 @@ function saveParameterAction(event, paramType, paramId) {
 
     const formData = new FormData(event.target);
 
-    // Add parameter context and source
-    formData.append('parameter_type', paramType);
-    formData.append('parameter_id', paramId);
+    // Add parameter context and source (only if not screen-level)
+    if (paramType && paramType !== 'screen' && paramId && paramId !== 'null' && paramId !== null) {
+        formData.append('parameter_type', paramType);
+        formData.append('parameter_id', paramId);
+    }
     formData.append('source', 'manual');
 
     // Add week/month context if available
@@ -928,9 +930,11 @@ function saveParameterIssue(event, paramType, paramId) {
 
     const formData = new FormData(event.target);
 
-    // Add parameter context
-    formData.append('parameter_type', paramType);
-    formData.append('parameter_id', paramId);
+    // Add parameter context (only if not screen-level)
+    if (paramType && paramType !== 'screen' && paramId && paramId !== 'null' && paramId !== null) {
+        formData.append('parameter_type', paramType);
+        formData.append('parameter_id', paramId);
+    }
 
     console.log('🟢 DEBUG: saveParameterIssue - currentParameterContext:', window.currentParameterContext);
 
@@ -958,6 +962,7 @@ function saveParameterIssue(event, paramType, paramId) {
     saveBtn.disabled = true;
     saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
 
+    console.log('🚀 About to send fetch request to /api/create-issue/');
     fetch('/api/create-issue/', {
         method: 'POST',
         headers: {
@@ -965,8 +970,12 @@ function saveParameterIssue(event, paramType, paramId) {
         },
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('📥 Received response:', response.status, response.statusText);
+        return response.json();
+    })
     .then(data => {
+        console.log('📦 Response data:', data);
         if (data.success) {
             // Reset form and hide it
             cancelParameterIssueForm();
@@ -989,8 +998,9 @@ function saveParameterIssue(event, paramType, paramId) {
         }
     })
     .catch(error => {
-        console.error('Error saving issue:', error);
-        showNotification('Error saving issue', 'danger');
+        console.error('❌ Error saving issue:', error);
+        console.error('❌ Error stack:', error.stack);
+        showNotification('Error saving issue: ' + error.message, 'danger');
         saveBtn.disabled = false;
         saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Issue';
     });
@@ -1008,13 +1018,17 @@ function getIssueStatusBadgeClass(status) {
 }
 
 // Project Actions and Issues functions
-function openProjectActions(projectId, projectType) {
+function openProjectActions(projectId, projectType, quarterNumber) {
     window.currentProjectContext = {
         id: projectId,
-        type: projectType
+        type: projectType,
+        quarterNumber: quarterNumber
     };
 
     let queryParams = `project_id=${projectId}&project_type=${projectType}`;
+    if (quarterNumber) {
+        queryParams += `&quarter_number=${quarterNumber}`;
+    }
 
     fetch(`/api/project-actions/?${queryParams}`, {
         method: 'GET',
@@ -1039,13 +1053,17 @@ function openProjectActions(projectId, projectType) {
     });
 }
 
-function openProjectIssues(projectId, projectType) {
+function openProjectIssues(projectId, projectType, quarterNumber) {
     window.currentProjectContext = {
         id: projectId,
-        type: projectType
+        type: projectType,
+        quarterNumber: quarterNumber
     };
 
     let queryParams = `project_id=${projectId}&project_type=${projectType}`;
+    if (quarterNumber) {
+        queryParams += `&quarter_number=${quarterNumber}`;
+    }
 
     fetch(`/api/project-issues/?${queryParams}`, {
         method: 'GET',
@@ -1070,9 +1088,10 @@ function openProjectIssues(projectId, projectType) {
     });
 }
 
-function openActionIssues(actionId) {
+function openActionIssues(actionId, canCreate = true) {
     window.currentActionContext = {
-        id: actionId
+        id: actionId,
+        canCreate: canCreate
     };
 
     fetch(`/api/action-issues/?action_id=${actionId}`, {
@@ -1090,7 +1109,7 @@ function openActionIssues(actionId) {
         if (!data.issues) {
             data.issues = [];
         }
-        showActionIssuesModal(data, actionId);
+        showActionIssuesModal(data, actionId, canCreate);
     })
     .catch(error => {
         console.error('Error fetching action issues:', error);
@@ -1344,18 +1363,19 @@ function showProjectIssuesModal(data, projectId, projectType) {
     modal.show();
 }
 
-function showActionIssuesModal(data, actionId) {
+function showActionIssuesModal(data, actionId, canCreate = true) {
     const modalHtml = `
         <div class="modal fade" id="actionIssuesModal" tabindex="-1">
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <div class="modal-header bg-danger text-white">
                         <h5 class="modal-title">
-                            <i class="fas fa-exclamation-triangle me-2"></i>Issues for Action Item
+                            <i class="fas fa-exclamation-triangle me-2"></i>${canCreate ? 'Issues for Action Item' : 'View Issues for Action Item (Read-Only)'}
                         </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
+                        ${!canCreate ? '<div class="alert alert-warning"><i class="fas fa-lock me-2"></i>You are viewing in read-only mode. Only the final assignee can create or edit issues.</div>' : ''}
                         <div class="row mb-3">
                             <div class="col-md-12">
                                 <div class="alert alert-info">
@@ -1375,7 +1395,7 @@ function showActionIssuesModal(data, actionId) {
                                         <th>Required By</th>
                                         <th>Team</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
+                                        ${canCreate ? '<th>Actions</th>' : ''}
                                     </tr>
                                 </thead>
                                 <tbody id="actionIssuesTableBody">
@@ -1388,18 +1408,18 @@ function showActionIssuesModal(data, actionId) {
                                             <td>${issue.required_by || '-'}</td>
                                             <td>${issue.team_name}</td>
                                             <td><span class="badge bg-${getIssueStatusBadgeClass(issue.status)}">${issue.status_display}</span></td>
-                                            <td>
+                                            ${canCreate ? `<td>
                                                 <button class="btn btn-sm btn-outline-primary" onclick="editIssue(${issue.id})">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
-                                            </td>
+                                            </td>` : ''}
                                         </tr>
-                                    `).join('') : '<tr><td colspan="8" class="text-center text-muted">No issues found</td></tr>'}
+                                    `).join('') : `<tr><td colspan="${canCreate ? '8' : '7'}" class="text-center text-muted">No issues found</td></tr>`}
                                 </tbody>
                             </table>
                         </div>
 
-                        <div class="border-top pt-3">
+                        ${canCreate ? `<div class="border-top pt-3">
                             <h6>Add New Issue</h6>
                             <form id="actionIssueForm" onsubmit="saveActionIssue(event, ${actionId})">
                                 <div class="row">
@@ -1423,7 +1443,7 @@ function showActionIssuesModal(data, actionId) {
                                     <div class="col-md-2 mb-2">
                                         <button type="submit" class="btn btn-danger w-100">
                                             <i class="fas fa-save me-1"></i>Save
-                                        </button>
+                                        </button>` : ''}
                                     </div>
                                 </div>
                                 <div class="row">
@@ -1454,6 +1474,11 @@ function saveProjectAction(event, projectId, projectType) {
 
     formData.append('project_id', projectId);
     formData.append('project_type', projectType);
+
+    // Add quarter context if available
+    if (window.currentProjectContext && window.currentProjectContext.quarterNumber) {
+        formData.append('quarter_number', window.currentProjectContext.quarterNumber);
+    }
 
     fetch('/api/create-action/', {
         method: 'POST',
@@ -1522,6 +1547,11 @@ function saveProjectIssue(event, projectId, projectType) {
 
     formData.append('project_id', projectId);
     formData.append('project_type', projectType);
+
+    // Add quarter context if available
+    if (window.currentProjectContext && window.currentProjectContext.quarterNumber) {
+        formData.append('quarter_number', window.currentProjectContext.quarterNumber);
+    }
 
     fetch('/api/create-issue/', {
         method: 'POST',
@@ -1687,9 +1717,10 @@ function loadTeamsForActionIssue() {
 }
 
 // Action Actions (additional actions for an action item)
-function openActionActions(actionId) {
+function openActionActions(actionId, canCreate = true) {
     window.currentParentActionContext = {
-        id: actionId
+        id: actionId,
+        canCreate: canCreate
     };
 
     fetch(`/api/action-actions/?action_id=${actionId}`, {
@@ -1707,7 +1738,7 @@ function openActionActions(actionId) {
         if (!data.actions) {
             data.actions = [];
         }
-        showActionActionsModal(data, actionId);
+        showActionActionsModal(data, actionId, canCreate);
     })
     .catch(error => {
         console.error('Error fetching action actions:', error);
@@ -1715,18 +1746,19 @@ function openActionActions(actionId) {
     });
 }
 
-function showActionActionsModal(data, actionId) {
+function showActionActionsModal(data, actionId, canCreate = true) {
     const modalHtml = `
         <div class="modal fade" id="actionActionsModal" tabindex="-1">
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <div class="modal-header bg-primary text-white">
                         <h5 class="modal-title">
-                            <i class="fas fa-plus-circle me-2"></i>Action Items for Action
+                            <i class="fas fa-plus-circle me-2"></i>${canCreate ? 'Action Items for Action' : 'View Action Items for Action (Read-Only)'}
                         </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
+                        ${!canCreate ? '<div class="alert alert-warning"><i class="fas fa-lock me-2"></i>You are viewing in read-only mode. Only the final assignee can create or edit action items.</div>' : ''}
                         <div class="row mb-3">
                             <div class="col-md-12">
                                 <div class="alert alert-info">
@@ -1745,7 +1777,7 @@ function showActionActionsModal(data, actionId) {
                                         <th>Assigned To</th>
                                         <th>Due Date</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
+                                        ${canCreate ? '<th>Actions</th>' : ''}
                                     </tr>
                                 </thead>
                                 <tbody id="actionActionsTableBody">
@@ -1757,18 +1789,18 @@ function showActionActionsModal(data, actionId) {
                                             <td>${action.assigned_to_name}</td>
                                             <td>${action.original_due_date || '-'}</td>
                                             <td><span class="badge bg-${action.status === 'completed' ? 'success' : action.status === 'in_progress' ? 'primary' : 'secondary'}">${action.status_display}</span></td>
-                                            <td>
+                                            ${canCreate ? `<td>
                                                 <button class="btn btn-sm btn-outline-primary" onclick="editAction(${action.id})">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
-                                            </td>
+                                            </td>` : ''}
                                         </tr>
-                                    `).join('') : '<tr><td colspan="7" class="text-center text-muted">No action items found</td></tr>'}
+                                    `).join('') : `<tr><td colspan="${canCreate ? '7' : '6'}" class="text-center text-muted">No action items found</td></tr>`}
                                 </tbody>
                             </table>
                         </div>
 
-                        <div class="border-top pt-3">
+                        ${canCreate ? `<div class="border-top pt-3">
                             <h6>Add New Action Item</h6>
                             <form id="actionActionForm" onsubmit="saveActionAction(event, ${actionId})">
                                 <div class="row mb-2">
@@ -1793,7 +1825,7 @@ function showActionActionsModal(data, actionId) {
                                             <option value="low">Low</option>
                                             <option value="medium">Medium</option>
                                             <option value="high">High</option>
-                                        </select>
+                                        </select>` : ''}
                                     </div>
                                     <div class="col-md-2">
                                         <input type="date" class="form-control" name="due_date" required>

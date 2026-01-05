@@ -32,7 +32,7 @@ class DashboardView(TemplateView):
     def get_general_user_dashboard_data(self, user):
         """Get dashboard data for general users"""
         from organizations.models import Team
-        from plans.models import QuarterlyPlan, FPIParameter, GPIParameter, PPIProject
+        from plans.models import QuarterlyPlan, GPIParameter, PPIProject
         from implement.models import Action, ProjectStatus, NumbersTracking
         from improve.models import ImprovementProject, ImprovementProjectStatus
         from reviews.models import ReviewMeeting

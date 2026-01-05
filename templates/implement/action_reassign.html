@@ -37,9 +37,9 @@
                     {% csrf_token %}
 
                     <div class="mb-3">
-                        <label for="team" class="form-label">Select Team <span class="text-danger">*</span></label>
+                        <label for="team" class="form-label">Select Team Meeting <span class="text-danger">*</span></label>
                         <select class="form-control" id="team" name="team" required>
-                            <option value="">Choose Team</option>
+                            <option value="">Choose Team Meeting</option>
                             {% for team in teams %}
                             <option value="{{ team.id }}">{{ team.name }}</option>
                             {% endfor %}
@@ -99,7 +99,7 @@
                         </span>
                     </dd>
 
-                    <dt class="col-sm-5">Team:</dt>
+                    <dt class="col-sm-5">Team Meeting:</dt>
                     <dd class="col-sm-7">{{ action.team.name }}</dd>
 
                     <dt class="col-sm-5">Created By:</dt>
@@ -198,7 +198,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
+            // Show confirmation dialog
+            const selectedOption = document.getElementById('assigned_to').selectedOptions[0];
+            const newAssigneeName = selectedOption ? selectedOption.textContent : 'selected user';
+
+            const confirmMessage = 'By reassigning this action, all incomplete actions and sub-actions from subsequent users in the reassignment chain will be permanently deleted. Do you wish to continue?';
+
+            if (!confirm(confirmMessage)) {
+                return; // User cancelled
+            }
+
             const formData = new FormData(this);
+
+            // Disable submit button to prevent double submission
+            const submitBtn = document.getElementById('reassignBtn');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Reassigning...';
 
             fetch(`/implement/action/{{ action.id|unlocalize }}/reassign/`, {
                 method: 'POST',
@@ -211,15 +227,19 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Action reassigned successfully!');
+                    alert(data.message || 'Action reassigned successfully!');
                     window.location.href = '{% url "implement:dashboard" %}#my-todo';
                 } else {
                     alert('Error reassigning action: ' + (data.error || 'Unknown error'));
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('Error reassigning action: ' + error.message);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
             });
         });
     }

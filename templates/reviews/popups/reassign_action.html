@@ -13,9 +13,9 @@
     {% csrf_token %}
 
     <div class="mb-3">
-        <label for="reassignTeam" class="form-label">Select Team <span class="text-danger">*</span></label>
+        <label for="reassignTeam" class="form-label">Select Team Meeting <span class="text-danger">*</span></label>
         <select class="form-control" id="reassignTeam" name="team" required>
-            <option value="">Choose Team</option>
+            <option value="">Choose Team Meeting</option>
             {% for team in available_teams %}
             <option value="{{ team.id|unlocalize }}">{{ team.name }}</option>
             {% endfor %}

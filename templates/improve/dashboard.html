@@ -20,9 +20,9 @@
                 <div class="row">
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label class="form-label">Team</label>
+                            <label class="form-label">Team Meeting</label>
                             <select class="form-control" id="teamSelect">
-                                <option value="">Select Team</option>
+                                <option value="">Select Team Meeting</option>
                                 {% for team in user_teams %}
                                 <option value="{{ team.id }}">{{ team.name }}</option>
                                 {% endfor %}
@@ -41,7 +41,7 @@
                         <div class="mb-3">
                             <label class="form-label">Select File</label>
                             <input type="file" class="form-control" id="improvementFile" accept=".xlsx,.xls,.csv">
-                            <div class="form-text">Upload Excel file with PPI sheet</div>
+                            <div class="form-text">Upload Excel file with PPI-M and PPI-W sheets</div>
                         </div>
                     </div>
                 </div>

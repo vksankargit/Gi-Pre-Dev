@@ -151,44 +151,11 @@ class QuarterlyPlanUploadHistory(models.Model):
         return f"{self.quarterly_plan.team.name} - {self.quarterly_plan.financial_year.year} - {self.quarterly_plan.quarter} - {self.uploaded_at}"
 
 
-class FPIParameter(models.Model):
-    MAIN_HEADS = [
-        ('revenue', 'Revenue'),
-        ('variable_cost', 'Variable Cost'),
-        ('operating_expenses', 'Operating Expenses'),
-        ('other_expenses', 'Other Expenses'),
-    ]
-
-    quarterly_plan = models.ForeignKey(QuarterlyPlan, on_delete=models.CASCADE, related_name='fpi_parameters')
-    main_head = models.CharField(max_length=20, choices=MAIN_HEADS)
-    sub_head = models.CharField(max_length=255)
-    responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    assigned_team = models.ForeignKey('organizations.Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_fpi_parameters', help_text="Team selected during reassignment")
-    annual_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    q1_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    q2_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    q3_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    q4_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    ytd_till_last_quarter = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    quarter_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    quarter_goal = models.DecimalField(max_digits=15, decimal_places=2)
-    month1_budget = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    month2_budget = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    month3_budget = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-
-    # Actual and Plan fields for data entry
-    last_month_actual = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    last_month_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text="Previous month's current_month_plan value")
-    current_month_plan = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-
-    explanation = models.TextField(blank=True)
-
-    class Meta:
-        db_table = 'fpi_parameters'
-        unique_together = ['quarterly_plan', 'sub_head']
-
-    def __str__(self):
-        return f"{self.sub_head} - {self.quarterly_plan}"
+# ============================================================================
+# FPI MODELS - REMOVED FROM SYSTEM
+# FPI has been completely removed from the system. All FPI models have been
+# deleted and will be removed from the database via migration 0010.
+# ============================================================================
 
 
 class GPIParameter(models.Model):
@@ -252,9 +219,15 @@ class PPIProject(models.Model):
         ('on_hold', 'On Hold'),
     ]
 
+    TRACKING_TYPES = [
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    ]
+
     quarterly_plan = models.ForeignKey(QuarterlyPlan, on_delete=models.CASCADE, related_name='ppi_projects')
     name = models.CharField(max_length=255)
     completion_criteria = models.TextField()
+    tracking_type = models.CharField(max_length=10, choices=TRACKING_TYPES, default='weekly')
     responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     start_date = models.DateField()
     end_date = models.DateField()
@@ -312,13 +285,65 @@ class PPITask(models.Model):
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     is_completed = models.BooleanField(default=False)
     completed_at = models.DateTimeField(null=True, blank=True)
-    
+
     class Meta:
         db_table = 'ppi_tasks'
-        
+
     def __str__(self):
         return f"Week {self.week_number}: {self.task_description[:50]}"
 
+
+class PPIMilestone(models.Model):
+    """Stores weekly or monthly milestone/budget values for PPI projects"""
+    ppi_project = models.ForeignKey(PPIProject, on_delete=models.CASCADE, related_name='milestones')
+    period_number = models.IntegerField()  # Week 1-13 or Month 1-3 depending on tracking_type
+    budget_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    class Meta:
+        db_table = 'ppi_milestones'
+        unique_together = ['ppi_project', 'period_number']
+
+    def __str__(self):
+        period_type = "Week" if self.ppi_project.tracking_type == 'weekly' else "Month"
+        return f"{self.ppi_project.name} - {period_type} {self.period_number}"
+
+
+class PPIWeeklyRecord(models.Model):
+    """Stores historical weekly data for PPI projects with weekly tracking"""
+    ppi_project = models.ForeignKey(PPIProject, on_delete=models.CASCADE, related_name='weekly_records')
+    week_number = models.IntegerField()  # Week 1-13 within quarter
+    week_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    week_actual = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    explanation = models.TextField(blank=True)
+    is_locked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ppi_weekly_records'
+        unique_together = ['ppi_project', 'week_number']
+
+    def __str__(self):
+        return f"{self.ppi_project.name} - Week {self.week_number}"
+
+
+class PPIMonthlyRecord(models.Model):
+    """Stores historical monthly data for PPI projects with monthly tracking"""
+    ppi_project = models.ForeignKey(PPIProject, on_delete=models.CASCADE, related_name='monthly_records')
+    month_number = models.IntegerField()  # Month 1-3 within quarter
+    month_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    month_actual = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    explanation = models.TextField(blank=True)
+    is_locked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ppi_monthly_records'
+        unique_together = ['ppi_project', 'month_number']
+
+    def __str__(self):
+        return f"{self.ppi_project.name} - Month {self.month_number}"
 
 
 class GPIMilestone(models.Model):
@@ -334,20 +359,6 @@ class GPIMilestone(models.Model):
     def __str__(self):
         period_type = "Week" if self.gpi_parameter.tracking_type == 'weekly' else "Month"
         return f"{self.gpi_parameter.name} - {period_type} {self.period_number}"
-
-
-class FPIMilestone(models.Model):
-    """Stores monthly milestone values for FPI parameters"""
-    fpi_parameter = models.ForeignKey(FPIParameter, on_delete=models.CASCADE, related_name='milestones')
-    month_number = models.IntegerField()  # Month 1-3 within quarter
-    budget_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-
-    class Meta:
-        db_table = 'fpi_milestones'
-        unique_together = ['fpi_parameter', 'month_number']
-
-    def __str__(self):
-        return f"{self.fpi_parameter.sub_head} - Month {self.month_number}"
 
 
 # Historical weekly/monthly data tracking models
@@ -371,26 +382,6 @@ class GPIWeeklyRecord(models.Model):
         return f"{self.gpi_parameter.name} - Week {self.week_number}"
 
 
-class FPIMonthlyRecord(models.Model):
-    """Stores historical monthly data for FPI parameters"""
-    fpi_parameter = models.ForeignKey(FPIParameter, on_delete=models.CASCADE, related_name='monthly_records')
-    month_number = models.IntegerField()  # Month 1-3 within quarter
-    month_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text="Goal entered for this month")
-    month_actual = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text="Actual achieved for this month")
-    explanation = models.TextField(blank=True)
-    is_locked = models.BooleanField(default=False, help_text="Locked after monthly review is completed")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'fpi_monthly_records'
-        unique_together = ['fpi_parameter', 'month_number']
-        ordering = ['month_number']
-
-    def __str__(self):
-        return f"{self.fpi_parameter.sub_head} - Month {self.month_number}"
-
-
 class GPIMonthlyRecord(models.Model):
     """Stores historical monthly data for monthly-tracked GPI parameters"""
     gpi_parameter = models.ForeignKey(GPIParameter, on_delete=models.CASCADE, related_name='monthly_records')
@@ -412,34 +403,6 @@ class GPIMonthlyRecord(models.Model):
 
 
 # Annual Plan models
-class AnnualFPIParameter(models.Model):
-    """FPI parameters from Annual Plan"""
-    MAIN_HEADS = [
-        ('revenue', 'Revenue'),
-        ('variable_cost', 'Variable Cost'),
-        ('operating_expenses', 'Operating Expenses'),
-        ('other_expenses', 'Other Expenses'),
-    ]
-
-    annual_plan = models.ForeignKey(AnnualPlan, on_delete=models.CASCADE, related_name='fpi_parameters')
-    main_head = models.CharField(max_length=20, choices=MAIN_HEADS)
-    sub_head = models.CharField(max_length=255)
-    responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
-    annual_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    q1_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    q2_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    q3_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    q4_goal = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    explanation = models.TextField(blank=True)
-
-    class Meta:
-        db_table = 'annual_fpi_parameters'
-        unique_together = ['annual_plan', 'sub_head']
-
-    def __str__(self):
-        return f"{self.sub_head} - {self.annual_plan}"
-
-
 class AnnualGPIParameter(models.Model):
     """GPI parameters from Annual Plan"""
     TRACKING_TYPES = [
@@ -480,9 +443,15 @@ class AnnualGPIParameter(models.Model):
 
 class AnnualPPIProject(models.Model):
     """PPI projects from Annual Plan"""
+    TRACKING_TYPES = [
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    ]
+
     annual_plan = models.ForeignKey(AnnualPlan, on_delete=models.CASCADE, related_name='ppi_projects')
     name = models.CharField(max_length=255)
     completion_criteria = models.TextField(blank=True)
+    tracking_type = models.CharField(max_length=10, choices=TRACKING_TYPES, default='weekly')
     responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)

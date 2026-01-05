@@ -15,6 +15,10 @@
                     <input type="hidden" id="actionParameterType" name="parameter_type" value="">
                     <input type="hidden" id="actionParameterId" name="parameter_id" value="">
 
+                    <!-- Hidden fields for screen-level week/month context -->
+                    <input type="hidden" id="actionWeekNumber" name="week_number" value="">
+                    <input type="hidden" id="actionMonthNumber" name="month_number" value="">
+
                     <div class="mb-3">
                         <label class="form-label">Action <span class="text-danger">*</span></label>
                         <textarea class="form-control" id="actionTitle" name="action" rows="2" required placeholder="Describe the action to be taken"></textarea>
@@ -42,13 +46,13 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Assigned To Team <span class="text-danger">*</span></label>
+                        <label class="form-label">Assigned To Team Meeting <span class="text-danger">*</span></label>
                         <select class="form-control" id="actionTeam" name="team" required>
                             <option value="">Select</option>
                             <!-- Teams will be populated by JavaScript -->
                         </select>
                         <div class="invalid-feedback" id="actionTeamError"></div>
-                        <div class="form-text">Teams where you are in charge or a member</div>
+                        <div class="form-text">Team Meetings where you are in charge or a member</div>
                     </div>
 
                     <div class="mb-3">

@@ -1,5 +1,5 @@
 from django import forms
-from .models import Organization, Team
+from .models import Organization, Team, TeamMeetingType
 from accounts.models import User
 
 
@@ -26,19 +26,43 @@ class TeamForm(forms.ModelForm):
             'class': 'form-check-input'
         }),
         required=True,
-        help_text="Select at least one team member (required)"
+        help_text="Select at least one team meeting member (required)"
     )
 
     class Meta:
         model = Team
-        fields = ['name', 'organization', 'manager', 'members']
+        fields = ['name', 'organization', 'meeting_type', 'cadence',
+                  'day_of_week', 'week_number', 'month_in_quarter', 'quarter', 'meeting_time',
+                  'manager', 'members']
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'Enter team name',
+                'placeholder': 'Enter team meeting name',
             }),
             'organization': forms.Select(attrs={
                 'class': 'form-control',
+            }),
+            'meeting_type': forms.Select(attrs={
+                'class': 'form-control',
+            }),
+            'cadence': forms.Select(attrs={
+                'class': 'form-control',
+            }),
+            'day_of_week': forms.Select(attrs={
+                'class': 'form-control',
+            }),
+            'week_number': forms.Select(attrs={
+                'class': 'form-control',
+            }),
+            'month_in_quarter': forms.Select(attrs={
+                'class': 'form-control',
+            }),
+            'quarter': forms.Select(attrs={
+                'class': 'form-control',
+            }),
+            'meeting_time': forms.TimeInput(attrs={
+                'class': 'form-control',
+                'type': 'time',
             }),
             'manager': forms.Select(attrs={
                 'class': 'form-control',
@@ -61,10 +85,40 @@ class TeamForm(forms.ModelForm):
                     is_active=True
                 )
 
+        # Filter meeting types based on selected organization
+        # When form is bound (has data), we need to include ALL active meeting types
+        # because meeting types are loaded dynamically via AJAX when organization is selected
+        if self.instance and self.instance.pk and self.instance.organization:
+            self.fields['meeting_type'].queryset = TeamMeetingType.objects.filter(
+                organization=self.instance.organization,
+                is_active=True
+            )
+        elif self.is_bound and self.data.get('organization'):
+            # For new teams, include meeting types for the selected organization
+            self.fields['meeting_type'].queryset = TeamMeetingType.objects.filter(
+                organization_id=self.data.get('organization'),
+                is_active=True
+            )
+        else:
+            self.fields['meeting_type'].queryset = TeamMeetingType.objects.none()
+
         # Show only general users as potential managers and members
+        # When form is bound (has data), we need to include ALL general users
+        # because members may be loaded dynamically via AJAX
         general_users = User.objects.filter(role='general', is_active=True)
         self.fields['manager'].queryset = general_users
+
+        # For members, always use all general users queryset to handle dynamic loading
         self.fields['members'].queryset = general_users
+
+        # Make scheduling fields not required initially (will be validated based on cadence)
+        self.fields['meeting_type'].required = False
+        self.fields['cadence'].required = False
+        self.fields['day_of_week'].required = False
+        self.fields['week_number'].required = False
+        self.fields['month_in_quarter'].required = False
+        self.fields['quarter'].required = False
+        self.fields['meeting_time'].required = False
 
         # If editing existing team, populate current members
         if self.instance and self.instance.pk:
@@ -74,16 +128,47 @@ class TeamForm(forms.ModelForm):
     def clean_members(self):
         members = self.cleaned_data.get('members')
         if not members:
-            raise forms.ValidationError("At least one team member is required.")
+            raise forms.ValidationError("At least one team meeting member is required.")
         return members
 
     def clean(self):
         cleaned_data = super().clean()
         manager = cleaned_data.get('manager')
         members = cleaned_data.get('members')
+        cadence = cleaned_data.get('cadence')
 
         if manager and members and manager in members:
-            raise forms.ValidationError("The team manager cannot be included in the team members list.")
+            raise forms.ValidationError("The team meeting manager cannot be included in the team meeting members list.")
+
+        # Validate scheduling fields based on cadence
+        if cadence:
+            if cadence == 'weekly':
+                if cleaned_data.get('day_of_week') is None:
+                    raise forms.ValidationError("Day of the week is required for weekly cadence.")
+
+            elif cadence == 'monthly':
+                if not cleaned_data.get('week_number'):
+                    raise forms.ValidationError("Week number is required for monthly cadence.")
+                if cleaned_data.get('day_of_week') is None:
+                    raise forms.ValidationError("Day of the week is required for monthly cadence.")
+
+            elif cadence == 'quarterly':
+                if not cleaned_data.get('month_in_quarter'):
+                    raise forms.ValidationError("Month in quarter is required for quarterly cadence.")
+                if not cleaned_data.get('week_number'):
+                    raise forms.ValidationError("Week number is required for quarterly cadence.")
+                if cleaned_data.get('day_of_week') is None:
+                    raise forms.ValidationError("Day of the week is required for quarterly cadence.")
+
+            elif cadence == 'annually':
+                if not cleaned_data.get('quarter'):
+                    raise forms.ValidationError("Quarter is required for annual cadence.")
+                if not cleaned_data.get('month_in_quarter'):
+                    raise forms.ValidationError("Month in quarter is required for annual cadence.")
+                if not cleaned_data.get('week_number'):
+                    raise forms.ValidationError("Week number is required for annual cadence.")
+                if cleaned_data.get('day_of_week') is None:
+                    raise forms.ValidationError("Day of the week is required for annual cadence.")
 
         return cleaned_data
 

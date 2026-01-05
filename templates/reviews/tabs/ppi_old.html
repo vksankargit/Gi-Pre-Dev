@@ -1,0 +1,444 @@
+{% load l10n %}
+<!-- PPI Tab Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">Project Performance Indicators (PPI)</h5>
+    <div class="d-flex align-items-center gap-3">
+        <p class="text-muted mb-0">{{ current_quarter_display }}</p>
+        <button class="btn btn-primary btn-sm" onclick="window.location.reload()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Projects Grid -->
+<div class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
+    <table class="table table-bordered table-hover">
+        <thead class="table-dark" style="position: sticky; top: 0; z-index: 10;">
+            <tr>
+                <th>PPI (Project) Name</th>
+                <th>Completion Criteria</th>
+                <th>Original Due Date</th>
+                <th>% Completion</th>
+                <th>Status</th>
+                <th>Revised Due Date</th>
+                <th>Assigned To</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for project_data in ppi_project_details %}
+            <tr id="project-row-{{ project_data.project.id }}">
+                <td>
+                    <strong>{{ project_data.project.project_name }}</strong>
+                    <span class="badge bg-{% if project_data.project.project_type == 'PPI' %}primary{% else %}success{% endif %} ms-2">{{ project_data.project.project_type }}</span>
+                </td>
+                <td>{{ project_data.project.completion_criteria|truncatechars:80 }}</td>
+                <td>{{ project_data.project.original_due_date|date:"M d, Y" }}</td>
+                <td>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-{% if project_data.completion_percentage >= 100 %}success{% elif project_data.completion_percentage >= 75 %}info{% elif project_data.completion_percentage >= 50 %}warning{% else %}danger{% endif %}"
+                             role="progressbar"
+                             style="width: {{ project_data.completion_percentage }}%"
+                             aria-valuenow="{{ project_data.completion_percentage }}"
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ project_data.completion_percentage|floatformat:0 }}%
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    {% if project_data.project.project_type == 'Improvement' %}
+                        {# Improvement projects store status directly #}
+                        <span class="badge bg-{% if project_data.status == 'completed' %}success{% elif project_data.status == 'on_track' %}primary{% elif project_data.status == 'at_risk' %}warning{% elif project_data.status == 'danger' %}danger{% else %}secondary{% endif %}">
+                            {{ project_data.status_display }}
+                        </span>
+                    {% else %}
+                        {# PPI projects use latest status #}
+                        <span class="badge bg-{% if project_data.status == 'completed' %}success{% elif project_data.status == 'on_track' %}primary{% elif project_data.status == 'at_risk' %}warning{% elif project_data.status == 'danger' %}danger{% else %}secondary{% endif %}">
+                            {{ project_data.status_display }}
+                        </span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if project_data.revised_due_date %}
+                        {{ project_data.revised_due_date|date:"M d, Y" }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>{{ project_data.project.responsible_user.get_full_name }}</td>
+                <td>
+                    <small class="text-muted d-block mb-1">Tasks: {{ project_data.completed_tasks }}/{{ project_data.total_tasks }}</small>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-info" onclick="viewProjectDetails({{ project_data.project.id }}, '{{ project_data.project.project_type }}')"
+                                data-bs-toggle="tooltip" title="Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-success" onclick="addProjectAction({{ project_data.project.id }}, '{{ project_data.project.project_type }}')"
+                                data-bs-toggle="tooltip" title="Action Items">
+                            <i class="fas fa-plus-circle"></i>
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="addProjectIssue({{ project_data.project.id }}, '{{ project_data.project.project_type }}')"
+                                data-bs-toggle="tooltip" title="Issues">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </button>
+
+                        {% if project_data.status == 'completed' %}
+                            <button class="btn btn-outline-secondary" onclick="undoProjectComplete({{ project_data.project.id }}, '{{ project_data.project.project_type }}')"
+                                    data-bs-toggle="tooltip" title="Undo Complete">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                        {% else %}
+                            <button class="btn btn-outline-success"
+                                    onclick="markProjectComplete({{ project_data.project.id }}, '{{ project_data.project.project_type }}')"
+                                    data-bs-toggle="tooltip" title="Mark Complete"
+                                    {% if not project_data.all_tasks_completed %}disabled{% endif %}>
+                                <i class="fas fa-check"></i>
+                            </button>
+                        {% endif %}
+
+                        {% if project_data.status == 'on_hold' %}
+                            <button class="btn btn-outline-primary" onclick="resumeProject({{ project_data.project.id }}, '{{ project_data.project.project_type }}')"
+                                    data-bs-toggle="tooltip" title="Resume">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        {% else %}
+                            <button class="btn btn-outline-secondary"
+                                    onclick="markProjectOnHold({{ project_data.project.id }}, '{{ project_data.project.project_type }}')"
+                                    data-bs-toggle="tooltip" title="Mark On Hold"
+                                    {% if project_data.status == 'completed' %}disabled{% endif %}>
+                                <i class="fas fa-pause"></i>
+                            </button>
+                        {% endif %}
+
+                        {% if project_data.status == 'dropped' %}
+                            <button class="btn btn-outline-success" onclick="markProjectActive({{ project_data.project.id }}, '{{ project_data.project.project_type }}')"
+                                    data-bs-toggle="tooltip" title="Mark Active">
+                                <i class="fas fa-power-off"></i>
+                            </button>
+                        {% else %}
+                            <button class="btn btn-outline-danger"
+                                    onclick="markProjectDropped({{ project_data.project.id }}, '{{ project_data.project.project_type }}')"
+                                    data-bs-toggle="tooltip" title="Mark Dropped"
+                                    {% if project_data.status == 'completed' %}disabled{% endif %}>
+                                <i class="fas fa-times"></i>
+                            </button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center text-muted">No projects available for this team in the current quarter</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+function viewProjectDetails(projectId, projectType) {
+    console.log(`Opening project details for ${projectType} project ID: ${projectId}`);
+
+    // Get or create the project details modal
+    let modal = document.getElementById('projectDetailsModal');
+    if (!modal) {
+        // Create modal if it doesn't exist
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'projectDetailsModal';
+        modal.setAttribute('tabindex', '-1');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content" id="projectDetailsContent">
+                    <div class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                        <p class="text-muted mt-2">Loading project details...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const content = document.getElementById('projectDetailsContent');
+
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading project details...</p>
+        </div>
+    `;
+
+    // Show the modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    // Fetch project details
+    const meetingId = {{ meeting.pk }};
+    fetch(`/review/${meetingId}/project-details/?project_id=${projectId}&project_type=${projectType}`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.body.appendChild(newScript);
+                setTimeout(() => {
+                    if (newScript.parentNode) {
+                        newScript.parentNode.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading project details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading project details</p>
+                    <button class="btn btn-outline-primary" onclick="viewProjectDetails(${projectId}, '${projectType}')">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+function openParameterActionItemsDirectly(type, id) {
+    console.log(`Opening Action Items popup for ${type} project ID: ${id}`);
+
+    // Get the existing action items modal
+    const modal = document.getElementById('actionItemsModal');
+    const content = document.getElementById('actionItemsContent');
+
+    if (!modal || !content) {
+        console.error('Action items modal or content not found');
+        alert('Error: Action items modal not found. Please refresh the page.');
+        return;
+    }
+
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading action items...</p>
+        </div>
+    `;
+
+    // Show the modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    // Fetch action items for this parameter
+    const meetingId = {{ meeting.pk }};
+    fetch(`/review/${meetingId}/action-items/?parameter_type=${type}&parameter_id=${id}`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.body.appendChild(newScript);
+                // Clean up after a short delay
+                setTimeout(() => {
+                    if (newScript.parentNode) {
+                        newScript.parentNode.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading action items:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading action items</p>
+                    <button class="btn btn-outline-primary" onclick="openParameterActionItemsDirectly('${type}', '${id}')">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+}
+
+function addProjectAction(projectId, projectType) {
+    // Set the project context for action items
+    window.currentParameterContext = {
+        type: projectType.toLowerCase(),
+        id: projectId
+    };
+    openParameterActionItemsDirectly(projectType.toLowerCase(), projectId);
+}
+
+function addProjectIssue(projectId, projectType) {
+    // Set the project context for issues
+    window.currentParameterContext = {
+        type: projectType.toLowerCase(),
+        id: projectId
+    };
+    openParameterIssuesDirectly(projectType.toLowerCase(), projectId);
+}
+
+function openParameterIssuesDirectly(type, id) {
+    console.log(`Opening Issues popup for ${type} project ID: ${id}`);
+
+    // Get the existing issues modal
+    const modal = document.getElementById('issuesModal');
+    const content = document.getElementById('issuesContent');
+
+    if (!modal) {
+        console.error('issuesModal not found!');
+        alert('Error: Issues modal not found. Please refresh the page and try again.');
+        return;
+    }
+
+    if (!content) {
+        console.error('issuesContent not found!');
+        alert('Error: Issues content area not found. Please refresh the page and try again.');
+        return;
+    }
+
+    // Show loading state
+    content.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Loading issues...</p>
+        </div>
+    `;
+
+    // Show the modal
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+
+    // Load issues with parameter context
+    const meetingId = {{ meeting.pk }};
+    const issuesUrl = `/review/${meetingId}/issues/?parameter_type=${type}&parameter_id=${id}`;
+
+    fetch(issuesUrl)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute any script tags in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.head.appendChild(newScript);
+                setTimeout(() => {
+                    if (document.head.contains(newScript)) {
+                        document.head.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading issues:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading issues</p>
+                    <button class="btn btn-outline-primary" onclick="openParameterIssuesDirectly('${type}', '${id}')">
+                        <i class="fas fa-redo me-1"></i>Try Again
+                    </button>
+                </div>
+            `;
+        });
+
+    // Clear parameter context when modal is closed
+    modal.addEventListener('hidden.bs.modal', function () {
+        console.log('Issues modal closed, clearing parameter context');
+        window.currentParameterContext = null;
+    }, { once: true });
+}
+
+function updateProjectStatus(projectId, projectType, action, confirmMessage) {
+    if (confirm(confirmMessage)) {
+        const formData = new FormData();
+        formData.append('project_id', projectId);
+        formData.append('project_type', projectType);
+        formData.append('action', action);
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+        fetch(`/review/{{ meeting.pk }}/update-project-status/`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload(); // Reload to show updated status
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error updating project status');
+        });
+    }
+}
+
+function markProjectComplete(projectId, projectType) {
+    updateProjectStatus(projectId, projectType, 'complete', 'Are you sure you want to mark this project as Complete?');
+}
+
+function undoProjectComplete(projectId, projectType) {
+    updateProjectStatus(projectId, projectType, 'undo', 'Are you sure you want to undo the completed status?');
+}
+
+function markProjectOnHold(projectId, projectType) {
+    updateProjectStatus(projectId, projectType, 'hold', 'Are you sure you want to mark this project as On Hold?');
+}
+
+function resumeProject(projectId, projectType) {
+    updateProjectStatus(projectId, projectType, 'resume', 'Are you sure you want to resume this project?');
+}
+
+function markProjectDropped(projectId, projectType) {
+    updateProjectStatus(projectId, projectType, 'drop', 'Are you sure you want to mark this project as Dropped?');
+}
+
+function markProjectActive(projectId, projectType) {
+    updateProjectStatus(projectId, projectType, 'activate', 'Are you sure you want to mark this project as Active?');
+}
+
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
+}
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>

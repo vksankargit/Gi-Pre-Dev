@@ -104,19 +104,36 @@
             <div class="tab-content" id="numbersTabContent">
                 <!-- Weekly Numbers Tab -->
                 <div class="tab-pane fade show active" id="weekly" role="tabpanel">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h4>Weekly Numbers - Updated</h4>
-                        <div class="btn-group">
-                            <button type="button" class="btn btn-info btn-sm" onclick="openNewIssueModal()">
-                                <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
-                            </button>
-                            <button type="button" class="btn btn-warning btn-sm" onclick="openNewActionModal()">
-                                <i class="fas fa-plus-circle me-2"></i>Add Action
-                            </button>
+                    <!-- Week Selector -->
+                    <div class="alert alert-info mb-3">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <label for="weekDropdown" class="form-label mb-0"><strong>Select Week:</strong></label>
+                            </div>
+                            <div class="col-md-9">
+                                <select id="weekDropdown" class="form-select" onchange="changeWeek(this.value)">
+                                    {% for week_data in available_weeks_with_dates %}
+                                    <option value="{{ week_data.number }}" {% if week_data.number == selected_week %}selected{% endif %}>
+                                        {{ week_data.display }}{% if week_data.number == current_week_in_quarter %} (Current){% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                         </div>
                     </div>
 
-                    <h1 style="color: red; background: yellow; padding: 20px;">TEMPLATE UPDATED - TEST MESSAGE</h1>
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-start gap-2 mb-3">
+                        <button type="button" class="btn btn-danger" onclick="openUnifiedIssuesModal({location: 'implement', screen: 'my_numbers', level: 'screen', period: 'weekly', periodNumber: {{ selected_week }}})">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Issues
+                        </button>
+                        <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
+                            <i class="fas fa-tasks me-2"></i>Action Items
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="refreshMyNumbers()">
+                            <i class="fas fa-sync-alt me-2"></i>Refresh
+                        </button>
+                    </div>
 
                     {% if weekly_numbers %}
                     <div class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto; border: 2px solid red; margin-bottom: 2rem;">
@@ -124,12 +141,13 @@
                         <thead>
                             <tr>
                                 <th>Parameter</th>
-                                <th>Team</th>
+                                <th>Team Meeting</th>
                                 <th>Last Week Budget</th>
                                 <th>Last Week Goal</th>
                                 <th>Current Week Budget</th>
                                 <th>Current Week Goal</th>
                                 <th>Quarter Goal</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -162,6 +180,20 @@
                                     </div>
                                 </td>
                                 <td>{{ gpi.quarter_goal }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-danger"
+                                                onclick="openUnifiedIssuesModal({location: 'implement', level: 'item', period: 'weekly', periodNumber: {{ selected_week }}, itemType: 'gpi', itemId: {{ gpi.id }}, itemName: '{{ gpi.name|escapejs }}'})"
+                                                title="Issues">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success"
+                                                onclick="openParameterActions('gpi', {{ gpi.id }}, {{ selected_week }}, null)"
+                                                title="Action Items">
+                                            <i class="fas fa-plus-circle"></i>
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -174,7 +206,36 @@
 
                 <!-- Monthly Numbers Tab -->
                 <div class="tab-pane fade" id="monthly" role="tabpanel">
-                    <h4>Monthly Numbers</h4>
+                    <!-- Month Selector -->
+                    <div class="alert alert-info mb-3">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <label for="monthDropdown" class="form-label mb-0"><strong>Select Month:</strong></label>
+                            </div>
+                            <div class="col-md-9">
+                                <select id="monthDropdown" class="form-select" onchange="changeMonth(this.value)">
+                                    {% for month_data in available_months_with_dates %}
+                                    <option value="{{ month_data.number }}" {% if month_data.number == selected_month %}selected{% endif %}>
+                                        {{ month_data.display }}{% if month_data.number == current_month_in_quarter %} (Current){% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-start gap-2 mb-3">
+                        <button type="button" class="btn btn-danger" onclick="openUnifiedIssuesModal({location: 'implement', screen: 'my_numbers', level: 'screen', period: 'monthly', periodNumber: {{ selected_month }}})">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Issues
+                        </button>
+                        <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
+                            <i class="fas fa-tasks me-2"></i>Action Items
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="refreshMyNumbers()">
+                            <i class="fas fa-sync-alt me-2"></i>Refresh
+                        </button>
+                    </div>
 
                     {% if monthly_numbers %}
                     <div class="table-container">
@@ -182,12 +243,13 @@
                         <thead>
                             <tr>
                                 <th>Parameter</th>
-                                <th>Team</th>
+                                <th>Team Meeting</th>
                                 <th>Last Month Budget</th>
                                 <th>Last Month Goal</th>
                                 <th>Current Month Budget</th>
                                 <th>Current Month Goal</th>
                                 <th>Quarter Goal</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -225,6 +287,20 @@
                                     </div>
                                 </td>
                                 <td>{{ param.quarter_goal }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-danger"
+                                                onclick="openUnifiedIssuesModal({location: 'implement', level: 'item', period: 'monthly', periodNumber: {{ selected_month }}, itemType: 'gpi', itemId: {{ param.id }}, itemName: '{% if param.sub_head %}{{ param.sub_head|escapejs }}{% else %}{{ param.name|escapejs }}{% endif %}'})"
+                                                title="Issues">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success"
+                                                onclick="openParameterActions('gpi', {{ param.id }}, null, {{ selected_month }})"
+                                                title="Action Items">
+                                            <i class="fas fa-plus-circle"></i>
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -242,6 +318,58 @@
 
 {% block extra_js %}
 <script>
+// Week/Month selector functions
+function changeWeek(weekNumber) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('week', weekNumber);
+    window.location.href = url.toString();
+}
+
+function changeMonth(monthNumber) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('month', monthNumber);
+    window.location.href = url.toString();
+}
+
+// Refresh function
+function refreshMyNumbers() {
+    window.location.reload();
+}
+
+// Screen-level issue modal function using unified modal
+function openScreenLevelIssueModal(periodType) {
+    const weekNumber = periodType === 'weekly' ? {{ selected_week }} : null;
+    const monthNumber = periodType === 'monthly' ? {{ selected_month }} : null;
+
+    openUnifiedIssuesModal({
+        location: 'implement',
+        screen: 'my_numbers',
+        level: 'screen',
+        period: periodType,
+        periodNumber: periodType === 'weekly' ? weekNumber : monthNumber
+    });
+}
+
+// Screen-level action modal function
+function openScreenLevelActionModal(periodType) {
+    const weekNumber = periodType === 'weekly' ? {{ selected_week }} : null;
+    const monthNumber = periodType === 'monthly' ? {{ selected_month }} : null;
+
+    // Open the existing action modal (same as line-item level)
+    if (typeof openNewActionModal === 'function') {
+        openNewActionModal();
+    } else {
+        const modal = new bootstrap.Modal(document.getElementById('newActionModal'));
+        modal.show();
+    }
+
+    // Store the period information for later use when saving
+    sessionStorage.setItem('screenLevelAction', 'true');
+    sessionStorage.setItem('periodType', periodType);
+    if (weekNumber) sessionStorage.setItem('weekNumber', weekNumber);
+    if (monthNumber) sessionStorage.setItem('monthNumber', monthNumber);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const editableCells = document.querySelectorAll('.editable-cell');
 

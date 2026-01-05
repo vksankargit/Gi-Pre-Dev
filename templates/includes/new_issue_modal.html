@@ -15,6 +15,10 @@
                     <input type="hidden" id="issueParameterType" name="parameter_type" value="">
                     <input type="hidden" id="issueParameterId" name="parameter_id" value="">
 
+                    <!-- Hidden fields for screen-level week/month context -->
+                    <input type="hidden" id="issueWeekNumber" name="week_number" value="">
+                    <input type="hidden" id="issueMonthNumber" name="month_number" value="">
+
                     <div class="mb-3">
                         <label class="form-label">Issue Title <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="issueTitle" name="title" required placeholder="Brief description of the issue">
@@ -40,10 +44,20 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label class="form-label">Required to be resolved by</label>
-                                <input type="date" class="form-control" id="issueRequiredBy" name="required_by">
+                                <label class="form-label">Issue Type <span class="text-danger">*</span></label>
+                                <select class="form-control" id="issueType" name="issue_type" required>
+                                    <option value="acknowledge">Acknowledge</option>
+                                    <option value="support">Support</option>
+                                    <option value="act">Act</option>
+                                    <option value="park">Park</option>
+                                </select>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Required to be resolved by</label>
+                        <input type="date" class="form-control" id="issueRequiredBy" name="required_by">
                     </div>
 
                     <div class="mb-3">
@@ -53,7 +67,7 @@
                             <!-- Teams will be populated by JavaScript -->
                         </select>
                         <div class="invalid-feedback" id="issueTeamError"></div>
-                        <div class="form-text">Teams where you are a member or in charge</div>
+                        <div class="form-text">Team Meetings where you are a member or in charge</div>
                     </div>
                 </form>
 

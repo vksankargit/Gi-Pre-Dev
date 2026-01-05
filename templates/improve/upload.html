@@ -33,7 +33,7 @@
                             <div class="mb-3">
                                 <label for="team" class="form-label">Team <span class="text-danger">*</span></label>
                                 <select class="form-control" id="team" name="team" required>
-                                    <option value="">Select Team</option>
+                                    <option value="">Select Team Meeting</option>
                                     {% for team in managed_teams %}
                                     <option value="{{ team.id }}">{{ team.name }}</option>
                                     {% endfor %}

@@ -136,12 +136,14 @@
                                 <tr>
                                     <th style="width: 5%">ID</th>
                                     <th style="width: 15%">Description</th>
-                                    <th style="width: 15%">Source</th>
-                                    <th style="width: 10%">Status</th>
+                                    <th style="width: 12%">Source</th>
+                                    <th style="width: 8%">Issue Type</th>
+                                    <th style="width: 7%">Priority</th>
+                                    <th style="width: 8%">Status</th>
                                     <th style="width: 10%">Reported By</th>
-                                    <th style="width: 10%">Required By</th>
-                                    <th style="width: 8%">Actions</th>
-                                    <th style="width: 27%">Actions</th>
+                                    <th style="width: 8%">Required By</th>
+                                    <th style="width: 8%">Action Completed</th>
+                                    <th style="width: 19%">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -167,7 +169,17 @@
                                         <small class="text-muted">{{ issue.source_display }}</small>
                                     </td>
                                     <td>
-                                        <span class="badge status-badge bg-{% if issue.status == 'resolved' %}success{% elif issue.status == 'open' %}secondary{% elif issue.status == 'on_hold' %}warning{% elif issue.status == 'dropped' %}danger{% elif issue.status == 'escalated' %}info{% endif %}">
+                                        <span class="badge bg-{% if issue.issue_type == 'acknowledge' %}info{% elif issue.issue_type == 'support' %}warning{% elif issue.issue_type == 'act' %}primary{% else %}secondary{% endif %}">
+                                            {{ issue.get_issue_type_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if issue.priority == 'high' %}danger{% elif issue.priority == 'medium' %}warning{% else %}secondary{% endif %}">
+                                            {{ issue.get_priority_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge status-badge bg-{% if issue.status == 'resolved' %}success{% elif issue.status == 'open' %}secondary{% elif issue.status == 'acknowledged' %}info{% elif issue.status == 'parked' %}warning{% elif issue.status == 'on_hold' %}warning{% elif issue.status == 'dropped' %}danger{% elif issue.status == 'escalated' %}info{% endif %}">
                                             {{ issue.get_status_display }}
                                         </span>
                                     </td>
@@ -185,21 +197,21 @@
                                         <span class="badge bg-light text-dark">{{ issue.action_count }}</span>
                                     </td>
                                     <td>
-                                        <div class="btn-group" role="group">
-                                            <!-- Add Action Button -->
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <!-- Action Items Button -->
                                             <button class="btn btn-outline-primary"
                                                     onclick="addIssueAction({{ issue.id }})"
                                                     data-bs-toggle="tooltip"
-                                                    title="Add Action">
-                                                <i class="fas fa-plus-circle"></i>
+                                                    title="Action Items">
+                                                <i class="fas fa-tasks"></i>
                                             </button>
 
-                                            <!-- Mark Resolved / Undo Resolved -->
+                                            <!-- Mark Resolved / Undo (Unresolved) -->
                                             {% if issue.status == 'resolved' %}
                                             <button class="btn btn-outline-success"
                                                     onclick="revertIssueStatus({{ issue.id }})"
                                                     data-bs-toggle="tooltip"
-                                                    title="Undo Resolved">
+                                                    title="Undo / Unresolved">
                                                 <i class="fas fa-undo"></i>
                                             </button>
                                             {% else %}
@@ -286,7 +298,7 @@
                 <div class="mb-3">
                     <label class="form-label">Escalate to Team <span class="text-danger">*</span></label>
                     <select class="form-select" id="escalateTeamId" required>
-                        <option value="">Select Team</option>
+                        <option value="">Select Team Meeting</option>
                         {% for team in user_teams %}
                         <option value="{{ team.id }}">{{ team.name }}</option>
                         {% endfor %}

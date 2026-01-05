@@ -14,7 +14,7 @@
 
 <!-- New Review Form as per PRD -->
 <div class="row">
-    <div class="col-md-8 mx-auto">
+    <div class="col-md-10 mx-auto">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
@@ -22,30 +22,99 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" id="newReviewForm">
                     {% csrf_token %}
 
                     <div class="row g-3">
                         <!-- Team Selection -->
                         <div class="col-md-6">
-                            <label for="team" class="form-label">Team <span class="text-danger">*</span></label>
+                            <label for="team" class="form-label">Team Meeting <span class="text-danger">*</span></label>
                             <select name="team" id="team" class="form-select" required>
-                                <option value="">Select Team</option>
+                                <option value="">Select Team Meeting</option>
                                 {% for team in teams %}
                                 <option value="{{ team.id }}">{{ team.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
 
-                        <!-- Review Type -->
+                        <!-- Meeting Type (auto-filled from Team) -->
                         <div class="col-md-6">
-                            <label for="review_type" class="form-label">Review Type <span class="text-danger">*</span></label>
-                            <select name="review_type" id="review_type" class="form-select" required>
-                                <option value="">Select Type</option>
-                                {% for type_key, type_name in review_types %}
-                                <option value="{{ type_key }}">{{ type_name }}</option>
-                                {% endfor %}
-                            </select>
+                            <label for="meeting_type_display" class="form-label">Meeting Type</label>
+                            <input type="text" id="meeting_type_display" class="form-control" readonly placeholder="Select team first">
+                        </div>
+
+                        <!-- Cadence or Ad-Hoc -->
+                        <div class="col-12">
+                            <label class="form-label">Meeting Category <span class="text-danger">*</span></label>
+                            <div class="d-flex gap-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="meeting_category" id="cadence_meeting" value="cadence" checked>
+                                    <label class="form-check-label" for="cadence_meeting">
+                                        Cadence Meeting
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="meeting_category" id="adhoc_meeting" value="adhoc">
+                                    <label class="form-check-label" for="adhoc_meeting">
+                                        Ad-Hoc Meeting
+                                    </label>
+                                </div>
+                            </div>
+                            <input type="hidden" name="is_adhoc" id="is_adhoc" value="false">
+                        </div>
+
+                        <!-- Cadence Display (read-only, shown for cadence meetings) -->
+                        <div class="col-md-6" id="cadence_display_container" style="display: none;">
+                            <label for="cadence_display" class="form-label">Cadence</label>
+                            <input type="text" id="cadence_display" class="form-control" readonly placeholder="Select team first">
+                        </div>
+
+                        <!-- Hidden Review Type field (auto-filled from cadence) -->
+                        <input type="hidden" name="review_type" id="review_type" value="weekly">
+
+                        <!-- Period Selection Container (for cadence meetings) -->
+                        <div class="col-12" id="period_selection_container" style="display: none;">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">Select Period</h6>
+
+                                    <!-- Week Selection (for weekly cadence) -->
+                                    <div id="week_selection" class="mb-3" style="display: none;">
+                                        <label for="selected_week" class="form-label">Week <span class="text-danger">*</span></label>
+                                        <select name="selected_week" id="selected_week" class="form-select">
+                                            <option value="">Select Week</option>
+                                        </select>
+                                        <div class="form-text">Select the week for this review</div>
+                                    </div>
+
+                                    <!-- Month Selection (for monthly cadence) -->
+                                    <div id="month_selection" class="mb-3" style="display: none;">
+                                        <label for="selected_month" class="form-label">Month <span class="text-danger">*</span></label>
+                                        <select name="selected_month" id="selected_month" class="form-select">
+                                            <option value="">Select Month</option>
+                                        </select>
+                                        <div class="form-text">Select the month for this review</div>
+                                    </div>
+
+                                    <!-- Quarter Selection (for quarterly cadence) -->
+                                    <div id="quarter_selection" class="mb-3" style="display: none;">
+                                        <label for="selected_quarter" class="form-label">Quarter <span class="text-danger">*</span></label>
+                                        <select name="selected_quarter" id="selected_quarter" class="form-select">
+                                            <option value="">Select Quarter</option>
+                                        </select>
+                                        <div class="form-text">Select the quarter for this review</div>
+                                    </div>
+
+                                    <!-- Year Selection (for annually cadence) -->
+                                    <div id="year_selection" class="mb-3" style="display: none;">
+                                        <label for="selected_year" class="form-label">Year <span class="text-danger">*</span></label>
+                                        <select name="selected_year" id="selected_year" class="form-select">
+                                            <option value="">Select Year</option>
+                                        </select>
+                                        <div class="form-text">Select the year for this review</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Review Date -->
@@ -58,6 +127,14 @@
                         <div class="col-md-6">
                             <label for="review_time" class="form-label">Review Time <span class="text-danger">*</span></label>
                             <input type="time" name="review_time" id="review_time" class="form-control" required>
+                        </div>
+
+                        <!-- Pending Review Warning -->
+                        <div class="col-12" id="pending_review_warning" style="display: none;">
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>Warning:</strong> <span id="pending_review_message"></span>
+                            </div>
                         </div>
 
                         <!-- Manager Name -->
@@ -97,89 +174,12 @@
     </div>
 </div>
 
+<!-- Store teams data as JSON for JavaScript -->
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const teamSelect = document.getElementById('team');
-    const participantsList = document.getElementById('participantsList');
-
-    // Set default date to today
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('review_date').value = today;
-
-    // Set default time to current hour
-    const now = new Date();
-    const currentTime = now.getHours().toString().padStart(2, '0') + ':00';
-    document.getElementById('review_time').value = currentTime;
-
-    // Load team members when team is selected
-    teamSelect.addEventListener('change', function() {
-        const teamId = this.value;
-
-        if (!teamId) {
-            participantsList.innerHTML = '<div class="text-muted">Please select a team first</div>';
-            return;
-        }
-
-        // Show loading
-        participantsList.innerHTML = '<div class="text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading team members...</div>';
-
-        // Fetch team members
-        fetch(`/api/team-members/${teamId}/`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.members && data.members.length > 0) {
-                    let html = '';
-                    data.members.forEach(member => {
-                        html += `
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="participants"
-                                       value="${member.id}" id="participant_${member.id}">
-                                <label class="form-check-label" for="participant_${member.id}">
-                                    ${member.name} (${member.email})
-                                </label>
-                            </div>
-                        `;
-                    });
-                    participantsList.innerHTML = html;
-                } else if (data.success) {
-                    participantsList.innerHTML = '<div class="text-muted">No team members found</div>';
-                } else {
-                    participantsList.innerHTML = `<div class="text-danger">${data.error || 'Error loading team members'}</div>`;
-                }
-            })
-            .catch(error => {
-                console.error('Error loading team members:', error);
-                participantsList.innerHTML = '<div class="text-danger">Error loading team members</div>';
-            });
-    });
-
-    // Form validation
-    document.querySelector('form').addEventListener('submit', function(e) {
-        const team = document.getElementById('team').value;
-        const reviewType = document.getElementById('review_type').value;
-        const reviewDate = document.getElementById('review_date').value;
-        const reviewTime = document.getElementById('review_time').value;
-        const managerName = document.getElementById('manager_name').value.trim();
-
-        if (!team || !reviewType || !reviewDate || !reviewTime || !managerName) {
-            e.preventDefault();
-            alert('Please fill in all required fields.');
-            return false;
-        }
-
-        // Check if date is not in the past
-        const selectedDate = new Date(reviewDate + 'T' + reviewTime);
-        const now = new Date();
-
-        if (selectedDate < now) {
-            const confirmPast = confirm('The selected date and time is in the past. Do you want to continue?');
-            if (!confirmPast) {
-                e.preventDefault();
-                return false;
-            }
-        }
-    });
-});
+    const teamsData = {{ teams_data|safe }};
 </script>
+
+<script src="{% static 'js/new_review.js' %}"></script>
+
 </div>
 {% endblock %}

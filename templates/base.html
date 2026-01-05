@@ -261,7 +261,7 @@
                 <li class="sidebar-nav-item">
                     <a href="{% url 'organizations:teams' %}" class="sidebar-nav-link">
                         <i class="fas fa-users-cog"></i>
-                        <span class="nav-text">Manage Teams</span>
+                        <span class="nav-text">Manage Team Meetings</span>
                     </a>
                 </li>
                 {% endif %}
@@ -420,6 +420,10 @@
 
     <!-- Universal Modal Cancel Confirmation -->
     <script src="{% static 'js/issue_action_modals.js' %}"></script>
+
+    <!-- Unified Issues Modal -->
+    {% include 'includes/unified_issues_modal.html' %}
+    <script src="{% static 'js/unified_issues_modal.js' %}"></script>
 
     {% block extra_js %}{% endblock %}
 </body>

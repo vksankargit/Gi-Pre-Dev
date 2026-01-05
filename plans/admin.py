@@ -1,9 +1,11 @@
 from django.contrib import admin
 from .models import (
     FinancialYear, AnnualPlan, QuarterlyPlan,
-    FPIParameter, GPIParameter, PPIProject, PPITask,
-    GPIMilestone, FPIMilestone, AnnualFPIParameter,
-    AnnualGPIParameter, AnnualPPIProject
+    GPIParameter, PPIProject, PPITask,
+    GPIMilestone, PPIMilestone,
+    AnnualGPIParameter, AnnualPPIProject,
+    GPIWeeklyRecord, GPIMonthlyRecord,
+    PPIWeeklyRecord, PPIMonthlyRecord
 )
 
 
@@ -27,14 +29,6 @@ class QuarterlyPlanAdmin(admin.ModelAdmin):
     list_filter = ('upload_status', 'quarter', 'uploaded_at', 'financial_year')
     search_fields = ('team__name', 'file_name')
     ordering = ('-uploaded_at',)
-
-
-@admin.register(FPIParameter)
-class FPIParameterAdmin(admin.ModelAdmin):
-    list_display = ('sub_head', 'main_head', 'quarterly_plan', 'responsible_user', 'quarter_goal')
-    list_filter = ('main_head', 'quarterly_plan__financial_year', 'quarterly_plan__quarter')
-    search_fields = ('sub_head', 'quarterly_plan__team__name')
-    ordering = ('quarterly_plan', 'main_head', 'sub_head')
 
 
 @admin.register(GPIParameter)
@@ -69,20 +63,12 @@ class GPIMilestoneAdmin(admin.ModelAdmin):
     ordering = ('gpi_parameter', 'period_number')
 
 
-@admin.register(FPIMilestone)
-class FPIMilestoneAdmin(admin.ModelAdmin):
-    list_display = ('fpi_parameter', 'month_number', 'budget_value')
-    list_filter = ('fpi_parameter__quarterly_plan__financial_year', 'month_number')
-    search_fields = ('fpi_parameter__sub_head',)
-    ordering = ('fpi_parameter', 'month_number')
-
-
-@admin.register(AnnualFPIParameter)
-class AnnualFPIParameterAdmin(admin.ModelAdmin):
-    list_display = ('sub_head', 'main_head', 'annual_plan', 'responsible_user', 'annual_goal')
-    list_filter = ('main_head', 'annual_plan__financial_year')
-    search_fields = ('sub_head', 'annual_plan__team__name')
-    ordering = ('annual_plan', 'main_head', 'sub_head')
+@admin.register(PPIMilestone)
+class PPIMilestoneAdmin(admin.ModelAdmin):
+    list_display = ('ppi_project', 'period_number', 'budget_value')
+    list_filter = ('ppi_project__tracking_type', 'ppi_project__quarterly_plan__financial_year')
+    search_fields = ('ppi_project__name',)
+    ordering = ('ppi_project', 'period_number')
 
 
 @admin.register(AnnualGPIParameter)

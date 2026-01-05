@@ -74,7 +74,7 @@
                         <h6><i class="fas fa-info-circle me-2"></i>What happens after you create this issue?</h6>
                         <ul class="mb-0">
                             <li>The issue will be assigned to your team</li>
-                            <li>Team managers will be notified via email</li>
+                            <li>Team Meeting managers will be notified via email</li>
                             <li>The issue will appear in team dashboards</li>
                             <li>You can track progress and add updates</li>
                         </ul>
@@ -132,7 +132,7 @@
                     <dt class="col-sm-4">Role:</dt>
                     <dd class="col-sm-8">{{ user.get_role_display }}</dd>
 
-                    <dt class="col-sm-4">Team:</dt>
+                    <dt class="col-sm-4">Team Meeting:</dt>
                     <dd class="col-sm-8">
                         {% for membership in user.team_memberships.all %}
                             {% if membership.is_active %}

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block title %}
-{% if object %}Edit Team{% else %}Create Team{% endif %} - PRE System
+{% if object %}Edit Team Meeting{% else %}Create Team Meeting{% endif %} - PRE System
 {% endblock %}
 
 {% block content %}
@@ -13,7 +13,7 @@
             </a>
             <h1 class="h3 mb-0">
                 <i class="fas fa-users-cog me-2"></i>
-                {% if object %}Edit Team{% else %}New Team{% endif %}
+                {% if object %}Edit Team Meeting{% else %}New Team Meeting{% endif %}
             </h1>
         </div>
     </div>
@@ -24,7 +24,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    {% if object %}Team Details{% else %}Team Information{% endif %}
+                    {% if object %}Team Meeting Details{% else %}Team Meeting Information{% endif %}
                 </h5>
             </div>
             <div class="card-body">
@@ -37,9 +37,12 @@
                 <form method="post">
                     {% csrf_token %}
 
+                    <div class="row">
+                        <!-- Left Column -->
+                        <div class="col-12 col-md-6">
                     <div class="mb-3">
                         <label for="{{ form.name.id_for_label }}" class="form-label">
-                            <i class="fas fa-users-cog me-2"></i>Team Name
+                            <i class="fas fa-users-cog me-2"></i>Team Meeting Name
                         </label>
                         {{ form.name }}
                         {% if form.name.errors %}
@@ -70,12 +73,42 @@
                         {% endif %}
                     </div>
 
+                    <!-- Team Meeting Type -->
+                    <div class="mb-3" id="meetingTypeGroup">
+                        <label for="{{ form.meeting_type.id_for_label }}" class="form-label">
+                            <i class="fas fa-calendar-alt me-2"></i>Team Meeting Type
+                        </label>
+                        <div class="input-group">
+                            <select class="form-control" name="{{ form.meeting_type.name }}" id="id_meeting_type">
+                                <option value="">Select Meeting Type</option>
+                                {% for choice in form.meeting_type.field.choices %}
+                                    {% if choice.0 %}
+                                    <option value="{{ choice.0 }}" {% if form.meeting_type.value == choice.0 %}selected{% endif %}>
+                                        {{ choice.1 }}
+                                    </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-primary" id="addMeetingTypeBtn" disabled>
+                                <i class="fas fa-plus"></i> Add New
+                            </button>
+                        </div>
+                        {% if form.meeting_type.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.meeting_type.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">
+                            Select an organization first to add new meeting types
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label for="{{ form.manager.id_for_label }}" class="form-label">
-                            <i class="fas fa-user-tie me-2"></i>Team Manager
+                            <i class="fas fa-user-tie me-2"></i>Team Meeting Manager
                         </label>
                         <select class="form-control" name="{{ form.manager.name }}" id="id_manager" required>
-                            <option value="">Select Team Manager</option>
+                            <option value="">Select Team Meeting Manager</option>
                             {% for choice in form.manager.field.choices %}
                                 {% if choice.0 %}
                                 <option value="{{ choice.0 }}" {% if form.manager.value == choice.0 %}selected{% endif %}>
@@ -96,7 +129,7 @@
 
                     <div class="mb-3">
                         <label class="form-label">
-                            <i class="fas fa-users me-2"></i>Team Members
+                            <i class="fas fa-users me-2"></i>Team Meeting Members
                         </label>
 
                         <!-- Search Input -->
@@ -154,16 +187,180 @@
                             <i class="fas fa-exclamation-triangle text-warning me-1"></i>{{ form.members.help_text }}
                         </div>
                     </div>
+                        </div>
+
+                        <!-- Right Column -->
+                        <div class="col-12 col-md-6">
+                    <!-- Team Meeting Cadence -->
+                    <div class="mb-3">
+                        <label for="{{ form.cadence.id_for_label }}" class="form-label">
+                            <i class="fas fa-sync me-2"></i>Team Meeting Cadence
+                        </label>
+                        <select class="form-control" name="{{ form.cadence.name }}" id="id_cadence">
+                            <option value="">Select Cadence</option>
+                            {% for choice in form.cadence.field.choices %}
+                                {% if choice.0 %}
+                                <option value="{{ choice.0 }}" {% if form.cadence.value == choice.0 %}selected{% endif %}>
+                                    {{ choice.1 }}
+                                </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                        {% if form.cadence.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.cadence.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Scheduling Details Section -->
+                    <div id="schedulingSection" style="display: none;">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Scheduling Details</strong>
+                            <p class="mb-0 mt-2">Please configure when this team meeting occurs:</p>
+                        </div>
+
+                        <!-- Quarter (for Annually only) -->
+                        <div class="mb-3" id="quarterGroup" style="display: none;">
+                            <label for="{{ form.quarter.id_for_label }}" class="form-label">
+                                <i class="fas fa-calendar-check me-2"></i>Quarter
+                            </label>
+                            <select class="form-control" name="{{ form.quarter.name }}" id="id_quarter">
+                                <option value="">Select Quarter</option>
+                                {% for choice in form.quarter.field.choices %}
+                                    {% if choice.0 %}
+                                    <option value="{{ choice.0 }}" {% if form.quarter.value == choice.0 %}selected{% endif %}>
+                                        {{ choice.1 }}
+                                    </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                            {% if form.quarter.errors %}
+                                <div class="text-danger small mt-1">
+                                    {{ form.quarter.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Month in Quarter (for Quarterly and Annually) -->
+                        <div class="mb-3" id="monthInQuarterGroup" style="display: none;">
+                            <label for="{{ form.month_in_quarter.id_for_label }}" class="form-label">
+                                <i class="fas fa-calendar-day me-2"></i>Month in Quarter
+                            </label>
+                            <select class="form-control" name="{{ form.month_in_quarter.name }}" id="id_month_in_quarter">
+                                <option value="">Select Month</option>
+                                {% for choice in form.month_in_quarter.field.choices %}
+                                    {% if choice.0 %}
+                                    <option value="{{ choice.0 }}" {% if form.month_in_quarter.value == choice.0 %}selected{% endif %}>
+                                        {{ choice.1 }}
+                                    </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                            {% if form.month_in_quarter.errors %}
+                                <div class="text-danger small mt-1">
+                                    {{ form.month_in_quarter.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Week Number (for Monthly, Quarterly, and Annually) -->
+                        <div class="mb-3" id="weekNumberGroup" style="display: none;">
+                            <label for="{{ form.week_number.id_for_label }}" class="form-label">
+                                <i class="fas fa-calendar-week me-2"></i>Week Number
+                            </label>
+                            <select class="form-control" name="{{ form.week_number.name }}" id="id_week_number">
+                                <option value="">Select Week</option>
+                                {% for choice in form.week_number.field.choices %}
+                                    {% if choice.0 %}
+                                    <option value="{{ choice.0 }}" {% if form.week_number.value == choice.0 %}selected{% endif %}>
+                                        {{ choice.1 }}
+                                    </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                            {% if form.week_number.errors %}
+                                <div class="text-danger small mt-1">
+                                    {{ form.week_number.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Day of Week (for all cadences) -->
+                        <div class="mb-3" id="dayOfWeekGroup" style="display: none;">
+                            <label for="{{ form.day_of_week.id_for_label }}" class="form-label">
+                                <i class="fas fa-calendar me-2"></i>Day of Week
+                            </label>
+                            <select class="form-control" name="{{ form.day_of_week.name }}" id="id_day_of_week">
+                                <option value="">Select Day</option>
+                                {% for choice in form.day_of_week.field.choices %}
+                                    {% if choice.0 or choice.0 == 0 %}
+                                    <option value="{{ choice.0 }}" {% if form.day_of_week.value == choice.0 or form.day_of_week.value|stringformat:"s" == choice.0|stringformat:"s" %}selected{% endif %}>
+                                        {{ choice.1 }}
+                                    </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                            {% if form.day_of_week.errors %}
+                                <div class="text-danger small mt-1">
+                                    {{ form.day_of_week.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Meeting Time (for all cadences) -->
+                        <div class="mb-3" id="meetingTimeGroup" style="display: none;">
+                            <label for="{{ form.meeting_time.id_for_label }}" class="form-label">
+                                <i class="fas fa-clock me-2"></i>Meeting Time
+                            </label>
+                            {{ form.meeting_time }}
+                            {% if form.meeting_time.errors %}
+                                <div class="text-danger small mt-1">
+                                    {{ form.meeting_time.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                        </div>
+                    </div>
 
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
-                            {% if object %}Update Team{% else %}Create Team{% endif %}
+                            {% if object %}Update Team Meeting{% else %}Create Team Meeting{% endif %}
                         </button>
                         <a href="{% url 'organizations:teams' %}" class="btn btn-secondary">
                             Cancel
                         </a>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Meeting Type Modal -->
+<div class="modal fade" id="addMeetingTypeModal" tabindex="-1" aria-labelledby="addMeetingTypeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addMeetingTypeModalLabel">
+                    <i class="fas fa-calendar-alt me-2"></i>Add New Meeting Type
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="newMeetingTypeName" class="form-label">Meeting Type Name</label>
+                    <input type="text" class="form-control" id="newMeetingTypeName" placeholder="Enter meeting type name">
+                    <div class="invalid-feedback" id="meetingTypeError"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveMeetingTypeBtn">
+                    <i class="fas fa-save me-2"></i>Save
+                </button>
             </div>
         </div>
     </div>
@@ -181,14 +378,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectedMembersList = document.getElementById('selectedMembersList');
     const noMembersFound = document.getElementById('noMembersFound');
 
+    // Scheduling elements
+    const meetingTypeSelect = document.getElementById('id_meeting_type');
+    const cadenceSelect = document.getElementById('id_cadence');
+    const schedulingSection = document.getElementById('schedulingSection');
+    const quarterGroup = document.getElementById('quarterGroup');
+    const monthInQuarterGroup = document.getElementById('monthInQuarterGroup');
+    const weekNumberGroup = document.getElementById('weekNumberGroup');
+    const dayOfWeekGroup = document.getElementById('dayOfWeekGroup');
+    const meetingTimeGroup = document.getElementById('meetingTimeGroup');
+
+    // Meeting type modal elements
+    const addMeetingTypeBtn = document.getElementById('addMeetingTypeBtn');
+    const addMeetingTypeModal = new bootstrap.Modal(document.getElementById('addMeetingTypeModal'));
+    const newMeetingTypeNameInput = document.getElementById('newMeetingTypeName');
+    const saveMeetingTypeBtn = document.getElementById('saveMeetingTypeBtn');
+    const meetingTypeError = document.getElementById('meetingTypeError');
+
     // Organization filtering functionality
     function filterByOrganization(organizationId) {
         if (!organizationId) {
             // Clear both manager and members lists when no organization selected
             clearManagerOptions();
             clearMembersOptions();
+            clearMeetingTypes();
+            addMeetingTypeBtn.disabled = true;
             return;
         }
+
+        // Enable the Add button when organization is selected
+        addMeetingTypeBtn.disabled = false;
 
         // Fetch users for the selected organization
         fetch(`/organizations/ajax/get-users/${organizationId}/`)
@@ -208,10 +427,44 @@ document.addEventListener('DOMContentLoaded', function() {
                 clearManagerOptions();
                 clearMembersOptions();
             });
+
+        // Fetch meeting types for the selected organization
+        fetch(`/organizations/ajax/get-meeting-types/${organizationId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateMeetingTypes(data.meeting_types);
+                } else {
+                    console.error('Failed to fetch meeting types for organization');
+                    clearMeetingTypes();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching meeting types:', error);
+                clearMeetingTypes();
+            });
+    }
+
+    function clearMeetingTypes() {
+        meetingTypeSelect.innerHTML = '<option value="">Select Meeting Type</option>';
+    }
+
+    function updateMeetingTypes(meetingTypes) {
+        const currentValue = meetingTypeSelect.value; // Preserve current selection
+        meetingTypeSelect.innerHTML = '<option value="">Select Meeting Type</option>';
+        meetingTypes.forEach(type => {
+            const option = document.createElement('option');
+            option.value = type.id;
+            option.textContent = type.name;
+            if (currentValue && type.id == currentValue) {
+                option.selected = true;
+            }
+            meetingTypeSelect.appendChild(option);
+        });
     }
 
     function clearManagerOptions() {
-        managerSelect.innerHTML = '<option value="">Select Team Manager</option>';
+        managerSelect.innerHTML = '<option value="">Select Team Meeting Manager</option>';
     }
 
     function clearMembersOptions() {
@@ -219,11 +472,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateManagerOptions(users) {
-        managerSelect.innerHTML = '<option value="">Select Team Manager</option>';
+        const currentValue = managerSelect.value; // Preserve current selection
+        managerSelect.innerHTML = '<option value="">Select Team Meeting Manager</option>';
         users.forEach(user => {
             const option = document.createElement('option');
             option.value = user.id;
             option.textContent = user.name;
+            if (currentValue && user.id == currentValue) {
+                option.selected = true;
+            }
             managerSelect.appendChild(option);
         });
     }
@@ -234,12 +491,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Preserve currently checked members
+        const currentlyChecked = Array.from(document.querySelectorAll('input[name="{{ form.members.name }}"]:checked'))
+            .map(cb => cb.value);
+
         let membersHtml = '';
         users.forEach(user => {
+            const isChecked = currentlyChecked.includes(user.id.toString());
             membersHtml += `
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" name="{{ form.members.name }}"
-                           value="${user.id}" id="member_${user.id}">
+                           value="${user.id}" id="member_${user.id}" ${isChecked ? 'checked' : ''}>
                     <label class="form-check-label" for="member_${user.id}">
                         ${user.name}
                     </label>
@@ -253,6 +515,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Re-attach event listeners to new checkboxes
         attachMemberEventListeners();
+
+        // Update selected members display
+        updateSelectedMembersDisplay();
     }
 
     function attachMemberEventListeners() {
@@ -395,6 +660,146 @@ document.addEventListener('DOMContentLoaded', function() {
         updateMemberOptions();
         updateSelectedMembersDisplay();
     });
+
+    // Cadence-based scheduling field visibility
+    function updateSchedulingFields() {
+        const cadence = cadenceSelect.value;
+
+        // Hide all scheduling fields first
+        schedulingSection.style.display = 'none';
+        quarterGroup.style.display = 'none';
+        monthInQuarterGroup.style.display = 'none';
+        weekNumberGroup.style.display = 'none';
+        dayOfWeekGroup.style.display = 'none';
+        meetingTimeGroup.style.display = 'none';
+
+        if (!cadence) {
+            return;
+        }
+
+        // Show scheduling section
+        schedulingSection.style.display = 'block';
+
+        // Show fields based on cadence
+        if (cadence === 'weekly') {
+            // Weekly: Day of Week + Time
+            dayOfWeekGroup.style.display = 'block';
+            meetingTimeGroup.style.display = 'block';
+        } else if (cadence === 'monthly') {
+            // Monthly: Week Number + Day of Week + Time
+            weekNumberGroup.style.display = 'block';
+            dayOfWeekGroup.style.display = 'block';
+            meetingTimeGroup.style.display = 'block';
+        } else if (cadence === 'quarterly') {
+            // Quarterly: Month (1-3) + Week Number + Day of Week + Time
+            monthInQuarterGroup.style.display = 'block';
+            weekNumberGroup.style.display = 'block';
+            dayOfWeekGroup.style.display = 'block';
+            meetingTimeGroup.style.display = 'block';
+        } else if (cadence === 'annually') {
+            // Annually: Quarter + Month (1-3) + Week Number + Day of Week + Time
+            quarterGroup.style.display = 'block';
+            monthInQuarterGroup.style.display = 'block';
+            weekNumberGroup.style.display = 'block';
+            dayOfWeekGroup.style.display = 'block';
+            meetingTimeGroup.style.display = 'block';
+        }
+    }
+
+    // Listen for cadence changes
+    cadenceSelect.addEventListener('change', updateSchedulingFields);
+
+    // Initialize scheduling fields on page load
+    updateSchedulingFields();
+
+    // Meeting Type Modal Handlers
+    addMeetingTypeBtn.addEventListener('click', function() {
+        newMeetingTypeNameInput.value = '';
+        newMeetingTypeNameInput.classList.remove('is-invalid');
+        meetingTypeError.textContent = '';
+        addMeetingTypeModal.show();
+    });
+
+    // Handle Enter key in modal input
+    newMeetingTypeNameInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveMeetingTypeBtn.click();
+        }
+    });
+
+    saveMeetingTypeBtn.addEventListener('click', function() {
+        const meetingTypeName = newMeetingTypeNameInput.value.trim();
+        const organizationId = organizationSelect.value;
+
+        // Reset error state
+        newMeetingTypeNameInput.classList.remove('is-invalid');
+        meetingTypeError.textContent = '';
+
+        if (!meetingTypeName) {
+            newMeetingTypeNameInput.classList.add('is-invalid');
+            meetingTypeError.textContent = 'Meeting type name is required.';
+            return;
+        }
+
+        if (!organizationId) {
+            newMeetingTypeNameInput.classList.add('is-invalid');
+            meetingTypeError.textContent = 'Please select an organization first.';
+            return;
+        }
+
+        // Disable save button while processing
+        saveMeetingTypeBtn.disabled = true;
+        saveMeetingTypeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+
+        // Send AJAX request to create meeting type
+        fetch('/organizations/ajax/create-meeting-type/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                organization_id: organizationId,
+                name: meetingTypeName
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Add new option to select dropdown
+                const option = document.createElement('option');
+                option.value = data.meeting_type.id;
+                option.textContent = data.meeting_type.name;
+                option.selected = true;
+                meetingTypeSelect.appendChild(option);
+
+                // Close modal
+                addMeetingTypeModal.hide();
+
+                // Show success message (optional)
+                console.log('Meeting type created successfully:', data.meeting_type.name);
+            } else {
+                // Show error
+                newMeetingTypeNameInput.classList.add('is-invalid');
+                meetingTypeError.textContent = data.error || 'Failed to create meeting type.';
+            }
+        })
+        .catch(error => {
+            console.error('Error creating meeting type:', error);
+            newMeetingTypeNameInput.classList.add('is-invalid');
+            meetingTypeError.textContent = 'An error occurred. Please try again.';
+        })
+        .finally(() => {
+            // Re-enable save button
+            saveMeetingTypeBtn.disabled = false;
+            saveMeetingTypeBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save';
+        });
+    });
+
+    // Trigger organization change on page load if editing existing team
+    if (organizationSelect.value) {
+        filterByOrganization(organizationSelect.value);
+    }
 });
 </script>
 {% endblock %}

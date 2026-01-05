@@ -86,7 +86,7 @@
                             <th style="width: 30%">Action</th>
                             <th style="width: 10%">Priority</th>
                             <th style="width: 12%">Due Date</th>
-                            <th style="width: 15%">Team</th>
+                            <th style="width: 15%">Team Meeting</th>
                             <th style="width: 13%">Member</th>
                             <th style="width: 15%">Actions</th>
                         </tr>
@@ -235,7 +235,7 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Assigned To Team <span class="text-danger">*</span></label>
+                    <label class="form-label">Assigned To Team Meeting <span class="text-danger">*</span></label>
                     <select class="form-control" id="actionItemTeam" name="team" required onchange="loadActionItemTeamMembers()">
                         <option value="">Select</option>
                         {% for team in available_teams %}
@@ -243,7 +243,7 @@
                         {% endfor %}
                     </select>
                     <div class="invalid-feedback" id="actionItemTeamError"></div>
-                    <div class="form-text">Teams where you are in charge or a member</div>
+                    <div class="form-text">Team Meetings where you are in charge or a member</div>
                 </div>
 
                 <div class="mb-3">

@@ -22,12 +22,15 @@
             <div class="card-header">
                 <div class="d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">My Action Items</h5>
-                    <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-info" onclick="openNewIssueModal()">
-                            <i class="fas fa-exclamation-triangle me-2"></i>Create Issue
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-danger" onclick="openUnifiedIssuesModal({location: 'implement', screen: 'my_todo', level: 'screen', period: 'manual'})">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Issues
                         </button>
                         <button type="button" class="btn btn-warning" onclick="openNewActionModal()">
-                            <i class="fas fa-plus-circle me-2"></i>Add Action
+                            <i class="fas fa-tasks me-2"></i>Action Items
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="location.reload()">
+                            <i class="fas fa-sync-alt me-2"></i>Refresh
                         </button>
                     </div>
                 </div>
@@ -63,7 +66,7 @@
                     <table class="table table-bordered table-hover">
                         <thead class="table-dark">
                             <tr>
-                                <th>Team</th>
+                                <th>Team Meeting</th>
                                 <th>Source</th>
                                 <th>Action</th>
                                 <th>Priority</th>
@@ -169,6 +172,9 @@
                                             </button>
                                             <button class="btn btn-outline-secondary" onclick="viewSubActions({{ action.id|unlocalize }})" title="Sub Actions">
                                                 <i class="fas fa-list"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" onclick="openActionIssues({{ action.id|unlocalize }})" title="Issues">
+                                                <i class="fas fa-exclamation-triangle"></i>
                                             </button>
                                         {% endif %}
                                     </div>
@@ -491,10 +497,14 @@ function initializeActionForm() {
     }
 }
 
-// Modal management functions
+// Modal management functions using unified modal
 function openNewIssueModal() {
-    // Redirect to issue creation page
-    window.location.href = '{% url "implement:issue_create" %}';
+    openUnifiedIssuesModal({
+        location: 'implement',
+        screen: 'my_todo',
+        level: 'screen',
+        period: 'manual'
+    });
 }
 
 function openNewActionModal() {

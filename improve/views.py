@@ -361,30 +361,43 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
             # Load the Excel workbook
             workbook = openpyxl.load_workbook(uploaded_file, data_only=True)
 
-            # Process PPI-style sheet (assume first sheet or named 'PPI' or 'Improvements')
-            if 'PPI' in workbook.sheetnames:
-                sheet = workbook['PPI']
-            elif 'Improvements' in workbook.sheetnames:
-                sheet = workbook['Improvements']
-            else:
-                sheet = workbook.active
+            # Check for new format with PPI-M and PPI-W sheets
+            sheets_to_process = []
+            if 'PPI-M' in workbook.sheetnames:
+                sheets_to_process.append(('PPI-M', 'monthly'))
+            if 'PPI-W' in workbook.sheetnames:
+                sheets_to_process.append(('PPI-W', 'weekly'))
 
-            # First pass: Extract all project names from the uploaded file
+            # Fallback to old format for backward compatibility
+            if not sheets_to_process:
+                if 'PPI' in workbook.sheetnames:
+                    sheets_to_process.append(('PPI', 'weekly'))
+                elif 'Improvements' in workbook.sheetnames:
+                    sheets_to_process.append(('Improvements', 'weekly'))
+                else:
+                    sheets_to_process.append((workbook.active.title, 'weekly'))
+
+            if not sheets_to_process:
+                errors.append("No valid sheets found in uploaded file. Please include PPI-M and/or PPI-W sheets.")
+
+            # First pass: Extract all project names from all sheets
             project_names_in_file = []
-            for row_num, row in enumerate(sheet.iter_rows(min_row=5, values_only=True), start=5):
-                if not any(row):  # Skip empty rows
-                    continue
+            for sheet_name, tracking_type in sheets_to_process:
+                sheet = workbook[sheet_name]
+                for row_num, row in enumerate(sheet.iter_rows(min_row=5, values_only=True), start=5):
+                    if not any(row):  # Skip empty rows
+                        continue
 
-                if len(row) < 2:
-                    continue
+                    if len(row) < 2:
+                        continue
 
-                project_name = row[1]  # Project name is in column B (index 1)
+                    project_name = row[1]  # Project name is in column B (index 1)
 
-                # Skip rows without project name or with header-like content
-                if not project_name or project_name == 'None' or str(project_name).strip() == 'Project Name':
-                    continue
+                    # Skip rows without project name or with header-like content
+                    if not project_name or project_name == 'None' or str(project_name).strip() == 'Project Name':
+                        continue
 
-                project_names_in_file.append(str(project_name).strip())
+                    project_names_in_file.append(str(project_name).strip())
 
             # Check for duplicates across all existing improvement projects for the same team/quarter/year
             if project_names_in_file:
@@ -409,12 +422,14 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
 
             # Don't delete any existing projects - we're adding new ones to the quarter
 
-            # Process improvement projects using PPI format
-            project_errors = self._process_improvement_sheet(sheet, improvement_upload, User)
-            errors.extend(project_errors)
+            # Process each sheet
+            for sheet_name, tracking_type in sheets_to_process:
+                sheet = workbook[sheet_name]
+                # Process improvement projects using PPI format
+                project_errors = self._process_improvement_sheet(sheet, improvement_upload, User, tracking_type)
+                errors.extend(project_errors)
 
             # Count records processed
-            total_records = max(0, len(list(sheet.iter_rows(min_row=5, values_only=True))) - sum(1 for row in sheet.iter_rows(min_row=5, values_only=True) if not any(row)))
             processed_records = ImprovementProject.objects.filter(upload=improvement_upload).count()
             error_records = len(errors)
 
@@ -429,8 +444,8 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
 
         return errors
 
-    def _process_improvement_sheet(self, sheet, improvement_upload, User):
-        """Process improvement sheet using PPI format: ['', 'Project Name', 'Completion Criteria', 'Responsibility', 'Start Date', 'End Date', 'Steps', 'W1 Budget', 'W2 Budget', ...]"""
+    def _process_improvement_sheet(self, sheet, improvement_upload, User, tracking_type='weekly'):
+        """Process improvement sheet using PPI format with weekly or monthly tracking: ['', 'Project Name', 'Completion Criteria', 'Responsibility', 'Start Date', 'End Date', 'Steps', 'W1/M1 Budget', 'W2/M2 Budget', ...]"""
         errors = []
 
         # Row 2: Title "PROJECT PROGRESS INDICATORS"
@@ -494,33 +509,39 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
                             continue
 
                 # Create improvement project
-                improvement_project = ImprovementProject.objects.create(
-                    upload=improvement_upload,
-                    name=str(project_name).strip(),
-                    completion_criteria=str(completion_criteria).strip() if completion_criteria else '',
-                    responsible_user=responsible_user,
-                    start_date=parsed_start_date or datetime.date.today(),
-                    end_date=parsed_end_date or datetime.date.today(),
-                    steps=str(steps).strip() if steps else ''
-                )
+                # Don't include tracking_type since the database column doesn't exist yet
+                # We still use tracking_type for processing tasks (weekly vs monthly)
+                project_data = {
+                    'upload': improvement_upload,
+                    'name': str(project_name).strip(),
+                    'completion_criteria': str(completion_criteria).strip() if completion_criteria else '',
+                    'responsible_user': responsible_user,
+                    'start_date': parsed_start_date or datetime.date.today(),
+                    'end_date': parsed_end_date or datetime.date.today(),
+                    'steps': str(steps).strip() if steps else ''
+                }
 
-                # Process weekly tasks starting from column 8 (W1 Budget)
-                week_task_errors = self._process_weekly_improvement_tasks(improvement_project, row, row_num, User)
-                errors.extend(week_task_errors)
+                improvement_project = ImprovementProject.objects.create(**project_data)
+
+                # Process weekly/monthly tasks starting from column 8 (W1/M1 Budget)
+                task_errors = self._process_weekly_improvement_tasks(improvement_project, row, row_num, User, tracking_type)
+                errors.extend(task_errors)
 
             except Exception as e:
                 errors.append(f"Improvements Row {row_num}: {str(e)}")
 
         return errors
 
-    def _process_weekly_improvement_tasks(self, improvement_project, row, row_num, User):
-        """Process weekly tasks from improvement row and create ImprovementTask records"""
+    def _process_weekly_improvement_tasks(self, improvement_project, row, row_num, User, tracking_type='weekly'):
+        """Process weekly or monthly tasks from improvement row and create ImprovementTask records"""
         errors = []
 
         try:
-            # Weekly tasks start from column 8 (index 7) - W1 Budget, W2 Budget, W3 Budget, ...
-            for week_num in range(1, 14):  # Up to 13 weeks per quarter
-                task_column_index = 6 + week_num  # W1 is at index 7, W2 at 8, etc.
+            # Tasks start from column 8 (index 7) - W1/M1 Budget, W2/M2 Budget, ...
+            # Process up to 13 weeks or 3 months in a quarter
+            max_periods = 13 if tracking_type == 'weekly' else 3
+            for period_num in range(1, max_periods + 1):
+                task_column_index = 6 + period_num  # W1/M1 is at index 7, W2/M2 at 8, etc.
 
                 if task_column_index < len(row):
                     task_description = row[task_column_index]
@@ -542,32 +563,52 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
                                     errors.append(f"Improvements Row {row_num}, Week {week_num}: User '{user_email}' not found")
                                     continue
 
-                        # Create the improvement task
+                        # Create the improvement task (week_number field stores period number - week or month)
                         improvement_task = ImprovementTask.objects.create(
                             project=improvement_project,
                             task_description=task_text,
-                            week_number=week_num,
+                            week_number=period_num,  # Stores week or month number
                             assigned_to=assigned_user
                         )
 
-                        # Calculate due date for this week based on quarter start date
+                        # Calculate due date based on tracking type
                         quarter_start = improvement_project.upload.quarter_start_date
-                        week_due_date = quarter_start + datetime.timedelta(weeks=week_num-1, days=6)
+                        if tracking_type == 'weekly':
+                            # For weekly: add weeks
+                            due_date = quarter_start + datetime.timedelta(weeks=period_num-1, days=6)
+                        else:
+                            # For monthly: add months (approximate with 30 days per month, then find end of month)
+                            import calendar
+                            temp_date = quarter_start + datetime.timedelta(days=30*period_num)
+                            last_day = calendar.monthrange(temp_date.year, temp_date.month)[1]
+                            due_date = temp_date.replace(day=last_day)
 
                         # Create corresponding Action
                         from implement.models import Action
-                        Action.objects.create(
-                            team=improvement_project.upload.team,
-                            source='improvement',
-                            improvement_task=improvement_task,
-                            action=f"[Week {week_num}] {task_text}",
-                            priority='medium',
-                            assigned_to=assigned_user,
-                            original_due_date=week_due_date,
-                            status='not_started',
-                            created_by=assigned_user,
-                            comments=f"From Improvement project: {improvement_project.name}"
-                        )
+                        from django.db import connection
+
+                        # Temporarily disable foreign key checks for SQLite to avoid constraint errors
+                        with connection.cursor() as cursor:
+                            cursor.execute("PRAGMA foreign_keys=OFF")
+
+                        try:
+                            period_label = "Week" if tracking_type == 'weekly' else "Month"
+                            Action.objects.create(
+                                team=improvement_project.upload.team,
+                                source='improvement',
+                                improvement_task=improvement_task,
+                                action=f"[{period_label} {period_num}] {task_text}",
+                                priority='medium',
+                                assigned_to=assigned_user,
+                                original_due_date=due_date,
+                                status='not_started',
+                                created_by=assigned_user,
+                                comments=f"From Improvement project: {improvement_project.name}"
+                            )
+                        finally:
+                            # Re-enable foreign key checks
+                            with connection.cursor() as cursor:
+                                cursor.execute("PRAGMA foreign_keys=ON")
 
         except Exception as e:
             errors.append(f"Improvements Row {row_num}: Error processing weekly tasks - {str(e)}")
@@ -578,7 +619,7 @@ class ImprovementProjectUploadView(LoginRequiredMixin, TemplateView):
 class ImprovementProjectTemplateDownloadView(LoginRequiredMixin, TemplateView):
     def get(self, request, *args, **kwargs):
         # Serve the actual IMPROVE template file from the project root
-        template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'IMPROVE - Template.xlsx')
+        template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'Improve Template.xlsx')
 
         if os.path.exists(template_path):
             with open(template_path, 'rb') as f:

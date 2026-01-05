@@ -34,4 +34,5 @@ urlpatterns = [
     path('task/<int:task_id>/history/', views.TaskHistoryView.as_view(), name='task_history'),
     path('parameter/<int:param_id>/comments/', views.ParameterCommentsView.as_view(), name='parameter_comments'),
     path('get-team-members/', views.GetTeamMembersView.as_view(), name='get_team_members'),
+    path('toggle-action-status/', views.ToggleActionStatusView.as_view(), name='toggle_action_status'),
 ]

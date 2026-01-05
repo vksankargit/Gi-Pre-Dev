@@ -1,6 +1,8 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
 from django.views.generic import TemplateView, CreateView, UpdateView, View
+from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from django.urls import reverse_lazy
 from django.http import JsonResponse
@@ -16,7 +18,7 @@ from .models import ReviewMeeting, ReviewCommitment, ReviewNote, ReviewActionIte
 from organizations.models import Team
 from plans.models import FinancialYear
 from implement.models import Action, Issue, NumbersTracking
-from plans.models import FPIParameter, GPIParameter, PPIProject
+from plans.models import GPIParameter, PPIProject
 from accounts.utils import get_effective_user
 
 
@@ -28,15 +30,19 @@ class ReviewDashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = get_effective_user(self.request)
 
-        # Get user's teams where user is in charge (manager)
-        if user.role == 'general':
-            user_teams = Team.objects.filter(manager=user, is_active=True)
-        else:
-            user_teams = Team.objects.filter(is_active=True)
+        # Get teams where user is a member or manager
+        # This includes both teams where user is manager and teams where user is a member
+        user_managed_teams = Team.objects.filter(manager=user, is_active=True)
+        user_member_teams = Team.objects.filter(members__member=user, members__is_active=True, is_active=True)
+        user_teams = (user_managed_teams | user_member_teams).distinct()
+
+        # Check if user is a manager of any team (for New Review button visibility)
+        is_manager = user_managed_teams.exists()
 
         # Filter parameters from request
         team_filter = self.request.GET.get('team', '')
-        review_type_filter = self.request.GET.get('review_type', '')
+        meeting_type_filter = self.request.GET.get('meeting_type', '')
+        cadence_filter = self.request.GET.get('cadence', '')
         month_year_filter = self.request.GET.get('month_year', '')
 
         # Base queryset
@@ -45,8 +51,13 @@ class ReviewDashboardView(LoginRequiredMixin, TemplateView):
         # Apply filters
         if team_filter:
             meetings = meetings.filter(team__id=team_filter)
-        if review_type_filter:
-            meetings = meetings.filter(review_type=review_type_filter)
+        if meeting_type_filter:
+            meetings = meetings.filter(team__meeting_type=meeting_type_filter)
+        if cadence_filter:
+            if cadence_filter == 'adhoc':
+                meetings = meetings.filter(is_adhoc=True)
+            else:
+                meetings = meetings.filter(team__cadence=cadence_filter, is_adhoc=False)
         if month_year_filter:
             try:
                 month, year = month_year_filter.split('-')
@@ -62,14 +73,46 @@ class ReviewDashboardView(LoginRequiredMixin, TemplateView):
             team__in=user_teams
         ).dates('review_date', 'month', order='DESC')
 
+        # Get unique meeting types from user's teams (TeamMeetingType objects)
+        from organizations.models import TeamMeetingType
+        meeting_type_ids = user_teams.values_list('meeting_type', flat=True).distinct()
+        meeting_types = []
+        for mt_id in meeting_type_ids:
+            if mt_id:  # Exclude None/empty values
+                try:
+                    mt_obj = TeamMeetingType.objects.get(id=mt_id)
+                    meeting_types.append((mt_id, mt_obj.name))
+                except TeamMeetingType.DoesNotExist:
+                    pass
+        meeting_types.sort(key=lambda x: x[1])  # Sort by display name
+
+        # Get unique cadences from user's teams and always add Ad-Hoc
+        cadences_set = set(user_teams.values_list('cadence', flat=True).distinct())
+        cadences = []
+        cadence_names = {
+            'weekly': 'Weekly',
+            'monthly': 'Monthly',
+            'quarterly': 'Quarterly',
+            'annually': 'Annually',
+        }
+        for cad in cadences_set:
+            if cad:  # Exclude None/empty values
+                cadences.append((cad, cadence_names.get(cad, cad)))
+        # Always add Ad-Hoc option
+        cadences.append(('adhoc', 'Ad-Hoc'))
+        cadences.sort(key=lambda x: x[1])  # Sort by display name
+
         context.update({
             'user_teams': user_teams,
-            'meetings': meetings.select_related('team', 'created_by'),
-            'review_types': ReviewMeeting.REVIEW_TYPES,
+            'meetings': meetings.select_related('team', 'team__meeting_type', 'created_by'),
+            'meeting_types': meeting_types,
+            'cadences': cadences,
             'available_dates': available_dates,
+            'is_manager': is_manager,  # For New Review button visibility
             'current_filters': {
                 'team': team_filter,
-                'review_type': review_type_filter,
+                'meeting_type': meeting_type_filter,
+                'cadence': cadence_filter,
                 'month_year': month_year_filter,
             }
         })
@@ -81,24 +124,50 @@ class NewReviewView(LoginRequiredMixin, TemplateView):
     """New Review Screen as per PRD specifications"""
     template_name = 'reviews/new_review.html'
 
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user is a manager of any team before allowing access"""
+        user = get_effective_user(request)
+
+        # Check if user is a manager of at least one team
+        is_manager = Team.objects.filter(manager=user, is_active=True).exists()
+
+        if not is_manager:
+            messages.error(request, 'You do not have permission to create review meetings. Only team managers can create reviews.')
+            return redirect('reviews:dashboard')
+
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         print(f"=== NewReviewView GET request ===")
         print(f"User: {self.request.user}")
         print(f"GET parameters: {dict(self.request.GET)}")
 
         context = super().get_context_data(**kwargs)
-        user = self.request.user
+        user = get_effective_user(self.request)
 
-        # Get user's teams where user is in charge (manager)
-        if user.role == 'general':
-            teams = Team.objects.filter(manager=user, is_active=True)
-        else:
-            teams = Team.objects.filter(is_active=True)
+        # Get only teams where user is the manager (not member teams)
+        teams = Team.objects.filter(manager=user, is_active=True).select_related('meeting_type')
 
         print(f"Found {teams.count()} teams for user")
 
+        # Prepare teams data with cadence and meeting type info
+        teams_data = []
+        for team in teams:
+            teams_data.append({
+                'id': team.id,
+                'name': team.name,
+                'cadence': team.cadence,
+                'meeting_type': team.meeting_type.name if team.meeting_type else '',
+                'day_of_week': team.day_of_week,
+                'week_number': team.week_number,
+                'month_in_quarter': team.month_in_quarter,
+                'quarter': team.quarter,
+                'meeting_time': team.meeting_time.strftime('%H:%M') if team.meeting_time else '',
+            })
+
         context.update({
             'teams': teams,
+            'teams_data': json.dumps(teams_data),
             'review_types': ReviewMeeting.REVIEW_TYPES,
         })
         return context
@@ -109,18 +178,28 @@ class NewReviewView(LoginRequiredMixin, TemplateView):
 
         team_id = request.POST.get('team')
         review_type = request.POST.get('review_type')
+        is_adhoc = request.POST.get('is_adhoc') == 'true'
         review_date = request.POST.get('review_date')
         review_time = request.POST.get('review_time')
         manager_name = request.POST.get('manager_name')
         participants = request.POST.getlist('participants')
 
+        # Period selections (if cadence meeting)
+        selected_week = request.POST.get('selected_week')
+        selected_month = request.POST.get('selected_month')
+        selected_quarter = request.POST.get('selected_quarter')
+        selected_year = request.POST.get('selected_year')
+
         print(f"Parsed values:")
         print(f"  team_id: {team_id}")
         print(f"  review_type: {review_type}")
+        print(f"  is_adhoc: {is_adhoc}")
         print(f"  review_date: {review_date}")
         print(f"  review_time: {review_time}")
         print(f"  manager_name: {manager_name}")
         print(f"  participants: {participants}")
+        print(f"  selected_week: {selected_week}")
+        print(f"  selected_month: {selected_month}")
 
         # Basic validation
         if not all([team_id, review_type, review_date, review_time, manager_name]):
@@ -180,6 +259,12 @@ class NewReviewView(LoginRequiredMixin, TemplateView):
             if month_in_quarter > 3:
                 month_in_quarter = ((current_month - quarter_start_month + 12) % 12) + 1
 
+            # Use selected periods if provided (for cadence meetings)
+            if not is_adhoc and selected_week:
+                week_in_quarter = int(selected_week)
+            if not is_adhoc and selected_month:
+                month_in_quarter = int(selected_month)
+
             meeting = ReviewMeeting.objects.create(
                 # New columns
                 team=team,
@@ -187,6 +272,7 @@ class NewReviewView(LoginRequiredMixin, TemplateView):
                 review_date=review_datetime,
                 manager_name=manager_name,
                 created_by=request.user,
+                is_adhoc=is_adhoc,
 
                 # Required legacy columns to match database constraints
                 meeting_type=review_type,
@@ -230,19 +316,25 @@ class ReviewMeetingView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        user = get_effective_user(self.request)
         meeting = get_object_or_404(ReviewMeeting, pk=kwargs['pk'])
 
         # Check if this review is editable (PRD: if subsequent review exists, view only)
+        # Also check if meeting is finalized
         subsequent_reviews = ReviewMeeting.objects.filter(
             team=meeting.team,
             review_date__gt=meeting.review_date
         ).exists()
 
-        is_editable = not subsequent_reviews
+        is_editable = not subsequent_reviews and not meeting.finalized_at
+
+        # Check if user is the team manager
+        is_manager = meeting.team.manager == user
 
         context.update({
             'meeting': meeting,
             'is_editable': is_editable,
+            'is_manager': is_manager,
         })
 
         return context
@@ -598,10 +690,37 @@ class GPITabView(LoginRequiredMixin, TemplateView):
             import traceback
             traceback.print_exc()
 
+        # Use the meeting's week_number (ISO week) and month_number if available
+        # Otherwise use defaults
+        current_week = meeting.week_number if meeting.week_number else review_date.isocalendar()[1]
+
+        # For month, we need to calculate the dropdown value (1-6)
+        # Get current quarter
+        financial_year = meeting.financial_year if hasattr(meeting, 'financial_year') and meeting.financial_year else None
+        if not financial_year:
+            from plans.models import FinancialYear
+            financial_year = FinancialYear.objects.filter(
+                start_date__lte=review_date,
+                end_date__gte=review_date
+            ).first()
+
+        if financial_year:
+            months_from_fy_start = ((review_date.year - financial_year.start_date.year) * 12 +
+                                    (review_date.month - financial_year.start_date.month))
+            current_quarter = min(4, max(1, (months_from_fy_start // 3) + 1))
+            month_in_quarter = (months_from_fy_start % 3) + 1
+            # Dropdown month: previous quarter (1-3) + current quarter months (4-6)
+            # For current quarter month 1, 2, 3 -> dropdown values are 4, 5, 6
+            current_month = 3 + month_in_quarter  # This gives us 4, 5, or 6 for current quarter
+        else:
+            current_month = 1  # Fallback
+
         context.update({
             'meeting': meeting,
             'weekly_gpi_data': weekly_gpi_data,
             'monthly_gpi_data': monthly_gpi_data,
+            'current_week': current_week,
+            'current_month': current_month,
         })
         return context
 
@@ -952,10 +1071,10 @@ class IssuesTabView(LoginRequiredMixin, TemplateView):
         ).select_related('reported_by', 'escalated_to_team').prefetch_related('related_actions')
 
         # Separate into:
-        # - Old Issues: Issues that have actions initiated (action_count > 0)
-        # - New Issues: Issues that don't have any actions yet (action_count = 0)
-        old_issues_list = []  # Issues with actions
-        new_issues_list = []  # Issues without actions
+        # - New Issues: Issues with status 'open' (not yet acknowledged, parked, or resolved)
+        # - Old Issues: Issues with status 'acknowledged', 'parked', 'resolved', 'on_hold', 'dropped', or 'escalated'
+        old_issues_list = []  # Issues that have been processed (acknowledged, parked, resolved, etc.)
+        new_issues_list = []  # Issues with 'open' status
 
         for issue in all_issues:
             # Calculate action counts from ReviewActionItems (created via parameter action popup)
@@ -977,11 +1096,13 @@ class IssuesTabView(LoginRequiredMixin, TemplateView):
 
             issue.action_count = f"{completed_actions}/{total_actions}" if total_actions > 0 else "0/0"
 
-            # Categorize based on whether actions have been initiated
-            if total_actions > 0:
-                old_issues_list.append(issue)  # Has actions - goes to "Old Issues"
+            # Categorize based on status
+            # New Issues: status = 'open' (these require action)
+            # Old Issues: status = 'acknowledged', 'parked', 'resolved', 'on_hold', 'dropped', 'escalated'
+            if issue.status == 'open':
+                new_issues_list.append(issue)  # Status is open - goes to "New Issues"
             else:
-                new_issues_list.append(issue)  # No actions yet - goes to "New Issues"
+                old_issues_list.append(issue)  # Status is not open - goes to "Old Issues"
 
         # Get teams where user is a member (for escalation)
         from django.db.models import Q
@@ -1381,7 +1502,7 @@ class ActionItemPopupView(LoginRequiredMixin, TemplateView):
 
         # Get the parameter name if parameter context is provided
         if parameter_type and parameter_id:
-            from plans.models import FPIParameter, GPIParameter, PPIProject
+            from plans.models import GPIParameter, PPIProject
             from improve.models import ImprovementProject
             try:
                 if parameter_type == 'fpi':
@@ -1468,21 +1589,29 @@ class ActionItemPopupView(LoginRequiredMixin, TemplateView):
                     User = get_user_model()
 
                     assigned_to = User.objects.get(id=assigned_to_id)
-                    assigned_to_team = None
 
+                    # assigned_to_team_id is required in database, use meeting's team if not provided
                     if assigned_to_team_id:
                         assigned_to_team = Team.objects.get(id=assigned_to_team_id)
+                    else:
+                        assigned_to_team = meeting.team  # Use meeting's team as default
+
+                    # created_by is required in database
+                    user = get_effective_user(request)
 
                     # Create the action item with optional parameter context
                     action_item_data = {
                         'review_meeting': meeting,
-                        'action_description': action_text,
+                        'action': action_text,  # Required field in database
+                        'action_description': action_text,  # Also populate alternative field
                         'priority': priority,
                         'due_date': datetime.strptime(due_date, '%Y-%m-%d').date(),
                         'assigned_to': assigned_to,
-                        'assigned_to_team': assigned_to_team,
+                        'assigned_to_team': assigned_to_team,  # Required in database
+                        'created_by': user,  # Required in database
                         'status': 'pending',
-                        'completion_notes': comments,
+                        'comments': comments if comments else '',  # Required in database, cannot be None
+                        'completion_notes': comments if comments else '',
                         'created_at': timezone.now(),
                         'updated_at': timezone.now()
                     }
@@ -1521,11 +1650,13 @@ class ActionItemPopupView(LoginRequiredMixin, TemplateView):
                 old_status = action_item.status
 
                 # Update fields
+                action_item.action = action_text  # Update required field
                 action_item.action_description = action_text
                 action_item.priority = priority
                 action_item.due_date = datetime.strptime(due_date, '%Y-%m-%d').date()
                 action_item.assigned_to = User.objects.get(id=assigned_to_id)
                 action_item.status = status
+                action_item.completion_notes = completion_notes
 
                 if assigned_to_team_id:
                     action_item.assigned_to_team = Team.objects.get(id=assigned_to_team_id)
@@ -1699,11 +1830,7 @@ class ParameterActionItemsView(LoginRequiredMixin, TemplateView):
     def get_parameter_name(self, parameter_type, parameter_id):
         """Get the parameter name based on type and ID"""
         try:
-            if parameter_type == 'fpi':
-                from plans.models import FPIParameter
-                param = FPIParameter.objects.get(id=parameter_id)
-                return param.sub_head or 'FPI Parameter'
-            elif parameter_type == 'gpi':
+            if parameter_type == 'gpi':
                 from plans.models import GPIParameter
                 param = GPIParameter.objects.get(id=parameter_id)
                 return param.name
@@ -1740,14 +1867,21 @@ class ParameterActionItemsView(LoginRequiredMixin, TemplateView):
                     User = get_user_model()
                     assigned_to = User.objects.get(id=assigned_to_id)
 
+                    # created_by and assigned_to_team are required in database
+                    user = get_effective_user(request)
+
                     action_item = ReviewActionItem.objects.create(
                         review_meeting=meeting,
+                        action=action_text,  # Required field in database
                         action_description=action_text,
                         priority=priority,
                         due_date=due_date,
                         status='pending',
-                        completion_notes=comments,
+                        comments=comments if comments else '',  # Required in database, cannot be None
+                        completion_notes=comments if comments else '',
                         assigned_to=assigned_to,
+                        assigned_to_team=meeting.team,  # Required in database, use meeting's team
+                        created_by=user,  # Required in database
                         parameter_type=parameter_type,
                         parameter_id=parameter_id,
                         created_at=timezone.now(),
@@ -1793,7 +1927,7 @@ class ParameterIssuesView(LoginRequiredMixin, TemplateView):
 
         # Get the parameter name if parameter context is provided
         if parameter_type and parameter_id:
-            from plans.models import FPIParameter, GPIParameter, PPIProject
+            from plans.models import GPIParameter, PPIProject
             from improve.models import ImprovementProject
             try:
                 if parameter_type == 'fpi':
@@ -1816,9 +1950,7 @@ class ParameterIssuesView(LoginRequiredMixin, TemplateView):
 
         if parameter_type and parameter_id:
             # Filter by parameter type
-            if parameter_type == 'fpi':
-                issues = issues.filter(fpi_parameter_id=parameter_id)
-            elif parameter_type == 'gpi':
+            if parameter_type == 'gpi':
                 issues = issues.filter(gpi_parameter_id=parameter_id)
             elif parameter_type == 'ppi':
                 issues = issues.filter(ppi_project_id=parameter_id)
@@ -1826,12 +1958,12 @@ class ParameterIssuesView(LoginRequiredMixin, TemplateView):
                 issues = issues.filter(improvement_project_id=parameter_id)
         else:
             # No parameter specified - show only meeting-level issues
-            # (issues not linked to any FPI/GPI/PPI/Improvement parameter)
+            # (issues not linked to any GPI/PPI/Improvement parameter)
             issues = issues.filter(
-                fpi_parameter__isnull=True,
                 gpi_parameter__isnull=True,
                 ppi_project__isnull=True,
-                improvement_project__isnull=True
+                improvement_project__isnull=True,
+                action__isnull=True
             )
 
         issues = issues.select_related('reported_by', 'escalated_to_team').prefetch_related('related_actions')
@@ -1904,68 +2036,74 @@ class SaveFPIDataView(LoginRequiredMixin, TemplateView):
         field = request.POST.get('field')
         value = request.POST.get('value', '').strip()
 
-        try:
-            from plans.models import FPIParameter
+        # FPI has been removed from the system
+        return JsonResponse({
+            'success': False,
+            'error': 'FPI parameters are no longer supported'
+        })
 
-            # Get the FPI parameter
-            fpi_param = FPIParameter.objects.get(id=param_id)
-
-            # Validate that the parameter belongs to the meeting's team
-            if fpi_param.quarterly_plan.team != meeting.team:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Parameter does not belong to this team'
-                })
-
-            # Update the appropriate field
-            if field == 'last_month_actual':
-                try:
-                    fpi_param.last_month_actual = float(value) if value else None
-                except ValueError:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'Invalid number format for last month actual'
-                    })
-            elif field == 'current_month_plan':
-                try:
-                    new_value = float(value) if value else None
-                    fpi_param.current_month_plan = new_value
-
-                    # When current_month_plan is updated, update the next month's last_month_goal
-                    # within the same quarterly plan (if exists)
-                    self.update_next_month_goal(fpi_param, new_value, meeting)
-
-                except ValueError:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'Invalid number format for current month plan'
-                    })
-            elif field == 'explanation':
-                fpi_param.explanation = value
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'Invalid field: {field}'
-                })
-
-            # Save the changes
-            fpi_param.save()
-
-            return JsonResponse({
-                'success': True,
-                'message': f'Updated {field} for {fpi_param.sub_head}'
-            })
-
-        except FPIParameter.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'error': 'FPI parameter not found'
-            })
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            })
+        # OLD FPI CODE - COMMENTED OUT AS FPI HAS BEEN REMOVED
+        # try:
+        #     from plans.models import FPIParameter
+        #     # Get the FPI parameter
+        #     fpi_param = FPIParameter.objects.get(id=param_id)
+        #
+        #     # Validate that the parameter belongs to the meeting's team
+        #     if fpi_param.quarterly_plan.team != meeting.team:
+        #         return JsonResponse({
+        #             'success': False,
+        #             'error': 'Parameter does not belong to this team'
+        #         })
+        #
+        #     # Update the appropriate field
+        #     if field == 'last_month_actual':
+        #         try:
+        #             fpi_param.last_month_actual = float(value) if value else None
+        #         except ValueError:
+        #             return JsonResponse({
+        #                 'success': False,
+        #                 'error': 'Invalid number format for last month actual'
+        #             })
+        #     elif field == 'current_month_plan':
+        #         try:
+        #             new_value = float(value) if value else None
+        #             fpi_param.current_month_plan = new_value
+        #
+        #             # When current_month_plan is updated, update the next month's last_month_goal
+        #             # within the same quarterly plan (if exists)
+        #             self.update_next_month_goal(fpi_param, new_value, meeting)
+        #
+        #         except ValueError:
+        #             return JsonResponse({
+        #                 'success': False,
+        #                 'error': 'Invalid number format for current month plan'
+        #             })
+        #     elif field == 'explanation':
+        #         fpi_param.explanation = value
+        #     else:
+        #         return JsonResponse({
+        #             'success': False,
+        #             'error': f'Invalid field: {field}'
+        #         })
+        #
+        #     # Save the changes
+        #     fpi_param.save()
+        #
+        #     return JsonResponse({
+        #         'success': True,
+        #         'message': f'Updated {field} for {fpi_param.sub_head}'
+        #     })
+        #
+        # except FPIParameter.DoesNotExist:
+        #     return JsonResponse({
+        #         'success': False,
+        #         'error': 'FPI parameter not found'
+        #     })
+        # except Exception as e:
+        #     return JsonResponse({
+        #         'success': False,
+        #         'error': str(e)
+        #     })
 
 
 class SaveGPIDataView(LoginRequiredMixin, TemplateView):
@@ -1979,9 +2117,12 @@ class SaveGPIDataView(LoginRequiredMixin, TemplateView):
         param_id = request.POST.get('id')
         field = request.POST.get('field')
         value = request.POST.get('value', '').strip()
+        tracking = request.POST.get('tracking')  # 'weekly' or 'monthly'
+        week_number = request.POST.get('week')
+        month_number = request.POST.get('month')
 
         try:
-            from plans.models import GPIParameter
+            from plans.models import GPIParameter, GPIWeeklyRecord, GPIMonthlyRecord
 
             # Get the GPI parameter
             gpi_param = GPIParameter.objects.get(id=param_id)
@@ -1993,55 +2134,83 @@ class SaveGPIDataView(LoginRequiredMixin, TemplateView):
                     'error': 'Parameter does not belong to this team'
                 })
 
-            # Update the appropriate field
-            if field == 'last_week_actual':
-                try:
-                    gpi_param.last_week_actual = float(value) if value else None
-                except ValueError:
+            # Handle weekly tracking
+            if tracking == 'weekly' and week_number:
+                week_num = int(week_number)
+
+                # Get or create weekly record
+                weekly_record, created = GPIWeeklyRecord.objects.get_or_create(
+                    gpi_parameter=gpi_param,
+                    week_number=week_num
+                )
+
+                if field == 'last_week_actual':
+                    try:
+                        weekly_record.week_actual = float(value) if value else None
+                    except ValueError:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Invalid number format for last week actual'
+                        })
+                elif field == 'current_week_plan':
+                    try:
+                        weekly_record.week_goal = float(value) if value else None
+                    except ValueError:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Invalid number format for current week plan'
+                        })
+                elif field == 'explanation':
+                    weekly_record.explanation = value
+                else:
                     return JsonResponse({
                         'success': False,
-                        'error': 'Invalid number format for last week actual'
+                        'error': f'Invalid field: {field}'
                     })
-            elif field == 'current_week_plan':
-                try:
-                    new_value = float(value) if value else None
-                    gpi_param.current_week_plan = new_value
-                    # Update last_week_goal to current value for next week
-                    gpi_param.last_week_goal = new_value
-                except ValueError:
+
+                weekly_record.save()
+
+            # Handle monthly tracking
+            elif tracking == 'monthly' and month_number:
+                month_num = int(month_number)
+
+                # Get or create monthly record
+                monthly_record, created = GPIMonthlyRecord.objects.get_or_create(
+                    gpi_parameter=gpi_param,
+                    month_number=month_num
+                )
+
+                if field == 'last_month_actual':
+                    try:
+                        monthly_record.month_actual = float(value) if value else None
+                    except ValueError:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Invalid number format for last month actual'
+                        })
+                elif field == 'current_month_plan':
+                    try:
+                        monthly_record.month_goal = float(value) if value else None
+                    except ValueError:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Invalid number format for current month plan'
+                        })
+                elif field == 'explanation':
+                    monthly_record.explanation = value
+                else:
                     return JsonResponse({
                         'success': False,
-                        'error': 'Invalid number format for current week plan'
+                        'error': f'Invalid field: {field}'
                     })
-            elif field == 'last_month_actual':
-                try:
-                    gpi_param.last_month_actual = float(value) if value else None
-                except ValueError:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'Invalid number format for last month actual'
-                    })
-            elif field == 'current_month_plan':
-                try:
-                    new_value = float(value) if value else None
-                    gpi_param.current_month_plan = new_value
-                    # Update last_month_goal to current value for next month
-                    gpi_param.last_month_goal = new_value
-                except ValueError:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'Invalid number format for current month plan'
-                    })
-            elif field == 'explanation':
-                gpi_param.explanation = value
+
+                monthly_record.save()
+
             else:
                 return JsonResponse({
                     'success': False,
-                    'error': f'Invalid field: {field}'
+                    'error': 'Missing tracking type or period number'
                 })
-
-            # Save the changes
-            gpi_param.save()
 
             return JsonResponse({
                 'success': True,
@@ -2054,6 +2223,8 @@ class SaveGPIDataView(LoginRequiredMixin, TemplateView):
                 'error': 'GPI parameter not found'
             })
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return JsonResponse({
                 'success': False,
                 'error': str(e)
@@ -2373,7 +2544,7 @@ class FPIDetailsView(LoginRequiredMixin, TemplateView):
         
         parameter_id = self.request.GET.get('parameter_id')
         
-        from plans.models import FPIParameter, FinancialYear
+        from plans.models import FinancialYear
         parameter = FPIParameter.objects.get(id=parameter_id)
         
         # Get financial year and quarter
@@ -2781,6 +2952,1443 @@ class DeleteActionView(LoginRequiredMixin, View):
             })
 
         except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
+
+
+# API endpoints for New Review form
+
+def available_periods_api(request):
+    """API endpoint to get available periods (weeks/months/quarters/years) for a team"""
+    team_id = request.GET.get('team_id')
+    period_type = request.GET.get('period_type')  # 'week', 'month', 'quarter', 'year'
+    
+    try:
+        team = Team.objects.get(id=team_id)
+        
+        # Get the last review for this team
+        last_review = ReviewMeeting.objects.filter(
+            team=team,
+            is_adhoc=False
+        ).order_by('-review_date').first()
+        
+        periods = []
+        
+        if period_type == 'week':
+            # Generate weeks from last review to current week
+            start_week = 1
+            if last_review and last_review.week_number:
+                start_week = last_review.week_number + 1
+            
+            for week_num in range(start_week, 14):  # 13 weeks in a quarter
+                periods.append({
+                    'number': week_num,
+                    'date_range': f'Week {week_num}'
+                })
+        
+        elif period_type == 'month':
+            # Generate months (1-3 for quarter)
+            start_month = 1
+            if last_review and last_review.month_number:
+                start_month = last_review.month_number + 1
+            
+            month_names = ['Month 1', 'Month 2', 'Month 3']
+            for month_num in range(start_month, 4):
+                periods.append({
+                    'number': month_num,
+                    'name': month_names[month_num - 1]
+                })
+        
+        elif period_type == 'quarter':
+            # All quarters
+            quarters = [
+                {'number': 1, 'name': 'Q1 (Apr-Jun)'},
+                {'number': 2, 'name': 'Q2 (Jul-Sep)'},
+                {'number': 3, 'name': 'Q3 (Oct-Dec)'},
+                {'number': 4, 'name': 'Q4 (Jan-Mar)'}
+            ]
+            periods = quarters
+        
+        elif period_type == 'year':
+            # Generate years
+            current_year = timezone.now().year
+            for year in range(current_year - 2, current_year + 3):
+                periods.append({
+                    'number': year,
+                    'name': f'FY {year % 100:02d}-{(year + 1) % 100:02d}'
+                })
+        
+        return JsonResponse({
+            'success': True,
+            'periods': periods
+        })
+    
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+def check_pending_reviews_api(request):
+    """API endpoint to check if there are pending reviews before a selected date"""
+    team_id = request.GET.get('team_id')
+    selected_date_str = request.GET.get('date')
+
+    try:
+        team = Team.objects.get(id=team_id)
+        selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+        today = timezone.now().date()
+
+        # Check if there are reviews with status 'scheduled' before the selected date
+        pending_reviews = ReviewMeeting.objects.filter(
+            team=team,
+            review_date__lt=selected_date,
+            review_date__gte=today,
+            status='scheduled'
+        ).count()
+
+        if pending_reviews > 0:
+            return JsonResponse({
+                'success': True,
+                'has_pending': True,
+                'message': f'There are {pending_reviews} pending review(s) before this date. Consider completing them first.'
+            })
+        else:
+            return JsonResponse({
+                'success': True,
+                'has_pending': False
+            })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+class FinalizeMeetingView(LoginRequiredMixin, View):
+    """Finalize a review meeting, making it read-only - auto-finalizes when manager navigates away"""
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def post(self, request, pk):
+        user = get_effective_user(request)
+        meeting = get_object_or_404(ReviewMeeting, pk=pk)
+
+        # Check if user is the team manager
+        if meeting.team.manager != user:
+            return JsonResponse({
+                'success': False,
+                'error': 'Only the team manager can finalize meetings.'
+            }, status=403)
+
+        # Check if already finalized
+        if meeting.finalized_at:
+            return JsonResponse({
+                'success': True,
+                'message': 'This meeting has already been finalized.',
+                'already_finalized': True
+            }, status=200)  # Return 200 to avoid errors on client side
+
+        # Finalize the meeting
+        meeting.finalized_at = timezone.now()
+        meeting.finalized_by = user
+        meeting.status = 'finalized'
+        meeting.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Meeting finalized successfully.',
+            'already_finalized': False
+        })
+
+
+class DownloadPDFView(LoginRequiredMixin, View):
+    """Generate and download PDF of finalized review meeting using ReportLab"""
+
+    def get(self, request, pk):
+        from django.http import HttpResponse
+        from io import BytesIO
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+
+        user = get_effective_user(request)
+        meeting = get_object_or_404(ReviewMeeting, pk=pk)
+
+        # Check if user has access to this meeting
+        user_teams = Team.objects.filter(
+            Q(manager=user) | Q(members__member=user)
+        ).distinct()
+
+        if meeting.team not in user_teams:
+            return HttpResponse("You don't have permission to view this meeting.", status=403)
+
+        # Check if meeting is finalized
+        if not meeting.finalized_at:
+            return HttpResponse("Only finalized meetings can be downloaded as PDF.", status=400)
+
+        # Create the PDF buffer
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        elements = []
+
+        # Styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.HexColor('#2c3e50'),
+            spaceAfter=20,
+            alignment=TA_CENTER
+        )
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.HexColor('#2c3e50'),
+            spaceAfter=10,
+            spaceBefore=15
+        )
+        normal_style = styles['Normal']
+
+        # Title
+        elements.append(Paragraph("Review Meeting Report", title_style))
+        elements.append(Spacer(1, 0.2*inch))
+
+        # Finalization badge
+        if meeting.finalized_at:
+            finalized_text = f"✓ FINALIZED on {meeting.finalized_at.strftime('%d-%b-%Y %I:%M %p')} by {meeting.finalized_by.get_full_name() or meeting.finalized_by.username}"
+            finalized_para = Paragraph(f"<para align='center' backColor='#27ae60' textColor='white' spaceBefore='10' spaceAfter='10'><b>{finalized_text}</b></para>", normal_style)
+            elements.append(finalized_para)
+            elements.append(Spacer(1, 0.2*inch))
+
+        # Meeting Details
+        meeting_data = [
+            ['Team Meeting:', meeting.team.name, 'Meeting Date:', meeting.review_date.strftime('%d-%b-%Y %I:%M %p')],
+            ['Meeting Type:', meeting.team.meeting_type.name if meeting.team.meeting_type else 'N/A',
+             'Cadence:', 'Ad-Hoc' if meeting.is_adhoc else (meeting.team.get_cadence_display() or 'N/A')],
+            ['Manager:', meeting.manager_name, 'Period:',
+             f'Week {meeting.week_number}' if meeting.week_number else
+             (f'Month {meeting.month_number}' if meeting.month_number else
+             (f'Q{meeting.quarter_number}' if meeting.quarter_number else '-'))]
+        ]
+
+        participants = ', '.join([p.get_full_name() or p.username for p in meeting.participants.all()])
+        if participants:
+            meeting_data.append(['Participants:', participants, '', ''])
+
+        meeting_table = Table(meeting_data, colWidths=[1.5*inch, 2.5*inch, 1.5*inch, 2*inch])
+        meeting_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#ecf0f1')),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+        ]))
+        elements.append(meeting_table)
+        elements.append(Spacer(1, 0.3*inch))
+
+        # Review Notes
+        notes = meeting.review_notes.all()
+        if notes.exists():
+            elements.append(Paragraph("Review Notes", heading_style))
+            for note in notes:
+                note_text = f"<b>{note.get_note_type_display()}</b><br/>{note.review_note}<br/><i>By: {note.created_by.get_full_name() or note.created_by.username} | {note.created_at.strftime('%d-%b-%Y %I:%M %p')}</i>"
+                elements.append(Paragraph(note_text, normal_style))
+                elements.append(Spacer(1, 0.1*inch))
+        else:
+            elements.append(Paragraph("Review Notes", heading_style))
+            elements.append(Paragraph("<i>No review notes recorded for this meeting.</i>", normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+        # Decisions
+        decisions = meeting.decisions.all()
+        if decisions.exists():
+            elements.append(Paragraph("Decisions", heading_style))
+            for idx, decision in enumerate(decisions, 1):
+                elements.append(Paragraph(f"{idx}. {decision.decision}", normal_style))
+                elements.append(Spacer(1, 0.05*inch))
+        else:
+            elements.append(Paragraph("Decisions", heading_style))
+            elements.append(Paragraph("<i>No decisions recorded for this meeting.</i>", normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+        # Commitments
+        commitments = meeting.commitments.all()
+        if commitments.exists():
+            elements.append(Paragraph("Commitments", heading_style))
+            commit_data = [['Commitment', 'Due Date', 'Status', 'Committed By']]
+            for c in commitments:
+                commit_data.append([
+                    c.commitment or 'N/A',
+                    c.due_date.strftime('%d-%b-%Y') if c.due_date else '-',
+                    c.status or 'Pending',
+                    c.committed_by.get_full_name() if c.committed_by else '-'
+                ])
+            commit_table = Table(commit_data, colWidths=[2.5*inch, 1*inch, 1*inch, 1.5*inch])
+            commit_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
+            ]))
+            elements.append(commit_table)
+            elements.append(Spacer(1, 0.2*inch))
+        else:
+            elements.append(Paragraph("Commitments", heading_style))
+            elements.append(Paragraph("<i>No commitments recorded for this meeting.</i>", normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+        # GPI Data
+        if meeting.review_type in ['weekly', 'monthly']:
+            # Get quarterly plan for the team
+            from plans.models import QuarterlyPlan, FinancialYear
+            review_date = meeting.review_date.date()
+            current_fy = FinancialYear.objects.filter(
+                start_date__lte=review_date,
+                end_date__gte=review_date
+            ).first()
+
+            gpi_parameters = []
+            if current_fy:
+                # Determine current quarter
+                days_from_fy_start = (review_date - current_fy.start_date).days
+                current_quarter = min(4, (days_from_fy_start // 90) + 1)
+
+                quarterly_plan = QuarterlyPlan.objects.filter(
+                    team=meeting.team,
+                    financial_year=current_fy,
+                    quarter=f'Q{current_quarter}'
+                ).first()
+
+                if quarterly_plan:
+                    gpi_parameters = quarterly_plan.gpi_parameters.order_by('id')
+
+            elements.append(Paragraph("GPI (Goal Performance Indicators)", heading_style))
+            if gpi_parameters:
+                gpi_data_list = [['Parameter', 'Target', 'Actual', 'Status']]
+                for param in gpi_parameters:
+                    # Use appropriate goal/actual fields based on tracking type
+                    if param.tracking_type == 'weekly':
+                        target = str(param.current_week_plan) if param.current_week_plan else '-'
+                        actual = str(param.last_week_actual) if param.last_week_actual else '-'
+                    else:  # monthly
+                        target = str(param.current_month_plan) if param.current_month_plan else '-'
+                        actual = str(param.last_month_actual) if param.last_month_actual else '-'
+
+                    # Status can be determined by comparing actual vs target
+                    status = '-'
+                    if actual != '-' and target != '-':
+                        try:
+                            actual_val = float(actual)
+                            target_val = float(target)
+                            if actual_val >= target_val:
+                                status = 'Achieved'
+                            else:
+                                status = 'Not Achieved'
+                        except:
+                            pass
+
+                    gpi_data_list.append([
+                        param.name,
+                        target,
+                        actual,
+                        status
+                    ])
+                gpi_table = Table(gpi_data_list, colWidths=[3*inch, 1*inch, 1*inch, 1*inch])
+                gpi_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
+                ]))
+                elements.append(gpi_table)
+            else:
+                elements.append(Paragraph("<i>No GPI parameters for this review period.</i>", normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+        # PPI Projects
+        if meeting.review_type == 'weekly':
+            # Reuse the quarterly plan from GPI section if available
+            ppi_projects = []
+            if 'quarterly_plan' in locals() and quarterly_plan:
+                ppi_projects = quarterly_plan.ppi_projects.order_by('id')
+            elif 'current_fy' not in locals():
+                # If GPI section wasn't executed, get quarterly plan here
+                from plans.models import QuarterlyPlan, FinancialYear
+                review_date = meeting.review_date.date()
+                current_fy = FinancialYear.objects.filter(
+                    start_date__lte=review_date,
+                    end_date__gte=review_date
+                ).first()
+
+                if current_fy:
+                    days_from_fy_start = (review_date - current_fy.start_date).days
+                    current_quarter = min(4, (days_from_fy_start // 90) + 1)
+
+                    quarterly_plan = QuarterlyPlan.objects.filter(
+                        team=meeting.team,
+                        financial_year=current_fy,
+                        quarter=f'Q{current_quarter}'
+                    ).first()
+
+                    if quarterly_plan:
+                        ppi_projects = quarterly_plan.ppi_projects.order_by('id')
+
+            elements.append(Paragraph("PPI (Project Performance Indicators)", heading_style))
+            if ppi_projects:
+                ppi_data_list = [['Project', 'Owner', 'Status', 'Progress']]
+                for project in ppi_projects:
+                    # Get status from status history if available
+                    latest_status = project.status_history.order_by('-updated_at').first() if hasattr(project, 'status_history') else None
+                    status_display = latest_status.status if latest_status else '-'
+
+                    ppi_data_list.append([
+                        project.name,
+                        project.responsible_user.get_full_name() if project.responsible_user else '-',
+                        status_display,
+                        f"{project.completion_percentage or 0}%"
+                    ])
+                ppi_table = Table(ppi_data_list, colWidths=[2.5*inch, 1.5*inch, 1*inch, 1*inch])
+                ppi_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
+                ]))
+                elements.append(ppi_table)
+            else:
+                elements.append(Paragraph("<i>No PPI projects for this review period.</i>", normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+        # Improvement Projects (PPI from Improve module)
+        if meeting.review_type == 'weekly':
+            from improve.models import ImprovementProject
+            improvement_projects = []
+            if 'current_fy' in locals() and current_fy and 'current_quarter' in locals():
+                improvement_projects = ImprovementProject.objects.filter(
+                    upload__team=meeting.team,
+                    upload__financial_year=current_fy,
+                    upload__quarter=f"Q{current_quarter}"
+                ).select_related('upload__team').prefetch_related('status_history').order_by('id')
+
+            elements.append(Paragraph("Improvement Projects (PPI)", heading_style))
+            if improvement_projects and improvement_projects.exists():
+                improve_data_list = [['Project', 'Owner', 'Status', 'Progress']]
+                for project in improvement_projects:
+                    # Get latest status from history
+                    latest_status = project.status_history.order_by('-updated_at').first() if hasattr(project, 'status_history') else None
+                    status_display = latest_status.status if latest_status else '-'
+
+                    improve_data_list.append([
+                        project.name,
+                        project.owner.get_full_name() if hasattr(project, 'owner') and project.owner else '-',
+                        status_display,
+                        f"{project.completion_percentage or 0}%"
+                    ])
+                improve_table = Table(improve_data_list, colWidths=[2.5*inch, 1.5*inch, 1*inch, 1*inch])
+                improve_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
+                ]))
+                elements.append(improve_table)
+            else:
+                elements.append(Paragraph("<i>No improvement projects for this review period.</i>", normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+        # Issues
+        issues = Issue.objects.filter(team=meeting.team, status__in=['open', 'in_progress', 'on_hold']).order_by('-created_at')
+        elements.append(Paragraph("Issue Log", heading_style))
+        if issues.exists():
+            issue_data_list = [['Issue #', 'Title', 'Priority', 'Status', 'Owner']]
+            for issue in issues:
+                issue_data_list.append([
+                    str(issue.id),
+                    issue.title[:40] + '...' if len(issue.title) > 40 else issue.title,
+                    issue.priority or '-',
+                    issue.status or '-',
+                    issue.owner.get_full_name() if issue.owner else '-'
+                ])
+            issue_table = Table(issue_data_list, colWidths=[0.7*inch, 2.5*inch, 0.8*inch, 1*inch, 1*inch])
+            issue_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
+            ]))
+            elements.append(issue_table)
+        else:
+            elements.append(Paragraph("<i>No open issues for this team.</i>", normal_style))
+        elements.append(Spacer(1, 0.2*inch))
+
+        # Action Items
+        action_items = meeting.review_action_items.all()
+        elements.append(Paragraph("Action Items", heading_style))
+        if action_items.exists():
+            action_data_list = [['Action', 'Assigned To', 'Priority', 'Due Date', 'Status']]
+            for action in action_items:
+                # Use action field (required) or fallback to action_description
+                action_text = action.action if action.action else (action.action_description if action.action_description else '-')
+                action_data_list.append([
+                    action_text[:40] + '...' if len(action_text) > 40 else action_text,
+                    action.assigned_to.get_full_name() if action.assigned_to else '-',
+                    action.priority or '-',
+                    action.due_date.strftime('%d-%b-%Y') if action.due_date else '-',
+                    action.status or 'Pending'
+                ])
+            action_table = Table(action_data_list, colWidths=[2.5*inch, 1.3*inch, 0.7*inch, 0.8*inch, 0.7*inch])
+            action_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
+            ]))
+            elements.append(action_table)
+        else:
+            elements.append(Paragraph("<i>No action items from this meeting.</i>", normal_style))
+
+        # Footer
+        elements.append(Spacer(1, 0.3*inch))
+        footer_text = f"Generated on {timezone.now().strftime('%d-%b-%Y %I:%M %p')} | PRE System - Review Meeting Report"
+        elements.append(Paragraph(f"<para align='center' fontSize='8' textColor='grey'>{footer_text}</para>", normal_style))
+
+        # Build PDF
+        doc.build(elements)
+        pdf = buffer.getvalue()
+        buffer.close()
+
+        # Create response
+        response = HttpResponse(pdf, content_type='application/pdf')
+        filename = f"Review_{meeting.team.name.replace(' ', '_')}_{meeting.review_date.strftime('%Y%m%d')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        return response
+
+
+# API endpoints for action status changes in Commitments tab
+
+@login_required
+@require_http_methods(["POST"])
+def mark_action_done(request):
+    """Mark action as done (for actions from other meetings)"""
+    try:
+        action_id = request.POST.get('action_id')
+        action = get_object_or_404(ReviewActionItem, id=action_id)
+
+        # Store previous status
+        action.previous_status = action.status
+        action.status = 'done'
+        action.updated_at = timezone.now()
+        action.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Action marked as done',
+            'new_status': action.status
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def mark_action_complete(request):
+    """Mark action as completed (for actions from this meeting)"""
+    try:
+        action_id = request.POST.get('action_id')
+        action = get_object_or_404(ReviewActionItem, id=action_id)
+
+        # Store previous status
+        action.previous_status = action.status
+        action.status = 'completed'
+        action.completed_at = timezone.now()
+        action.updated_at = timezone.now()
+        action.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Action marked as completed',
+            'new_status': action.status
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def undo_action_status(request):
+    """Undo status change and revert to previous status"""
+    try:
+        action_id = request.POST.get('action_id')
+        action = get_object_or_404(ReviewActionItem, id=action_id)
+
+        # Revert to previous status
+        if action.previous_status:
+            action.status = action.previous_status
+            action.previous_status = None
+        else:
+            # If no previous status, set to pending
+            action.status = 'pending'
+
+        # Clear completed_at if reverting from completed
+        if action.status != 'completed':
+            action.completed_at = None
+
+        action.updated_at = timezone.now()
+        action.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Action status reverted',
+            'new_status': action.status
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def mark_action_on_hold(request):
+    """Put action on hold"""
+    try:
+        action_id = request.POST.get('action_id')
+        action = get_object_or_404(ReviewActionItem, id=action_id)
+
+        # Store previous status
+        action.previous_status = action.status if action.status else 'pending'
+        action.status = 'on_hold'
+        action.updated_at = timezone.now()
+        action.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Action put on hold',
+            'new_status': action.status
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def resume_action(request):
+    """Resume action from on-hold state"""
+    try:
+        action_id = request.POST.get('action_id')
+        action = get_object_or_404(ReviewActionItem, id=action_id)
+
+        # Revert to previous status
+        if action.previous_status:
+            action.status = action.previous_status
+            action.previous_status = None
+        else:
+            # If no previous status, set to pending
+            action.status = 'pending'
+
+        action.updated_at = timezone.now()
+        action.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Action resumed',
+            'new_status': action.status
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def drop_action(request):
+    """Drop an action"""
+    try:
+        action_id = request.POST.get('action_id')
+        action = get_object_or_404(ReviewActionItem, id=action_id)
+
+        # Store previous status
+        action.previous_status = action.status if action.status else 'pending'
+        action.status = 'dropped'
+        action.updated_at = timezone.now()
+        action.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Action dropped',
+            'new_status': action.status
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def mark_action_active(request):
+    """Reactivate a dropped action"""
+    try:
+        action_id = request.POST.get('action_id')
+        action = get_object_or_404(ReviewActionItem, id=action_id)
+
+        # Revert to previous status
+        if action.previous_status:
+            action.status = action.previous_status
+            action.previous_status = None
+        else:
+            # If no previous status, set to pending
+            action.status = 'pending'
+
+        action.updated_at = timezone.now()
+        action.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Action reactivated',
+            'new_status': action.status
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+class GPIWeeklyDataView(LoginRequiredMixin, View):
+    """API endpoint to load weekly GPI data for a specific ISO week"""
+
+    def get(self, request, pk):
+        from plans.models import GPIParameter, GPIMilestone, GPIWeeklyRecord, FinancialYear, QuarterlyPlan
+        from datetime import datetime, timedelta
+
+        meeting = get_object_or_404(ReviewMeeting, pk=pk)
+        iso_week_number = int(request.GET.get('week', 1))
+
+        try:
+            review_date = meeting.review_date.date()
+
+            # Get current financial year
+            current_fy = FinancialYear.objects.filter(
+                start_date__lte=review_date,
+                end_date__gte=review_date
+            ).first()
+
+            if not current_fy:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No financial year found'
+                }, status=400)
+
+            # Determine current quarter based on review date
+            months_from_start = ((review_date.year - current_fy.start_date.year) * 12 +
+                                (review_date.month - current_fy.start_date.month))
+            current_quarter = min(4, max(1, (months_from_start // 3) + 1))
+
+            # Convert ISO week number to quarter-relative week number
+            # First, find the date for this ISO week (use Monday of that week)
+            # For ISO week, we use isocalendar - get Monday of the ISO week
+            year = review_date.year
+            # Get January 4th of the year (guaranteed to be in week 1 of that year)
+            jan_4 = datetime(year, 1, 4).date()
+            # Get the Monday of week 1
+            week_1_monday = jan_4 - timedelta(days=jan_4.weekday())
+            # Calculate Monday of the target ISO week
+            iso_week_date = week_1_monday + timedelta(weeks=iso_week_number - 1)
+
+            # Now calculate which quarter this date falls into
+            months_from_start_for_week = ((iso_week_date.year - current_fy.start_date.year) * 12 +
+                                         (iso_week_date.month - current_fy.start_date.month))
+            week_quarter = min(4, max(1, (months_from_start_for_week // 3) + 1))
+
+            # Calculate quarter start date
+            quarter_start_months = {1: 0, 2: 3, 3: 6, 4: 9}
+            months_to_add = quarter_start_months[week_quarter]
+            quarter_start_date = current_fy.start_date.replace(day=1)
+            quarter_start_month = current_fy.start_date.month + months_to_add
+            quarter_start_year = current_fy.start_date.year + (quarter_start_month - 1) // 12
+            quarter_start_month = ((quarter_start_month - 1) % 12) + 1
+            quarter_start_date = quarter_start_date.replace(year=quarter_start_year, month=quarter_start_month, day=1)
+
+            # Calculate week number within quarter
+            days_into_quarter = (iso_week_date - quarter_start_date).days
+            quarter_relative_week = max(1, (days_into_quarter // 7) + 1)
+
+            # Get quarterly plan for the appropriate quarter
+            quarterly_plan = QuarterlyPlan.objects.filter(
+                team=meeting.team,
+                financial_year=current_fy,
+                quarter=str(week_quarter)
+            ).first()
+
+            if not quarterly_plan:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'No quarterly plan found for Quarter {week_quarter}'
+                }, status=400)
+
+            # Get weekly GPI parameters
+            weekly_parameters = quarterly_plan.gpi_parameters.filter(
+                tracking_type='weekly'
+            ).select_related('responsible_user').prefetch_related('milestones', 'weekly_records')
+
+            gpi_data = []
+
+            for param in weekly_parameters:
+                # Calculate last week number (quarter-relative)
+                last_week = quarter_relative_week - 1 if quarter_relative_week > 1 else 13
+
+                # Get budget from milestones
+                last_week_milestone = param.milestones.filter(period_number=last_week).first()
+                current_week_milestone = param.milestones.filter(period_number=quarter_relative_week).first()
+
+                # Get actual data from weekly records
+                last_week_record = param.weekly_records.filter(week_number=last_week).first()
+                current_week_record = param.weekly_records.filter(week_number=quarter_relative_week).first()
+
+                gpi_data.append({
+                    'id': param.id,
+                    'name': param.name,
+                    'indicator_type': param.get_indicator_type_display(),
+                    'unit_of_measure': param.unit_of_measure or '',
+                    'last_week_budget': float(last_week_milestone.budget_value) if last_week_milestone else 0,
+                    'last_week_goal': float(last_week_record.week_goal) if last_week_record and last_week_record.week_goal else '',
+                    'last_week_actual': float(last_week_record.week_actual) if last_week_record and last_week_record.week_actual else '',
+                    'current_week_budget': float(current_week_milestone.budget_value) if current_week_milestone else 0,
+                    'current_week_goal': float(current_week_record.week_goal) if current_week_record and current_week_record.week_goal else '',
+                    'comments': current_week_record.explanation if current_week_record else '',
+                    'assigned_to': param.responsible_user.get_full_name() if param.responsible_user else 'Unassigned',
+                    'last_week_number': last_week,
+                    'current_week_number': quarter_relative_week,
+                })
+
+            return JsonResponse({
+                'success': True,
+                'data': gpi_data,
+                'week_number': iso_week_number,  # Return the ISO week for frontend reference
+                'quarter_week': quarter_relative_week  # Also return quarter-relative week for debugging
+            })
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+
+class GPIMonthlyDataView(LoginRequiredMixin, View):
+    """API endpoint to load monthly GPI data for a specific month (from dropdown: 1-6 range)"""
+
+    def get(self, request, pk):
+        from plans.models import GPIParameter, GPIMilestone, GPIMonthlyRecord, FinancialYear, QuarterlyPlan
+
+        meeting = get_object_or_404(ReviewMeeting, pk=pk)
+        dropdown_month = int(request.GET.get('month', 1))  # This is 1-6 from the dropdown
+
+        try:
+            review_date = meeting.review_date.date()
+
+            # Get current financial year
+            current_fy = FinancialYear.objects.filter(
+                start_date__lte=review_date,
+                end_date__gte=review_date
+            ).first()
+
+            if not current_fy:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No financial year found'
+                }, status=400)
+
+            # Determine current quarter based on review date
+            months_from_start = ((review_date.year - current_fy.start_date.year) * 12 +
+                                (review_date.month - current_fy.start_date.month))
+            current_quarter = min(4, max(1, (months_from_start // 3) + 1))
+
+            # Determine which quarter the dropdown month belongs to
+            # Months 1-3 are from previous quarter, months 4-6 are from current quarter
+            if dropdown_month <= 3:
+                # Previous quarter
+                target_quarter = current_quarter - 1 if current_quarter > 1 else 4
+                quarter_relative_month = dropdown_month
+            else:
+                # Current quarter
+                target_quarter = current_quarter
+                quarter_relative_month = dropdown_month - 3
+
+            # Get quarterly plan for the target quarter
+            quarterly_plan = QuarterlyPlan.objects.filter(
+                team=meeting.team,
+                financial_year=current_fy,
+                quarter=str(target_quarter)
+            ).first()
+
+            if not quarterly_plan:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'No quarterly plan found for Quarter {target_quarter}'
+                }, status=400)
+
+            # Get monthly GPI parameters
+            monthly_parameters = quarterly_plan.gpi_parameters.filter(
+                tracking_type='monthly'
+            ).select_related('responsible_user').prefetch_related('milestones', 'monthly_records')
+
+            gpi_data = []
+
+            for param in monthly_parameters:
+                # Calculate last month number (quarter-relative)
+                last_month = quarter_relative_month - 1 if quarter_relative_month > 1 else 3
+
+                # Get budget from milestones
+                last_month_milestone = param.milestones.filter(period_number=last_month).first()
+                current_month_milestone = param.milestones.filter(period_number=quarter_relative_month).first()
+
+                # Get actual data from monthly records
+                last_month_record = param.monthly_records.filter(month_number=last_month).first()
+                current_month_record = param.monthly_records.filter(month_number=quarter_relative_month).first()
+
+                gpi_data.append({
+                    'id': param.id,
+                    'name': param.name,
+                    'indicator_type': param.get_indicator_type_display(),
+                    'unit_of_measure': param.unit_of_measure or '',
+                    'last_month_budget': float(last_month_milestone.budget_value) if last_month_milestone else 0,
+                    'last_month_goal': float(last_month_record.month_goal) if last_month_record and last_month_record.month_goal else '',
+                    'last_month_actual': float(last_month_record.month_actual) if last_month_record and last_month_record.month_actual else '',
+                    'current_month_budget': float(current_month_milestone.budget_value) if current_month_milestone else 0,
+                    'current_month_goal': float(current_month_record.month_goal) if current_month_record and current_month_record.month_goal else '',
+                    'comments': current_month_record.explanation if current_month_record else '',
+                    'last_month_number': last_month,
+                    'current_month_number': quarter_relative_month,
+                })
+
+            return JsonResponse({
+                'success': True,
+                'data': gpi_data,
+                'month_number': dropdown_month,  # Return the dropdown month for frontend reference
+                'quarter_month': quarter_relative_month  # Also return quarter-relative month for debugging
+            })
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+
+class GPIQuarterlyDataView(LoginRequiredMixin, View):
+    """API endpoint to load quarterly GPI data with cumulation logic"""
+
+    def get(self, request, pk):
+        try:
+            review = get_object_or_404(Review, pk=pk)
+            review_date = review.review_date
+
+            # Get current financial year and quarter
+            current_fy = FinancialYear.objects.filter(
+                start_date__lte=review_date,
+                end_date__gte=review_date
+            ).first()
+
+            if not current_fy:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No financial year found for review date'
+                }, status=404)
+
+            # Calculate current quarter
+            months_from_fy_start = ((review_date.year - current_fy.start_date.year) * 12 +
+                                    (review_date.month - current_fy.start_date.month))
+            current_quarter = min(4, max(1, (months_from_fy_start // 3) + 1))
+
+            # Get quarterly plan for the current quarter
+            quarterly_plan = QuarterlyPlan.objects.filter(
+                financial_year=current_fy,
+                quarter=current_quarter,
+                team=review.team
+            ).first()
+
+            if not quarterly_plan:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'No quarterly plan found for Q{current_quarter}'
+                }, status=404)
+
+            # Get all GPI parameters from the quarterly plan
+            gpi_params = quarterly_plan.gpi_parameters.all()
+            gpi_data = []
+
+            for param in gpi_params:
+                # Get quarterly budget (sum of all milestones for the quarter)
+                quarterly_budget = param.milestones.aggregate(total=Sum('budget_value'))['total'] or 0
+
+                # Get quarterly goal based on cumulation type
+                quarterly_goal = self._calculate_cumulated_value(param, 'goal', current_quarter)
+
+                # Get quarterly actuals based on cumulation type
+                quarterly_actuals = self._calculate_cumulated_value(param, 'actual', current_quarter)
+
+                gpi_data.append({
+                    'id': param.id,
+                    'name': param.name,
+                    'indicator_type': param.get_indicator_type_display(),
+                    'uom': param.unit_of_measure or '',
+                    'quarterly_budget': float(quarterly_budget) if quarterly_budget else None,
+                    'quarterly_goal': quarterly_goal,
+                    'quarterly_actuals': quarterly_actuals,
+                })
+
+            return JsonResponse({
+                'success': True,
+                'gpis': gpi_data,
+                'quarter': current_quarter
+            })
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+    def _calculate_cumulated_value(self, param, value_type, quarter):
+        """Calculate cumulated value based on tracking type and cumulation type"""
+        cumulation_type = param.cumulation_type
+
+        if param.tracking_type == 'weekly':
+            # Get all weekly records for the quarter (weeks 1-13)
+            if value_type == 'goal':
+                records = param.weekly_records.filter(week_number__lte=13)
+                values = [r.week_goal for r in records if r.week_goal is not None]
+            else:  # actual
+                records = param.weekly_records.filter(week_number__lte=13)
+                values = [r.week_actual for r in records if r.week_actual is not None]
+        else:  # monthly
+            # Get all monthly records for the quarter (months 1-3)
+            if value_type == 'goal':
+                records = param.monthly_records.filter(month_number__lte=3)
+                values = [r.month_goal for r in records if r.month_goal is not None]
+            else:  # actual
+                records = param.monthly_records.filter(month_number__lte=3)
+                values = [r.month_actual for r in records if r.month_actual is not None]
+
+        if not values:
+            return None
+
+        # Apply cumulation logic
+        if cumulation_type == 'sum':
+            return float(sum(values))
+        elif cumulation_type == 'average':
+            return float(sum(values) / len(values))
+        elif cumulation_type == 'recent':
+            return float(values[-1])  # Last value
+        elif cumulation_type == 'max':
+            return float(max(values))
+        elif cumulation_type == 'min':
+            return float(min(values))
+        else:
+            return float(sum(values))  # Default to sum
+
+
+class GPIAnnualDataView(LoginRequiredMixin, View):
+    """API endpoint to load annual GPI data with cumulation logic for all quarters"""
+
+    def get(self, request, pk):
+        try:
+            review = get_object_or_404(Review, pk=pk)
+            review_date = review.review_date
+
+            # Get current financial year
+            current_fy = FinancialYear.objects.filter(
+                start_date__lte=review_date,
+                end_date__gte=review_date
+            ).first()
+
+            if not current_fy:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No financial year found for review date'
+                }, status=404)
+
+            # Get annual plan
+            annual_plan = AnnualPlan.objects.filter(
+                financial_year=current_fy,
+                team=review.team
+            ).first()
+
+            if not annual_plan:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No annual plan found'
+                }, status=404)
+
+            # Get all GPI parameters from annual plan
+            gpi_params = annual_plan.gpi_parameters.all()
+            gpi_data = []
+
+            for param in gpi_params:
+                # Get annual goal (from annual plan parameter)
+                annual_goal = float(param.annual_goal) if param.annual_goal else None
+
+                # Calculate annual actuals by aggregating all quarters
+                annual_actuals = self._calculate_annual_cumulated_value(param, 'actual', current_fy, review.team)
+
+                # Get quarterly data for all 4 quarters
+                q1_data = self._get_quarter_data(param, 1, current_fy, review.team)
+                q2_data = self._get_quarter_data(param, 2, current_fy, review.team)
+                q3_data = self._get_quarter_data(param, 3, current_fy, review.team)
+                q4_data = self._get_quarter_data(param, 4, current_fy, review.team)
+
+                gpi_data.append({
+                    'id': param.id,
+                    'name': param.name,
+                    'indicator_type': param.get_indicator_type_display(),
+                    'uom': param.unit_of_measure or '',
+                    'annual_goal': annual_goal,
+                    'annual_actuals': annual_actuals,
+                    'q1_budget': q1_data['budget'],
+                    'q1_goal': q1_data['goal'],
+                    'q1_actuals': q1_data['actuals'],
+                    'q2_budget': q2_data['budget'],
+                    'q2_goal': q2_data['goal'],
+                    'q2_actuals': q2_data['actuals'],
+                    'q3_budget': q3_data['budget'],
+                    'q3_goal': q3_data['goal'],
+                    'q3_actuals': q3_data['actuals'],
+                    'q4_budget': q4_data['budget'],
+                    'q4_goal': q4_data['goal'],
+                    'q4_actuals': q4_data['actuals'],
+                })
+
+            return JsonResponse({
+                'success': True,
+                'gpis': gpi_data
+            })
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+    def _get_quarter_data(self, param, quarter_num, fy, team):
+        """Get budget, goal, and actuals for a specific quarter"""
+        # Get quarterly plan
+        quarterly_plan = QuarterlyPlan.objects.filter(
+            financial_year=fy,
+            quarter=quarter_num,
+            team=team
+        ).first()
+
+        if not quarterly_plan:
+            return {'budget': None, 'goal': None, 'actuals': None}
+
+        # Find the GPI parameter in this quarterly plan by matching name
+        quarterly_param = quarterly_plan.gpi_parameters.filter(name=param.name).first()
+
+        if not quarterly_param:
+            return {'budget': None, 'goal': None, 'actuals': None}
+
+        # Get quarterly budget (sum of all milestones)
+        quarterly_budget = quarterly_param.milestones.aggregate(total=Sum('budget_value'))['total'] or 0
+
+        # Get quarterly goal and actuals based on cumulation type
+        quarterly_goal = self._calculate_quarter_cumulated_value(quarterly_param, 'goal')
+        quarterly_actuals = self._calculate_quarter_cumulated_value(quarterly_param, 'actual')
+
+        return {
+            'budget': float(quarterly_budget) if quarterly_budget else None,
+            'goal': quarterly_goal,
+            'actuals': quarterly_actuals
+        }
+
+    def _calculate_quarter_cumulated_value(self, param, value_type):
+        """Calculate cumulated value for a quarter based on tracking type and cumulation type"""
+        cumulation_type = param.cumulation_type
+
+        if param.tracking_type == 'weekly':
+            # Get all weekly records for the quarter (weeks 1-13)
+            if value_type == 'goal':
+                records = param.weekly_records.filter(week_number__lte=13)
+                values = [r.week_goal for r in records if r.week_goal is not None]
+            else:  # actual
+                records = param.weekly_records.filter(week_number__lte=13)
+                values = [r.week_actual for r in records if r.week_actual is not None]
+        else:  # monthly
+            # Get all monthly records for the quarter (months 1-3)
+            if value_type == 'goal':
+                records = param.monthly_records.filter(month_number__lte=3)
+                values = [r.month_goal for r in records if r.month_goal is not None]
+            else:  # actual
+                records = param.monthly_records.filter(month_number__lte=3)
+                values = [r.month_actual for r in records if r.month_actual is not None]
+
+        if not values:
+            return None
+
+        # Apply cumulation logic
+        if cumulation_type == 'sum':
+            return float(sum(values))
+        elif cumulation_type == 'average':
+            return float(sum(values) / len(values))
+        elif cumulation_type == 'recent':
+            return float(values[-1])  # Last value
+        elif cumulation_type == 'max':
+            return float(max(values))
+        elif cumulation_type == 'min':
+            return float(min(values))
+        else:
+            return float(sum(values))  # Default to sum
+
+    def _calculate_annual_cumulated_value(self, param, value_type, fy, team):
+        """Calculate annual cumulated value by aggregating all quarters"""
+        quarterly_values = []
+
+        # Get data from all 4 quarters
+        for quarter_num in range(1, 5):
+            quarterly_plan = QuarterlyPlan.objects.filter(
+                financial_year=fy,
+                quarter=quarter_num,
+                team=team
+            ).first()
+
+            if quarterly_plan:
+                quarterly_param = quarterly_plan.gpi_parameters.filter(name=param.name).first()
+                if quarterly_param:
+                    quarter_value = self._calculate_quarter_cumulated_value(quarterly_param, value_type)
+                    if quarter_value is not None:
+                        quarterly_values.append(quarter_value)
+
+        if not quarterly_values:
+            return None
+
+        # Apply cumulation logic at annual level
+        cumulation_type = param.cumulation_type
+
+        if cumulation_type == 'sum':
+            return float(sum(quarterly_values))
+        elif cumulation_type == 'average':
+            return float(sum(quarterly_values) / len(quarterly_values))
+        elif cumulation_type == 'recent':
+            return float(quarterly_values[-1])  # Last quarter value
+        elif cumulation_type == 'max':
+            return float(max(quarterly_values))
+        elif cumulation_type == 'min':
+            return float(min(quarterly_values))
+        else:
+            return float(sum(quarterly_values))  # Default to sum
+
+
+class PPIDetailsView(LoginRequiredMixin, TemplateView):
+    """PPI Details popup with weekly (W1-W13) or monthly (M1-M3) cells"""
+    template_name = 'reviews/popups/ppi_details.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        project_id = self.request.GET.get('project_id')
+        tracking_type = self.request.GET.get('tracking_type', 'weekly')
+        quarter_number = int(self.request.GET.get('quarter', 1))
+
+        from improve.models import ImprovementProject
+        from implement.models import Action
+
+        project = get_object_or_404(ImprovementProject, pk=project_id)
+
+        # Get all tasks (actions) for this project
+        tasks = Action.objects.filter(improvement_project=project).order_by('id')
+
+        # Prepare weekly or monthly data structure
+        if tracking_type == 'weekly':
+            periods = list(range(1, 14))  # W1 to W13
+            period_label = 'W'
+        else:  # monthly
+            periods = list(range(1, 4))  # M1 to M3
+            period_label = 'M'
+
+        # Group tasks by period
+        tasks_by_period = {}
+        for period in periods:
+            period_tasks = []
+            for task in tasks:
+                # Check if task is scheduled for this period
+                if tracking_type == 'weekly' and hasattr(task, 'week_number') and task.week_number == period:
+                    period_tasks.append(task)
+                elif tracking_type == 'monthly' and hasattr(task, 'month_number') and task.month_number == period:
+                    period_tasks.append(task)
+
+            tasks_by_period[period] = period_tasks
+
+        context.update({
+            'project': project,
+            'tracking_type': tracking_type,
+            'periods': periods,
+            'period_label': period_label,
+            'tasks_by_period': tasks_by_period,
+            'quarter_number': quarter_number,
+            'meeting_id': kwargs['pk']
+        })
+
+        return context
+
+
+class UpdatePPIStatusView(LoginRequiredMixin, View):
+    """Update PPI project status (complete, on-hold, dropped, resume, active)"""
+
+    def post(self, request, pk):
+        try:
+            import json
+            data = json.loads(request.body)
+            project_id = data.get('project_id')
+            action = data.get('action')
+
+            from improve.models import ImprovementProject
+            from implement.models import NumbersTracking
+
+            project = get_object_or_404(ImprovementProject, pk=project_id)
+
+            # Get the latest NumbersTracking record or create one
+            latest_tracking = NumbersTracking.objects.filter(
+                improvement_project=project
+            ).order_by('-week_number', '-id').first()
+
+            # Handle different actions
+            if action == 'completed':
+                # Mark as completed
+                if latest_tracking:
+                    # Save previous status before updating
+                    latest_tracking.previous_status = latest_tracking.status
+                    latest_tracking.status = 'completed'
+                    latest_tracking.save()
+                else:
+                    # Create new tracking record
+                    NumbersTracking.objects.create(
+                        improvement_project=project,
+                        week_number=1,
+                        status='completed'
+                    )
+
+            elif action == 'undo_complete':
+                # Revert to previous status or blank
+                if latest_tracking:
+                    if latest_tracking.previous_status:
+                        latest_tracking.status = latest_tracking.previous_status
+                        latest_tracking.previous_status = None
+                    else:
+                        latest_tracking.status = ''
+                    latest_tracking.save()
+
+            elif action == 'on_hold':
+                # Mark as on hold
+                if latest_tracking:
+                    latest_tracking.previous_status = latest_tracking.status
+                    latest_tracking.status = 'on_hold'
+                    latest_tracking.save()
+                else:
+                    NumbersTracking.objects.create(
+                        improvement_project=project,
+                        week_number=1,
+                        status='on_hold'
+                    )
+
+            elif action == 'resume':
+                # Resume from on hold
+                if latest_tracking:
+                    if latest_tracking.previous_status:
+                        latest_tracking.status = latest_tracking.previous_status
+                        latest_tracking.previous_status = None
+                    else:
+                        latest_tracking.status = ''
+                    latest_tracking.save()
+
+            elif action == 'dropped':
+                # Mark as dropped
+                if latest_tracking:
+                    latest_tracking.previous_status = latest_tracking.status
+                    latest_tracking.status = 'dropped'
+                    latest_tracking.save()
+                else:
+                    NumbersTracking.objects.create(
+                        improvement_project=project,
+                        week_number=1,
+                        status='dropped'
+                    )
+
+            elif action == 'active':
+                # Mark as active (from dropped)
+                if latest_tracking:
+                    if latest_tracking.previous_status:
+                        latest_tracking.status = latest_tracking.previous_status
+                        latest_tracking.previous_status = None
+                    else:
+                        latest_tracking.status = ''
+                    latest_tracking.save()
+
+            return JsonResponse({'success': True})
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             return JsonResponse({
                 'success': False,
                 'error': str(e)

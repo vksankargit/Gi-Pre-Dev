@@ -37,10 +37,33 @@ urlpatterns = [
     path('<int:pk>/fpi-details/', views.FPIDetailsView.as_view(), name='fpi_details'),
     path('<int:pk>/gpi-details/', views.GPIDetailsView.as_view(), name='gpi_details'),
 
+    # GPI data loading endpoints
+    path('<int:pk>/gpi-weekly-data/', views.GPIWeeklyDataView.as_view(), name='gpi_weekly_data'),
+    path('<int:pk>/gpi-monthly-data/', views.GPIMonthlyDataView.as_view(), name='gpi_monthly_data'),
+    path('<int:pk>/gpi-quarterly-data/', views.GPIQuarterlyDataView.as_view(), name='gpi_quarterly_data'),
+    path('<int:pk>/gpi-annual-data/', views.GPIAnnualDataView.as_view(), name='gpi_annual_data'),
+
+    # PPI endpoints
+    path('<int:pk>/ppi-details/', views.PPIDetailsView.as_view(), name='ppi_details'),
+    path('<int:pk>/update-ppi-status/', views.UpdatePPIStatusView.as_view(), name='update_ppi_status'),
+
     # Issue status updates
     path('<int:pk>/update-issue-status/', views.UpdateIssueStatusView.as_view(), name='update_issue_status'),
     path('<int:pk>/revert-issue-status/', views.RevertIssueStatusView.as_view(), name='revert_issue_status'),
 
     # Action deletion
     path('<int:pk>/delete-action/', views.DeleteActionView.as_view(), name='delete_action'),
+
+    # Action status changes (Commitments tab)
+    path('action/mark-done/', views.mark_action_done, name='mark_action_done'),
+    path('action/mark-complete/', views.mark_action_complete, name='mark_action_complete'),
+    path('action/undo-status/', views.undo_action_status, name='undo_action_status'),
+    path('action/mark-on-hold/', views.mark_action_on_hold, name='mark_action_on_hold'),
+    path('action/resume/', views.resume_action, name='resume_action'),
+    path('action/drop/', views.drop_action, name='drop_action'),
+    path('action/mark-active/', views.mark_action_active, name='mark_action_active'),
+
+    # Meeting finalization and PDF
+    path('<int:pk>/finalize/', views.FinalizeMeetingView.as_view(), name='finalize_meeting'),
+    path('<int:pk>/download-pdf/', views.DownloadPDFView.as_view(), name='download_pdf'),
 ]

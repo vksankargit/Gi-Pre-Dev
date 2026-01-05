@@ -17,9 +17,5 @@ class Migration(migrations.Migration):
             name='gpi_parameter',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='actions', to='plans.gpiparameter'),
         ),
-        migrations.AddField(
-            model_name='action',
-            name='fpi_parameter',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='actions', to='plans.fpiparameter'),
-        ),
+        # FPI parameter field removed - not needed anymore
     ]

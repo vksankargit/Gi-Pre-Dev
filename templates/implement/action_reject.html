@@ -32,41 +32,65 @@
                     <small class="text-muted">Created by: {{ action.created_by.get_full_name }} | Due: {{ action.original_due_date|date:"M d, Y" }}</small>
                 </div>
 
+                {% if not can_reject %}
+                <div class="alert alert-danger">
+                    <h6><i class="fas fa-times-circle me-2"></i>Cannot Reject Action</h6>
+                    <p class="mb-0">
+                        {% if action.sub_actions.exists %}
+                        This action cannot be rejected because it has sub-actions. Please complete or remove all sub-actions first.
+                        {% else %}
+                        This action can only be rejected if its status is Done or Completed.
+                        {% endif %}
+                    </p>
+                </div>
+                {% else %}
+
                 <form method="post">
                     {% csrf_token %}
 
                     <div class="mb-3">
-                        <label for="rejection_reason" class="form-label">Reason for Rejection <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="rejection_reason" name="rejection_reason" rows="4" required placeholder="Please provide a detailed reason for rejecting this action..."></textarea>
-                        <div class="form-text">This reason will be visible to the action creator and other stakeholders.</div>
+                        <label for="rejection_reason" class="form-label">
+                            {% if action.rejection_reason %}
+                            Edit Rejection Reason <span class="text-danger">*</span>
+                            {% else %}
+                            Reason for Rejection <span class="text-danger">*</span>
+                            {% endif %}
+                        </label>
+                        <textarea class="form-control" id="rejection_reason" name="rejection_reason" rows="4" required placeholder="Please provide a detailed reason for rejecting this action...">{{ action.rejection_reason }}</textarea>
+                        <div class="form-text">
+                            {% if action.rejection_reason %}
+                            You are editing the existing rejection reason.
+                            {% else %}
+                            This reason will be visible to the action creator and other stakeholders.
+                            {% endif %}
+                        </div>
                     </div>
 
                     <div class="alert alert-info">
                         <h6><i class="fas fa-info-circle me-2"></i>What happens when you reject this action?</h6>
                         <ul class="mb-0">
                             <li>The action status will be changed to "Rejected"</li>
-                            <li>The action creator will be notified via email</li>
-                            <li>The action will appear in rejected actions reports</li>
-                            <li>You can provide feedback for improvement</li>
+                            <li>The action will be reopened (no longer marked as complete)</li>
+                            <li>The rejection reason will be saved and visible in action history</li>
+                            <li>You can edit the rejection reason later by clicking Mark Reject again</li>
                         </ul>
-                    </div>
-
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" id="notify_creator" name="notify_creator" checked>
-                        <label class="form-check-label" for="notify_creator">
-                            Send notification email to action creator
-                        </label>
                     </div>
 
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-danger">
-                            <i class="fas fa-times-circle me-2"></i>Reject Action
+                            <i class="fas fa-times-circle me-2"></i>
+                            {% if action.rejection_reason %}
+                            Update Rejection
+                            {% else %}
+                            Reject Action
+                            {% endif %}
                         </button>
                         <a href="{% url 'implement:dashboard' %}#my-todo" class="btn btn-secondary">
                             <i class="fas fa-arrow-left me-2"></i>Cancel
                         </a>
                     </div>
                 </form>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -92,7 +116,7 @@
                         </span>
                     </dd>
 
-                    <dt class="col-sm-5">Team:</dt>
+                    <dt class="col-sm-5">Team Meeting:</dt>
                     <dd class="col-sm-7">{{ action.team.name }}</dd>
 
                     <dt class="col-sm-5">Assigned To:</dt>

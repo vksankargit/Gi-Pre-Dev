@@ -86,9 +86,9 @@
                 <div class="row mb-4">
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label class="form-label">Team</label>
+                            <label class="form-label">Team Meeting</label>
                             <select class="form-control" id="teamSelect">
-                                <option value="">All Teams</option>
+                                <option value="">All Team Meetings</option>
                                 {% for team in user_teams %}
                                 <option value="{{ team.id }}">{{ team.name }}</option>
                                 {% endfor %}

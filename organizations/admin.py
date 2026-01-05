@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Organization, OrganizationCoordinator, Team, TeamMember
+from .models import Organization, OrganizationCoordinator, Team, TeamMember, TeamMeetingType
 
 
 @admin.register(Organization)
@@ -18,10 +18,18 @@ class OrganizationCoordinatorAdmin(admin.ModelAdmin):
     ordering = ('organization', 'coordinator')
 
 
+@admin.register(TeamMeetingType)
+class TeamMeetingTypeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'organization', 'is_active', 'created_at')
+    list_filter = ('is_active', 'organization')
+    search_fields = ('name', 'organization__name')
+    ordering = ('organization', 'name')
+
+
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ('name', 'organization', 'manager', 'is_active', 'created_at')
-    list_filter = ('is_active', 'created_at', 'organization')
+    list_display = ('name', 'organization', 'meeting_type', 'cadence', 'manager', 'is_active', 'created_at')
+    list_filter = ('is_active', 'cadence', 'created_at', 'organization', 'meeting_type')
     search_fields = ('name', 'organization__name', 'manager__username')
     ordering = ('organization', 'name')
 

@@ -97,7 +97,6 @@ class Migration(migrations.Migration):
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('assigned_to', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
-                ('fpi_parameter', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='plans.fpiparameter')),
                 ('gpi_parameter', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='plans.gpiparameter')),
                 ('team', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='organizations.team')),
             ],

@@ -132,7 +132,7 @@
                         </span>
                     </dd>
 
-                    <dt class="col-sm-5">Team:</dt>
+                    <dt class="col-sm-5">Team Meeting:</dt>
                     <dd class="col-sm-7">{{ parent_action.team.name }}</dd>
 
                     <dt class="col-sm-5">Assigned To:</dt>
@@ -235,7 +235,7 @@
                     <div class="mb-3">
                         <label for="subActionTeam" class="form-label">Team <span class="text-danger">*</span></label>
                         <select class="form-control" id="subActionTeam" name="team" required>
-                            <option value="">Select Team</option>
+                            <option value="">Select Team Meeting</option>
                             {% for team in available_teams %}
                             <option value="{{ team.id }}">{{ team.name }}</option>
                             {% endfor %}
@@ -245,7 +245,7 @@
                     <div class="mb-3">
                         <label for="subActionAssignedTo" class="form-label">Assigned To <span class="text-danger">*</span></label>
                         <select class="form-control" id="subActionAssignedTo" name="assigned_to" required disabled>
-                            <option value="">Select Team First</option>
+                            <option value="">Select Team Meeting First</option>
                         </select>
                     </div>
 
@@ -515,7 +515,7 @@ function loadSubActionTeamMembers() {
     memberSelect.disabled = true;
 
     if (!teamId) {
-        memberSelect.innerHTML = '<option value="">Select Team First</option>';
+        memberSelect.innerHTML = '<option value="">Select Team Meeting First</option>';
         return;
     }
 

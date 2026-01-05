@@ -7,9 +7,11 @@
 <div class="style-3">
 <div class="page-header d-flex justify-content-between align-items-center">
     <h1><i class="fas fa-search me-2"></i>Review</h1>
+    {% if is_manager %}
     <a href="{% url 'reviews:new_review' %}" class="btn btn-primary">
         <i class="fas fa-plus me-2"></i>New Review
     </a>
+    {% endif %}
 </div>
 
 <!-- Filter Section as per PRD -->
@@ -22,27 +24,24 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="GET" class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label">Team</label>
-                        <select name="team" class="form-select">
-                            <option value="">All Teams</option>
+                <form method="GET" class="row g-3" id="filterForm">
+                    <div class="col-md-4">
+                        <label class="form-label">Team Meeting</label>
+                        <select name="team" id="team_filter" class="form-select">
+                            <option value="">All Team Meetings</option>
                             {% for team in user_teams %}
-                            <option value="{{ team.id }}" {% if current_filters.team == team.id|stringformat:"s" %}selected{% endif %}>
+                            <option value="{{ team.id }}"
+                                    data-cadence="{{ team.cadence }}"
+                                    {% if current_filters.team == team.id|stringformat:"s" %}selected{% endif %}>
                                 {{ team.name }}
                             </option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Review Type</label>
-                        <select name="review_type" class="form-select">
-                            <option value="">All Types</option>
-                            {% for type_key, type_name in review_types %}
-                            <option value="{{ type_key }}" {% if current_filters.review_type == type_key %}selected{% endif %}>
-                                {{ type_name }}
-                            </option>
-                            {% endfor %}
+                        <label class="form-label">Meeting Cadence</label>
+                        <select name="cadence" id="cadence_filter" class="form-select">
+                            <option value="">All Cadences</option>
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -56,7 +55,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label">&nbsp;</label>
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary">
@@ -88,11 +87,12 @@
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Team</th>
-                                    <th>Review Type</th>
+                                    <th>Team Meeting</th>
+                                    <th>Meeting Type</th>
+                                    <th>Meeting Cadence</th>
                                     <th>Review Date & Time</th>
+                                    <th>Week/Month</th>
                                     <th>Manager</th>
-                                    <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -106,15 +106,35 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <span class="badge bg-{% if meeting.review_type == 'daily' %}info{% elif meeting.review_type == 'weekly' %}warning{% else %}success{% endif %}">
-                                            {{ meeting.get_review_type_display }}
+                                        <span class="badge bg-secondary">
+                                            {{ meeting.team.meeting_type.name|default:"N/A" }}
                                         </span>
                                     </td>
                                     <td>
+                                        {% if meeting.is_adhoc %}
+                                            <span class="badge bg-warning text-dark">Ad-Hoc</span>
+                                        {% else %}
+                                            <span class="badge bg-{% if meeting.team.cadence == 'weekly' %}info{% elif meeting.team.cadence == 'monthly' %}primary{% elif meeting.team.cadence == 'quarterly' %}success{% else %}dark{% endif %}">
+                                                {{ meeting.team.get_cadence_display|default:"N/A" }}
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
                                         <div>
-                                            <strong>{{ meeting.review_date|date:"M d, Y" }}</strong><br>
+                                            <strong>{{ meeting.review_date|date:"d-M-Y" }}</strong><br>
                                             <small class="text-muted">{{ meeting.review_date|date:"g:i A" }}</small>
                                         </div>
+                                    </td>
+                                    <td>
+                                        {% if meeting.week_number %}
+                                            <span class="badge bg-light text-dark">Week {{ meeting.week_number }}</span>
+                                        {% elif meeting.month_number %}
+                                            <span class="badge bg-light text-dark">Month {{ meeting.month_number }}</span>
+                                        {% elif meeting.quarter_number %}
+                                            <span class="badge bg-light text-dark">Q{{ meeting.quarter_number }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center">
@@ -123,23 +143,24 @@
                                         </div>
                                     </td>
                                     <td>
-                                        {% now "Y-m-d H:i" as current_datetime %}
-                                        {% if meeting.review_date|date:"Y-m-d H:i" > current_datetime %}
-                                            <span class="badge bg-info">Scheduled</span>
-                                        {% else %}
-                                            <span class="badge bg-success">Completed</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
                                         <div class="btn-group btn-group-sm">
-                                            <a href="{% url 'reviews:meeting' meeting.pk %}" class="btn btn-outline-primary"
-                                               data-bs-toggle="tooltip" data-bs-placement="top" title="Edit/View Review Meeting">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
+                                            {% if meeting.finalized_at %}
+                                                <!-- If finalized, download PDF directly -->
+                                                <a href="{% url 'reviews:download_pdf' meeting.pk %}" class="btn btn-outline-primary"
+                                                   data-bs-toggle="tooltip" data-bs-placement="top" title="Download PDF">
+                                                    <i class="fas fa-file-pdf"></i> View PDF
+                                                </a>
+                                            {% else %}
+                                                <!-- If not finalized, go to meeting screen to conduct/edit -->
+                                                <a href="{% url 'reviews:meeting' meeting.pk %}" class="btn btn-outline-success"
+                                                   data-bs-toggle="tooltip" data-bs-placement="top" title="Conduct Review Meeting">
+                                                    <i class="fas fa-edit"></i> Conduct
+                                                </a>
+                                            {% endif %}
                                             <button type="button" class="btn btn-outline-info"
                                                     data-bs-toggle="modal" data-bs-target="#participantsModal{{ meeting.pk }}"
-                                                    data-bs-toggle="tooltip" data-bs-placement="top" title="View Participants">
-                                                <i class="fas fa-users"></i>
+                                                    title="View Participants">
+                                                <i class="fas fa-users"></i> Participants
                                             </button>
                                         </div>
                                     </td>
@@ -155,7 +176,7 @@
                         <ul class="pagination justify-content-center">
                             {% if page_obj.has_previous %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?{% if current_filters.team %}team={{ current_filters.team }}&{% endif %}{% if current_filters.review_type %}review_type={{ current_filters.review_type }}&{% endif %}{% if current_filters.month_year %}month_year={{ current_filters.month_year }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+                                    <a class="page-link" href="?{% if current_filters.team %}team={{ current_filters.team }}&{% endif %}{% if current_filters.cadence %}cadence={{ current_filters.cadence }}&{% endif %}{% if current_filters.month_year %}month_year={{ current_filters.month_year }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
                                 </li>
                             {% endif %}
 
@@ -166,14 +187,14 @@
                                     </li>
                                 {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                                     <li class="page-item">
-                                        <a class="page-link" href="?{% if current_filters.team %}team={{ current_filters.team }}&{% endif %}{% if current_filters.review_type %}review_type={{ current_filters.review_type }}&{% endif %}{% if current_filters.month_year %}month_year={{ current_filters.month_year }}&{% endif %}page={{ num }}">{{ num }}</a>
+                                        <a class="page-link" href="?{% if current_filters.team %}team={{ current_filters.team }}&{% endif %}{% if current_filters.cadence %}cadence={{ current_filters.cadence }}&{% endif %}{% if current_filters.month_year %}month_year={{ current_filters.month_year }}&{% endif %}page={{ num }}">{{ num }}</a>
                                     </li>
                                 {% endif %}
                             {% endfor %}
 
                             {% if page_obj.has_next %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?{% if current_filters.team %}team={{ current_filters.team }}&{% endif %}{% if current_filters.review_type %}review_type={{ current_filters.review_type }}&{% endif %}{% if current_filters.month_year %}month_year={{ current_filters.month_year }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+                                    <a class="page-link" href="?{% if current_filters.team %}team={{ current_filters.team }}&{% endif %}{% if current_filters.cadence %}cadence={{ current_filters.cadence }}&{% endif %}{% if current_filters.month_year %}month_year={{ current_filters.month_year }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
                                 </li>
                             {% endif %}
                         </ul>
@@ -185,15 +206,23 @@
                         <i class="fas fa-calendar-times fa-4x text-muted mb-3"></i>
                         <h5 class="text-muted mb-3">No Review Meetings Found</h5>
                         <p class="text-muted mb-4">
-                            {% if current_filters.team or current_filters.review_type or current_filters.month_year %}
-                                No meetings found matching your filter criteria. Try adjusting your filters or create a new review meeting.
+                            {% if current_filters.team or current_filters.cadence or current_filters.month_year %}
+                                No meetings found matching your filter criteria. Try adjusting your filters{% if is_manager %} or create a new review meeting{% endif %}.
+                            {% elif user_teams %}
+                                {% if is_manager %}
+                                    Get started by creating your first review meeting.
+                                {% else %}
+                                    No review meetings have been scheduled yet for your teams.
+                                {% endif %}
                             {% else %}
-                                Get started by creating your first review meeting.
+                                You are not a member or manager of any team meeting. Please contact your administrator.
                             {% endif %}
                         </p>
+                        {% if is_manager %}
                         <a href="{% url 'reviews:new_review' %}" class="btn btn-primary">
                             <i class="fas fa-plus me-2"></i>Create First Review Meeting
                         </a>
+                        {% endif %}
                     </div>
                 {% endif %}
             </div>
@@ -251,6 +280,55 @@ document.addEventListener('DOMContentLoaded', function() {
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Handle dynamic cadence filter based on team selection
+    const teamFilter = document.getElementById('team_filter');
+    const cadenceFilter = document.getElementById('cadence_filter');
+    const currentCadence = '{{ current_filters.cadence }}';
+
+    // Cadence display names
+    const cadenceNames = {
+        'weekly': 'Weekly',
+        'monthly': 'Monthly',
+        'quarterly': 'Quarterly',
+        'annually': 'Annually'
+    };
+
+    function updateCadenceDropdown() {
+        const selectedOption = teamFilter.options[teamFilter.selectedIndex];
+        const teamCadence = selectedOption.getAttribute('data-cadence');
+
+        // Clear existing options
+        cadenceFilter.innerHTML = '<option value="">All Cadences</option>';
+
+        if (teamCadence && teamFilter.value) {
+            // Add team's cadence option
+            const cadenceOption = document.createElement('option');
+            cadenceOption.value = teamCadence;
+            cadenceOption.textContent = cadenceNames[teamCadence] || teamCadence;
+            cadenceFilter.appendChild(cadenceOption);
+
+            // Add Ad-Hoc option
+            const adhocOption = document.createElement('option');
+            adhocOption.value = 'adhoc';
+            adhocOption.textContent = 'Ad-Hoc';
+            cadenceFilter.appendChild(adhocOption);
+        }
+
+        // Restore selected value if exists
+        if (currentCadence) {
+            cadenceFilter.value = currentCadence;
+        }
+    }
+
+    // Initialize on page load
+    updateCadenceDropdown();
+
+    // Update when team selection changes
+    teamFilter.addEventListener('change', function() {
+        cadenceFilter.value = ''; // Reset cadence selection
+        updateCadenceDropdown();
     });
 });
 </script>

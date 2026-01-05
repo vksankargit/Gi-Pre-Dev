@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.db import models
 from django.db.models import Q
 from .models import ProjectStatus, Action, Issue, ActionHistory
-from plans.models import PPIProject, FPIParameter, GPIParameter, GPIMilestone, FPIMilestone, PPITask, FinancialYear
+from plans.models import PPIProject, GPIParameter, GPIMilestone, PPITask, FinancialYear
 from improve.models import ImprovementProject, ImprovementTask
 from organizations.models import Team, TeamMember
 from accounts.utils import get_effective_user
@@ -132,7 +132,8 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             review_type='weekly',
             quarter_number=current_quarter_num,
             financial_year=current_financial_year,
-            status='completed'
+            status='completed',
+            week_number__isnull=False  # Exclude None values
         ).order_by('-week_number')
 
         if weekly_reviews.exists():
@@ -189,7 +190,8 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             review_type='monthly',
             quarter_number=current_quarter_num,
             financial_year=current_financial_year,
-            status='completed'
+            status='completed',
+            month_number__isnull=False  # Exclude None values
         ).order_by('-month_number')
 
         if monthly_reviews.exists():
@@ -209,10 +211,10 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         # print(f"DEBUG Dashboard: User={user.username}, managed_teams={managed_team_ids}, member_teams={member_only_team_ids}")
 
         # Get Weekly Numbers from GPI Parameters - filter by current quarter
-        # Show ALL parameters from managed teams + only assigned parameters from member teams
+        # Show ALL parameters from teams where user is manager or member
         weekly_numbers = GPIParameter.objects.filter(
             Q(quarterly_plan__team_id__in=managed_team_ids) |  # All parameters from managed teams
-            Q(quarterly_plan__team_id__in=member_only_team_ids, responsible_user=user),  # Only assigned from member teams
+            Q(quarterly_plan__team_id__in=member_only_team_ids),  # All parameters from member teams
             tracking_type='weekly',
             quarterly_plan__quarter=current_quarter_num,
             quarterly_plan__financial_year=current_financial_year
@@ -223,25 +225,20 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         # for param in weekly_numbers:
         #     print(f"   - {param.name} (team: {param.quarterly_plan.team.name}, responsible: {param.responsible_user.username})")
 
-        # Get Monthly Numbers from FPI and GPI Parameters - filter by current quarter
-        # Show ALL parameters from managed teams + only assigned parameters from member teams
-        monthly_fpi = FPIParameter.objects.filter(
-            Q(quarterly_plan__team_id__in=managed_team_ids) |  # All parameters from managed teams
-            Q(quarterly_plan__team_id__in=member_only_team_ids, responsible_user=user),  # Only assigned from member teams
-            quarterly_plan__quarter=current_quarter_num,
-            quarterly_plan__financial_year=current_financial_year
-        ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user', 'assigned_team').prefetch_related('milestones') if current_financial_year else FPIParameter.objects.none()
+        # Get Monthly Numbers from GPI Parameters - filter by current quarter
+        # Show ALL parameters from teams where user is manager or member
+        # FPI has been removed from the system
 
         monthly_gpi = GPIParameter.objects.filter(
             Q(quarterly_plan__team_id__in=managed_team_ids) |  # All parameters from managed teams
-            Q(quarterly_plan__team_id__in=member_only_team_ids, responsible_user=user),  # Only assigned from member teams
+            Q(quarterly_plan__team_id__in=member_only_team_ids),  # All parameters from member teams
             tracking_type='monthly',
             quarterly_plan__quarter=current_quarter_num,
             quarterly_plan__financial_year=current_financial_year
         ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user', 'assigned_team').prefetch_related('milestones') if current_financial_year else GPIParameter.objects.none()
 
         # Convert querysets to lists and combine monthly numbers
-        monthly_numbers = list(monthly_fpi) + list(monthly_gpi)
+        monthly_numbers = list(monthly_gpi)
 
         # Get summary statistics (exclude carry_forward actions)
         # Show counts from user's teams OR where user is assigned/responsible
@@ -255,7 +252,7 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             ).count() + ImprovementProject.objects.filter(
                 Q(upload__team_id__in=user_teams) | Q(responsible_user=user)
             ).count(),
-            'pending_numbers': weekly_numbers.count() + monthly_fpi.count() + monthly_gpi.count(),
+            'pending_numbers': weekly_numbers.count() + monthly_gpi.count(),
             'today': today,
             'current_week_display': current_week_display,
             'current_month': current_month,
@@ -349,6 +346,14 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         # Add regular actions with a wrapper to normalize field names
         for action in regular_actions:
             action.action_type = 'regular'  # Mark as regular action
+            # Add next assignee in reassignment chain
+            action.next_assignee = action.get_next_assignee_in_chain(user)
+            # Add permission flags based on reassignment hierarchy
+            action.can_edit = action.can_edit_action(user)
+            action.can_reassign = action.can_reassign_action(user)
+            action.can_create_sub = action.can_create_sub_items(user)
+            # Add sub-action count for rejection validation
+            action.has_sub_actions = action.sub_actions.exists()
             combined_actions.append(action)
 
         # Add review actions with field mapping
@@ -402,7 +407,12 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             combined_actions.append(ReviewActionWrapper(review_action))
 
         # Sort all actions by due date (oldest first) and created date (newest first as tiebreaker)
-        combined_actions.sort(key=lambda x: (x.original_due_date, -x.id))
+        # Handle None values: put items with no due date at the end, and use 0 for None ids
+        from datetime import date
+        combined_actions.sort(key=lambda x: (
+            x.original_due_date if x.original_due_date is not None else date.max,
+            -(x.id if x.id is not None else 0)
+        ))
 
         actions = combined_actions
         # Actions are filtered and ready to be passed to template
@@ -494,6 +504,14 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                     gpi.last_week_goal = 0
                     gpi.last_week_actual = 0
 
+            # Add permission flags for the current user
+            gpi.is_manager = gpi.quarterly_plan.team_id in managed_team_ids
+            gpi.is_responsible_user = gpi.responsible_user == user
+            gpi.is_team_member = gpi.quarterly_plan.team_id in member_only_team_ids
+            gpi.can_edit_numbers = gpi.is_responsible_user and not gpi.is_locked
+            gpi.can_create_actions_issues = gpi.is_responsible_user and not gpi.is_locked
+            gpi.can_reassign = gpi.is_manager
+
             enhanced_weekly_numbers.append(gpi)
 
         # Enhance monthly numbers with budget data
@@ -507,22 +525,16 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
 
         enhanced_monthly_numbers = []
         for param in monthly_numbers:
-            # Check if this is FPI or GPI parameter
-            is_fpi = hasattr(param, 'main_head')
+            # FPI has been removed - only GPI parameters now
 
             # Handle quarter boundary: if current month is first month of quarter, last month is in previous quarter
             if current_month_in_quarter > 1:
                 # Last month is in the same quarter
                 last_quarter_month = current_month_in_quarter - 1
 
-                if is_fpi:
-                    # Get FPI milestone values from current quarter
-                    last_month_milestone = param.milestones.filter(month_number=last_quarter_month).first()
-                    current_month_milestone = param.milestones.filter(month_number=current_month_in_quarter).first()
-                else:
-                    # Get GPI milestone values (for monthly GPI, use period_number as month)
-                    last_month_milestone = param.milestones.filter(period_number=last_quarter_month).first()
-                    current_month_milestone = param.milestones.filter(period_number=current_month_in_quarter).first()
+                # Get GPI milestone values (for monthly GPI, use period_number as month)
+                last_month_milestone = param.milestones.filter(period_number=last_quarter_month).first()
+                current_month_milestone = param.milestones.filter(period_number=current_month_in_quarter).first()
 
                 param.last_month_budget = last_month_milestone.budget_value if last_month_milestone else 0
                 param.current_month_budget = current_month_milestone.budget_value if current_month_milestone else 0
@@ -549,57 +561,44 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
 
                 # Get parameter from previous quarter
                 if prev_financial_year:
-                    if is_fpi:
-                        # Get FPI parameter from previous quarter by matching main_head and sub_head
-                        prev_quarter_param = FPIParameter.objects.filter(
-                            quarterly_plan__team=param.quarterly_plan.team,
-                            quarterly_plan__quarter=previous_quarter_num,
-                            quarterly_plan__financial_year=prev_financial_year,
-                            main_head=param.main_head,
-                            sub_head=param.sub_head
-                        ).first()
+                    # Get GPI parameter from previous quarter by matching name
+                    prev_quarter_param = GPIParameter.objects.filter(
+                        quarterly_plan__team=param.quarterly_plan.team,
+                        quarterly_plan__quarter=previous_quarter_num,
+                        quarterly_plan__financial_year=prev_financial_year,
+                        name=param.name,
+                        tracking_type='monthly'
+                    ).first()
 
-                        if prev_quarter_param:
-                            # Get month 3 budget from previous quarter
-                            last_month_milestone = prev_quarter_param.milestones.filter(month_number=3).first()
-                            param.last_month_budget = last_month_milestone.budget_value if last_month_milestone else 0
+                    if prev_quarter_param:
+                        # Get month 3 budget from previous quarter (using period_number)
+                        last_month_milestone = prev_quarter_param.milestones.filter(period_number=3).first()
+                        param.last_month_budget = last_month_milestone.budget_value if last_month_milestone else 0
 
-                            # Get month 3 goal (current_month_plan) from previous quarter
-                            param.last_month_goal = prev_quarter_param.current_month_plan if prev_quarter_param.current_month_plan else 0
-                        else:
-                            param.last_month_budget = 0
-                            param.last_month_goal = 0
+                        # Get month 3 goal (current_month_plan) from previous quarter
+                        param.last_month_goal = prev_quarter_param.current_month_plan if prev_quarter_param.current_month_plan else 0
                     else:
-                        # Get GPI parameter from previous quarter by matching name
-                        prev_quarter_param = GPIParameter.objects.filter(
-                            quarterly_plan__team=param.quarterly_plan.team,
-                            quarterly_plan__quarter=previous_quarter_num,
-                            quarterly_plan__financial_year=prev_financial_year,
-                            name=param.name,
-                            tracking_type='monthly'
-                        ).first()
-
-                        if prev_quarter_param:
-                            # Get month 3 budget from previous quarter (using period_number)
-                            last_month_milestone = prev_quarter_param.milestones.filter(period_number=3).first()
-                            param.last_month_budget = last_month_milestone.budget_value if last_month_milestone else 0
-
-                            # Get month 3 goal (current_month_plan) from previous quarter
-                            param.last_month_goal = prev_quarter_param.current_month_plan if prev_quarter_param.current_month_plan else 0
-                        else:
-                            param.last_month_budget = 0
-                            param.last_month_goal = 0
+                        param.last_month_budget = 0
+                        param.last_month_goal = 0
                 else:
                     param.last_month_budget = 0
                     param.last_month_goal = 0
 
                 # Current month budget from current quarter (month 1)
-                if is_fpi:
-                    current_month_milestone = param.milestones.filter(month_number=1).first()
-                else:
-                    current_month_milestone = param.milestones.filter(period_number=1).first()
+                current_month_milestone = param.milestones.filter(period_number=1).first()
 
                 param.current_month_budget = current_month_milestone.budget_value if current_month_milestone else 0
+
+            # Set is_locked for monthly parameters
+            param.is_locked = is_month_locked
+
+            # Add permission flags for the current user
+            param.is_manager = param.quarterly_plan.team_id in managed_team_ids
+            param.is_responsible_user = param.responsible_user == user
+            param.is_team_member = param.quarterly_plan.team_id in member_only_team_ids
+            param.can_edit_numbers = param.is_responsible_user and not param.is_locked
+            param.can_create_actions_issues = param.is_responsible_user and not param.is_locked
+            param.can_reassign = param.is_manager
 
             enhanced_monthly_numbers.append(param)
 
@@ -611,25 +610,36 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
         quarter = f"Q{current_quarter_num}"
         current_quarter_display = f"{quarter} of FY {fy_start_year:02d}–{fy_end_year:02d}"
 
+        # Calculate previous quarter display
+        previous_quarter_num = current_quarter_num - 1 if current_quarter_num > 1 else 4
+        if current_quarter_num == 1:
+            # Previous quarter is Q4 of previous FY
+            prev_fy_start_year = fy_start_year - 1
+            prev_fy_end_year = fy_start_year
+            previous_quarter_display = f"Q{previous_quarter_num} of FY {prev_fy_start_year:02d}–{prev_fy_end_year:02d}"
+        else:
+            # Previous quarter is in same FY
+            previous_quarter_display = f"Q{previous_quarter_num} of FY {fy_start_year:02d}–{fy_end_year:02d}"
+
         # Get both PPI projects and Improvement projects
         ppi_projects = []
         improvement_projects = []
 
         if current_financial_year:
             # Use current_quarter_num which is already calculated
-            # Show ALL projects from managed teams + only assigned projects from member teams
+            # Show ALL projects from teams where user is manager or member
             ppi_projects = PPIProject.objects.filter(
                 Q(quarterly_plan__team_id__in=managed_team_ids) |  # All projects from managed teams
-                Q(quarterly_plan__team_id__in=member_only_team_ids, responsible_user=user),  # Only assigned from member teams
+                Q(quarterly_plan__team_id__in=member_only_team_ids),  # All projects from member teams
                 quarterly_plan__quarter=current_quarter_num,
                 quarterly_plan__financial_year=current_financial_year
             ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user').prefetch_related('status_history', 'responsible_user__team_memberships__team')
 
             # Get improvement projects for the same quarter and financial year
-            # Show ALL projects from managed teams + only assigned projects from member teams
+            # Show ALL projects from teams where user is manager or member
             improvement_projects = ImprovementProject.objects.filter(
                 Q(upload__team_id__in=managed_team_ids) |  # All projects from managed teams
-                Q(upload__team_id__in=member_only_team_ids, responsible_user=user),  # Only assigned from member teams
+                Q(upload__team_id__in=member_only_team_ids),  # All projects from member teams
                 upload__quarter=quarter,
                 upload__financial_year=current_financial_year
             ).select_related('upload__team', 'upload__financial_year', 'responsible_user').prefetch_related('tasks', 'responsible_user__team_memberships__team')
@@ -637,12 +647,12 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             # Fallback if no financial year found - show all projects
             ppi_projects = PPIProject.objects.filter(
                 Q(quarterly_plan__team_id__in=managed_team_ids) |
-                Q(quarterly_plan__team_id__in=member_only_team_ids, responsible_user=user)
+                Q(quarterly_plan__team_id__in=member_only_team_ids)
             ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year', 'responsible_user').prefetch_related('status_history', 'responsible_user__team_memberships__team')
 
             improvement_projects = ImprovementProject.objects.filter(
                 Q(upload__team_id__in=managed_team_ids) |
-                Q(upload__team_id__in=member_only_team_ids, responsible_user=user)
+                Q(upload__team_id__in=member_only_team_ids)
             ).select_related('upload__team', 'upload__financial_year', 'responsible_user').prefetch_related('tasks', 'responsible_user__team_memberships__team')
 
         # Combine and enhance all projects
@@ -656,6 +666,16 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
 
             # Add project type identifier
             project.project_type = 'PPI'
+
+            # Add permission flags for the current user
+            project.is_manager = project.quarterly_plan.team_id in managed_team_ids
+            project.is_responsible_user = project.responsible_user == user
+            project.is_team_member = project.quarterly_plan.team_id in member_only_team_ids
+            project.can_create_actions_issues = project.is_responsible_user
+            project.can_edit = project.is_responsible_user
+            project.can_mark_done = project.is_responsible_user
+            project.can_reassign = project.is_manager  # Only managers can reassign
+
             enhanced_projects.append(project)
 
         # Process improvement projects - adapt them to PPI project interface
@@ -673,6 +693,7 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                     self.steps = improvement_project.steps
                     self.status = improvement_project.status  # Copy the current status
                     self.project_type = 'Improvement'
+                    self.tracking_type = improvement_project.tracking_type  # Add tracking type for filtering
 
                     # Create a quarterly_plan-like object for template compatibility
                     class TeamWrapper:
@@ -733,6 +754,15 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
                     # based on: (# of weeks with completed activities / # of weeks with planned activities) * 100
                     self.completion_percentage = improvement_project.completion_percentage
 
+                    # Add permission flags for the current user
+                    self.is_manager = improvement_project.upload.team_id in managed_team_ids
+                    self.is_responsible_user = improvement_project.responsible_user == user
+                    self.is_team_member = improvement_project.upload.team_id in member_only_team_ids
+                    self.can_create_actions_issues = self.is_responsible_user
+                    self.can_edit = self.is_responsible_user
+                    self.can_mark_done = self.is_responsible_user
+                    self.can_reassign = self.is_manager  # Only managers can reassign
+
                 def get_status_display(self):
                     """Method to provide human-readable status like Django models"""
                     status_dict = dict(ImprovementProject.STATUS_CHOICES)
@@ -790,7 +820,10 @@ class ImplementDashboardView(LoginRequiredMixin, TemplateView):
             'projects': enhanced_projects,
             'actions': actions,
             'user_teams': user_teams,
+            'current_user_id': user.id,
+            'current_quarter_num': current_quarter_num,
             'current_quarter_display': current_quarter_display,
+            'previous_quarter_display': previous_quarter_display,
             'current_week_start': current_week_start,
             'current_week_end': current_week_end,
             'next_week_start': next_week_start,
@@ -818,9 +851,28 @@ class MyNumbersView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = get_effective_user(self.request)
 
-        # Get current week/month numbers
+        # Get teams where user is manager or member
+        from organizations.models import Team, TeamMember
+        from django.db.models import Q
+
+        # Get team IDs where user is manager
+        managed_team_ids = Team.objects.filter(
+            manager=user,
+            is_active=True
+        ).values_list('id', flat=True)
+
+        # Get team IDs where user is member
+        member_team_ids = TeamMember.objects.filter(
+            member=user,
+            is_active=True
+        ).values_list('team_id', flat=True)
+
+        # Combine both lists
+        accessible_team_ids = list(set(list(managed_team_ids) + list(member_team_ids)))
+
+        # Get current week/month numbers from quarterly plans of accessible teams
         weekly_numbers_qs = GPIParameter.objects.filter(
-            responsible_user=user,
+            quarterly_plan__team_id__in=accessible_team_ids,
             tracking_type='weekly'
         ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones')
 
@@ -830,13 +882,13 @@ class MyNumbersView(LoginRequiredMixin, TemplateView):
             gpi.model_type = 'gpi'
             weekly_numbers.append(gpi)
 
-        # Get Monthly Numbers from FPI and GPI Parameters
+        # Get Monthly Numbers from FPI and GPI Parameters from accessible teams
         monthly_fpi = FPIParameter.objects.filter(
-            responsible_user=user
+            quarterly_plan__team_id__in=accessible_team_ids
         ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones')
 
         monthly_gpi = GPIParameter.objects.filter(
-            responsible_user=user,
+            quarterly_plan__team_id__in=accessible_team_ids,
             tracking_type='monthly'
         ).select_related('quarterly_plan__team', 'quarterly_plan__financial_year').prefetch_related('milestones')
 
@@ -853,23 +905,117 @@ class MyNumbersView(LoginRequiredMixin, TemplateView):
             gpi.model_type = 'gpi'
             monthly_numbers.append(gpi)
 
-        # Debug: Print what we're sending to template
-        print(f"=== MyNumbersView DEBUG ===")
-        print(f"Weekly numbers count: {len(weekly_numbers)}")
-        for gpi in weekly_numbers:
-            print(f"  {gpi.name}: last_week_actual={gpi.last_week_actual}, current_week_plan={gpi.current_week_plan}")
+        # Calculate current week and month information
+        from datetime import date, timedelta
+        today = date.today()
 
-        print(f"Monthly numbers count: {len(monthly_numbers)}")
-        for param in monthly_numbers[:3]:  # Show first 3 to avoid too much output
-            if hasattr(param, 'sub_head'):
-                name = param.sub_head
+        # Get current financial year and quarter
+        current_financial_year = FinancialYear.objects.filter(
+            start_date__lte=today,
+            end_date__gte=today
+        ).first()
+
+        if not current_financial_year:
+            # No active financial year found
+            context.update({
+                'weekly_numbers': weekly_numbers,
+                'monthly_numbers': monthly_numbers,
+                'error': 'No active financial year found'
+            })
+            return context
+
+        # Determine current quarter
+        fy_start_date = current_financial_year.start_date
+        fy_start_year = fy_start_date.year
+        days_into_fy = (today - fy_start_date).days
+        current_quarter_num = (days_into_fy // 91) + 1  # Rough quarter calculation
+        if current_quarter_num > 4:
+            current_quarter_num = 4
+
+        current_month_num = today.month
+
+        # Calculate quarter start date
+        quarter_start_months = {1: 4, 2: 7, 3: 10, 4: 1}  # Apr, Jul, Oct, Jan
+        quarter_start_month = quarter_start_months[current_quarter_num]
+
+        if current_quarter_num == 4:  # Jan-Mar quarter
+            quarter_start_year = fy_start_year + 1
+        else:
+            quarter_start_year = fy_start_year
+
+        month_first_day = date(quarter_start_year, quarter_start_month, 1)
+
+        # Find the Monday on or before the 1st of the quarter month
+        if month_first_day.weekday() == 0:
+            quarter_start_date = month_first_day
+        else:
+            days_back_to_monday = month_first_day.weekday()
+            quarter_start_date = month_first_day - timedelta(days=days_back_to_monday)
+
+        # Calculate which week of the quarter we're in
+        days_into_quarter = (today - quarter_start_date).days
+        current_week_in_quarter = (days_into_quarter // 7) + 1  # Week 1-13
+
+        # Week selection for historical data viewing
+        selected_week = int(self.request.GET.get('week', current_week_in_quarter))
+        selected_week = max(1, min(selected_week, current_week_in_quarter))
+
+        # Generate list of available weeks with date ranges
+        available_weeks_with_dates = []
+        for week_num in range(1, current_week_in_quarter + 1):
+            week_start = quarter_start_date + timedelta(days=(week_num - 1) * 7)
+            week_end = week_start + timedelta(days=6)
+            iso_year, iso_week_num, iso_weekday = week_start.isocalendar()
+            week_display = f"Week {iso_week_num} ({week_start.strftime('%d-%b-%y')} to {week_end.strftime('%d-%b-%y')})"
+            available_weeks_with_dates.append({
+                'number': week_num,
+                'display': week_display
+            })
+
+        # Calculate current month number within quarter (1-3)
+        current_month_in_quarter = ((current_month_num - quarter_start_month) % 12) // 1 + 1
+        if current_month_in_quarter > 3:
+            current_month_in_quarter = ((current_month_num - quarter_start_month + 12) % 12) // 1 + 1
+
+        # Month selection
+        selected_month = int(self.request.GET.get('month', current_month_in_quarter))
+        selected_month = max(1, min(selected_month, current_month_in_quarter))
+
+        # Generate list of available months with date ranges
+        available_months_with_dates = []
+        for month_num in range(1, current_month_in_quarter + 1):
+            month_offset = month_num - 1
+            month_value = quarter_start_month + month_offset
+            if month_value > 12:
+                month_value -= 12
+                month_year = quarter_start_year + 1
             else:
-                name = param.name
-            print(f"  {name}: last_month_actual={param.last_month_actual}, current_month_plan={param.current_month_plan}, last_month_goal={param.last_month_goal}")
+                month_year = quarter_start_year
+
+            month_start = date(month_year, month_value, 1)
+            # Get last day of month
+            if month_value == 12:
+                month_end = date(month_year + 1, 1, 1) - timedelta(days=1)
+            else:
+                month_end = date(month_year, month_value + 1, 1) - timedelta(days=1)
+
+            month_display = f"Month {month_num} ({month_start.strftime('%b %Y')})"
+            available_months_with_dates.append({
+                'number': month_num,
+                'display': month_display
+            })
 
         context.update({
             'weekly_numbers': weekly_numbers,
             'monthly_numbers': monthly_numbers,
+            'current_week_in_quarter': current_week_in_quarter,
+            'selected_week': selected_week,
+            'available_weeks_with_dates': available_weeks_with_dates,
+            'current_month_in_quarter': current_month_in_quarter,
+            'selected_month': selected_month,
+            'available_months_with_dates': available_months_with_dates,
+            'current_quarter': f'Q{current_quarter_num}',
+            'current_financial_year': current_financial_year,
         })
 
         return context
@@ -878,7 +1024,7 @@ class MyNumbersView(LoginRequiredMixin, TemplateView):
 class SaveNumberView(LoginRequiredMixin, TemplateView):
     def post(self, request):
         try:
-            from plans.models import GPIWeeklyRecord, GPIMonthlyRecord, FPIMonthlyRecord
+            from plans.models import GPIWeeklyRecord, GPIMonthlyRecord
 
             # Handle both parameter naming conventions
             data_type = request.POST.get('type') or request.POST.get('param_type')  # 'gpi' or 'fpi'
@@ -985,7 +1131,6 @@ class SaveNumberView(LoginRequiredMixin, TemplateView):
 
                 # Allow access if user is responsible OR parameter is from a managed team
                 param = get_object_or_404(
-                    FPIParameter,
                     Q(id=param_id) & (
                         Q(responsible_user=request.user) |
                         Q(quarterly_plan__team_id__in=user_managed_teams)
@@ -1053,7 +1198,7 @@ class ReassignParameterView(LoginRequiredMixin, View):
                 param.assigned_team = assigned_team
                 param.save()
             elif param_type == 'fpi':
-                param = get_object_or_404(FPIParameter, id=param_id)
+                param = get_object_or_404(id=param_id)
                 # Check if user has permission (is responsible user OR is team manager OR is member of the team)
                 user_teams = list(request.user.team_memberships.filter(is_active=True).values_list('team_id', flat=True))
                 user_managed_teams = list(request.user.managed_teams.filter(is_active=True).values_list('id', flat=True))
@@ -1186,7 +1331,7 @@ class ParameterCommentsView(LoginRequiredMixin, View):
                 parameter_name = param.name
                 comments = param.explanation or ""
             elif param_type == 'fpi':
-                param = get_object_or_404(FPIParameter, id=param_id)
+                param = get_object_or_404(id=param_id)
                 parameter_name = param.sub_head or param.main_head
                 comments = param.explanation or ""
             else:
@@ -1378,7 +1523,10 @@ class MyTodoView(LoginRequiredMixin, TemplateView):
             combined_actions.append(ReviewActionWrapper(review_action))
 
         # Sort all actions by due date (oldest first) and created date (newest first as tiebreaker)
-        combined_actions.sort(key=lambda x: (x.original_due_date, -x.id))
+        combined_actions.sort(key=lambda x: (
+            x.original_due_date if x.original_due_date is not None else date.max,
+            -(x.id if x.id is not None else 0)
+        ))
 
         context.update({
             'actions': combined_actions,
@@ -1425,11 +1573,11 @@ class ActionEditView(LoginRequiredMixin, View):
         # get_object_or_404 already handles DoesNotExist and raises Http404
         action = get_object_or_404(Action, pk=pk)
 
-        # Check if user has permission to edit this action
-        # User can edit if they are assigned to it or they are the creator
-        if action.assigned_to != request.user and action.created_by != request.user:
+        # Check if user has permission to edit this action based on reassignment hierarchy
+        # Only the final assignee can edit the action
+        if not action.can_edit_action(request.user):
             from django.http import HttpResponseForbidden
-            return HttpResponseForbidden("You don't have permission to edit this action.")
+            return HttpResponseForbidden("You don't have permission to edit this action. Only the final assignee can edit.")
 
         try:
             # Get the latest history entry if available
@@ -1453,11 +1601,12 @@ class ActionEditView(LoginRequiredMixin, View):
         """Handle the modal form submission"""
         action = get_object_or_404(Action, pk=pk)
 
-        # Check if user has permission to edit this action
-        if action.assigned_to != request.user and action.created_by != request.user:
+        # Check if user has permission to edit this action based on reassignment hierarchy
+        # Only the final assignee can edit the action
+        if not action.can_edit_action(request.user):
             return JsonResponse({
                 'success': False,
-                'error': "You don't have permission to edit this action."
+                'error': "You don't have permission to edit this action. Only the final assignee can edit."
             })
 
         try:
@@ -1534,12 +1683,22 @@ class ActionReassignView(LoginRequiredMixin, TemplateView):
         return context
 
     def post(self, request, pk):
-        """Handle action reassignment"""
+        """Handle action reassignment with hierarchy management"""
         import logging
+        from django.db import transaction
         logger = logging.getLogger(__name__)
 
         action = get_object_or_404(Action, pk=pk)
         logger.info(f"Reassigning action {pk}. Current assignee: {action.assigned_to.get_full_name()} (ID: {action.assigned_to.id})")
+
+        # Check if user has permission to reassign this action
+        # Only users in the reassignment chain (but not the final assignee) can reassign
+        if not action.can_reassign_action(request.user):
+            logger.error(f"User {request.user.get_full_name()} does not have permission to reassign action {pk}")
+            return JsonResponse({
+                'success': False,
+                'error': 'You do not have permission to reassign this action. Only users in the reassignment chain (not the final assignee) can reassign.'
+            })
 
         team_id = request.POST.get('team')
         assigned_to_id = request.POST.get('assigned_to')
@@ -1560,6 +1719,7 @@ class ActionReassignView(LoginRequiredMixin, TemplateView):
         try:
             from organizations.models import Team
             from django.contrib.auth import get_user_model
+            from .models import ActionReassignment
             User = get_user_model()
 
             new_team = get_object_or_404(Team, pk=team_id)
@@ -1568,30 +1728,96 @@ class ActionReassignView(LoginRequiredMixin, TemplateView):
             logger.info(f"New team: {new_team.name} (ID: {new_team.id})")
             logger.info(f"New assignee: {new_assignee.get_full_name()} (ID: {new_assignee.id})")
 
-            # Update the action
-            action.team = new_team
-            action.assigned_to = new_assignee
-            action.save()
+            with transaction.atomic():
+                # Get the current assignee before reassignment
+                current_assignee = action.assigned_to
 
-            logger.info(f"Action saved. New assignee: {action.assigned_to.get_full_name()} (ID: {action.assigned_to.id})")
+                # Get all existing reassignments for this action
+                existing_reassignments = ActionReassignment.objects.filter(
+                    action=action
+                ).order_by('sequence_number')
 
-            # Create history entry for reassignment
-            from .models import ActionHistory
-            ActionHistory.objects.create(
-                action=action,
-                status=action.status,  # Keep current status
-                comments=f"Reassigned to {new_assignee.get_full_name()} in {new_team.name}. {reassignment_reason}".strip(),
-                updated_by=request.user
-            )
+                # Find the position of the current user in the chain
+                current_user_position = None
+                for reassignment in existing_reassignments:
+                    if reassignment.reassigned_to == request.user:
+                        current_user_position = reassignment.sequence_number
+                        break
 
-            logger.info("Reassignment completed successfully")
+                # If no reassignments exist yet, this is the first one
+                if not existing_reassignments.exists():
+                    # Add the original assignee as the first person in the hierarchy
+                    ActionReassignment.objects.create(
+                        action=action,
+                        reassigned_from=action.created_by,
+                        reassigned_to=current_assignee,
+                        reassignment_reason="Original assignee",
+                        sequence_number=1
+                    )
+                    logger.info(f"Created first reassignment record for original assignee: {current_assignee.get_full_name()}")
+                    next_sequence = 2
+                else:
+                    # If user is in the chain, delete all reassignments after them
+                    if current_user_position is not None:
+                        # Delete all reassignments after the current user's position
+                        ActionReassignment.objects.filter(
+                            action=action,
+                            sequence_number__gt=current_user_position
+                        ).delete()
+
+                        # Get incomplete actions of users who were removed from the chain
+                        # and delete them along with their sub-actions
+                        removed_reassignments = existing_reassignments.filter(
+                            sequence_number__gt=current_user_position
+                        )
+                        for removed_reassignment in removed_reassignments:
+                            removed_user = removed_reassignment.reassigned_to
+                            # Delete incomplete actions assigned to removed users
+                            Action.objects.filter(
+                                parent_action=action,
+                                assigned_to=removed_user,
+                                status__in=['not_started', 'in_progress', 'at_risk', 'danger', 'overdue', 'on_hold']
+                            ).delete()
+
+                        next_sequence = current_user_position + 1
+                    else:
+                        # User is not in the chain, add to the end
+                        next_sequence = existing_reassignments.last().sequence_number + 1
+
+                # Create new reassignment record
+                ActionReassignment.objects.create(
+                    action=action,
+                    reassigned_from=request.user,
+                    reassigned_to=new_assignee,
+                    reassignment_reason=reassignment_reason,
+                    sequence_number=next_sequence
+                )
+
+                # Update the action
+                action.team = new_team
+                action.assigned_to = new_assignee
+                action.save()
+
+                logger.info(f"Action saved. New assignee: {action.assigned_to.get_full_name()} (ID: {action.assigned_to.id})")
+
+                # Create history entry for reassignment
+                from .models import ActionHistory
+                ActionHistory.objects.create(
+                    action=action,
+                    status=action.status,  # Keep current status
+                    comments=f"Reassigned to {new_assignee.get_full_name()} in {new_team.name}. {reassignment_reason}".strip(),
+                    updated_by=request.user
+                )
+
+                logger.info("Reassignment completed successfully")
 
             return JsonResponse({
                 'success': True,
-                'message': 'Action reassigned successfully'
+                'message': 'Action reassigned successfully. All incomplete actions from removed assignees have been deleted.'
             })
 
         except Exception as e:
+            logger.error(f"Error during reassignment: {str(e)}")
             return JsonResponse({
                 'success': False,
                 'error': str(e)
@@ -1647,34 +1873,156 @@ class ActionToggleCompleteView(LoginRequiredMixin, TemplateView):
         return redirect('implement:my_todo')
 
 
+class ToggleActionStatusView(LoginRequiredMixin, View):
+    """Toggle action status for Implement screen actions (Mark Complete/Undo, On-Hold/Resume, Drop/Mark Active)"""
+
+    def post(self, request):
+        from django.http import JsonResponse
+        from django.db import transaction
+
+        action_id = request.POST.get('action_id')
+        new_status = request.POST.get('new_status')
+
+        if not action_id or not new_status:
+            return JsonResponse({'success': False, 'error': 'Missing required parameters'})
+
+        try:
+            action = Action.objects.get(id=action_id)
+
+            # Verify user is assigned to this action
+            if action.assigned_to != request.user:
+                return JsonResponse({'success': False, 'error': 'You are not assigned to this action'})
+
+            # Verify action is from Implement screen (source = 'manual')
+            if action.source != 'manual':
+                return JsonResponse({'success': False, 'error': 'Can only toggle status for Implement screen actions'})
+
+            # Verify action is not linked to PPI or Improvement tasks
+            if action.ppi_task or action.improvement_task:
+                return JsonResponse({'success': False, 'error': 'Cannot toggle status for PPI/Improvement task actions'})
+
+            with transaction.atomic():
+                if new_status == 'completed':
+                    # Mark Complete: Save current status and change to completed
+                    action.previous_status = action.status
+                    action.status = 'completed'
+
+                elif new_status == 'undo':
+                    # Undo: Revert to previous status
+                    if action.previous_status:
+                        action.status = action.previous_status
+                        action.previous_status = ''
+                    else:
+                        action.status = 'not_started'
+
+                elif new_status == 'on_hold':
+                    # On-Hold: Save current status and change to on_hold
+                    action.previous_status = action.status
+                    action.status = 'on_hold'
+
+                elif new_status == 'resume':
+                    # Resume: Revert to previous status
+                    if action.previous_status:
+                        action.status = action.previous_status
+                        action.previous_status = ''
+                    else:
+                        action.status = 'not_started'
+
+                elif new_status == 'dropped':
+                    # Drop: Save current status and change to dropped
+                    action.previous_status = action.status
+                    action.status = 'dropped'
+
+                elif new_status == 'activate':
+                    # Mark Active: Revert to previous status
+                    if action.previous_status:
+                        action.status = action.previous_status
+                        action.previous_status = ''
+                    else:
+                        action.status = 'not_started'
+                else:
+                    return JsonResponse({'success': False, 'error': 'Invalid status'})
+
+                action.save()
+
+                # Create history record
+                ActionHistory.objects.create(
+                    action=action,
+                    status=action.status,
+                    revised_due_date=action.revised_due_date,
+                    challenge=action.challenge,
+                    comments=f'Status toggled to {action.get_status_display()}',
+                    updated_by=request.user
+                )
+
+            return JsonResponse({'success': True, 'message': 'Action status updated successfully'})
+
+        except Action.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Action not found'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+
 class ActionRejectView(LoginRequiredMixin, TemplateView):
     template_name = 'implement/action_reject.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         action = get_object_or_404(Action, pk=kwargs['pk'])
+
+        # Check if action can be rejected (must be done/completed/rejected and no sub-actions)
+        can_reject = (action.status in ['done', 'completed', 'rejected']) and not action.sub_actions.exists()
+
         context['action'] = action
+        context['can_reject'] = can_reject
         return context
-    
+
     def post(self, request, pk):
         action = get_object_or_404(Action, pk=pk)
+
+        # Validate that action can be rejected
+        if action.status not in ['done', 'completed', 'rejected']:
+            return JsonResponse({
+                'success': False,
+                'error': 'Action can only be rejected if it is Done or Completed.'
+            })
+
+        if action.sub_actions.exists():
+            return JsonResponse({
+                'success': False,
+                'error': 'Action cannot be rejected because it has sub-actions.'
+            })
+
         rejection_reason = request.POST.get('rejection_reason', '')
+
+        # Store previous status before changing to rejected
+        if action.status != 'rejected':
+            action.previous_status = action.status
 
         action.status = 'rejected'
         action.rejection_reason = rejection_reason
         action.save()
 
+        # Create history entry
+        from .models import ActionHistory
+        ActionHistory.objects.create(
+            action=action,
+            status='rejected',
+            comments=f"Action marked as rejected. Reason: {rejection_reason}",
+            updated_by=request.user
+        )
+
         # Return JSON for AJAX requests
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
             return JsonResponse({
                 'success': True,
-                'message': 'Action rejected.',
+                'message': 'Action rejected and reopened.',
                 'rejection_reason': rejection_reason
             })
 
         # Regular form submission - redirect with message
-        messages.success(request, 'Action rejected.')
-        return redirect('implement:my_todo')
+        messages.success(request, 'Action rejected and reopened.')
+        return redirect('implement:dashboard')
 
 
 class ActionHistoryView(LoginRequiredMixin, TemplateView):

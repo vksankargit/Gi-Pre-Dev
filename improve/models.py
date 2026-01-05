@@ -107,9 +107,15 @@ class ImprovementProject(models.Model):
         ('on_hold', 'On Hold'),
     ]
 
+    TRACKING_TYPES = [
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    ]
+
     upload = models.ForeignKey(ImprovementUpload, on_delete=models.CASCADE, related_name='projects')
     name = models.CharField(max_length=255)
     completion_criteria = models.TextField()
+    tracking_type = models.CharField(max_length=10, choices=TRACKING_TYPES, default='weekly')
     responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     start_date = models.DateField()
     end_date = models.DateField()

@@ -37,9 +37,9 @@
                     {% csrf_token %}
 
                     <div class="mb-3">
-                        <label for="team" class="form-label">Reassign Team <span class="text-danger">*</span></label>
+                        <label for="team" class="form-label">Reassign Team Meeting <span class="text-danger">*</span></label>
                         <select class="form-control" id="team" name="team" required>
-                            <option value="">Select Team</option>
+                            <option value="">Select Team Meeting</option>
                             {% for team in available_teams %}
                             <option value="{{ team.id }}">
                                 {{ team.name }}
@@ -51,7 +51,7 @@
                     <div class="mb-3">
                         <label for="responsible_user" class="form-label">Assign To <span class="text-danger">*</span></label>
                         <select class="form-control" id="responsible_user" name="responsible_user" required disabled>
-                            <option value="">Select Team First</option>
+                            <option value="">Select Team Meeting First</option>
                         </select>
                     </div>
 
@@ -111,7 +111,7 @@
                         {% endif %}
                     </dd>
 
-                    <dt class="col-sm-5">Team:</dt>
+                    <dt class="col-sm-5">Team Meeting:</dt>
                     <dd class="col-sm-7">
                         {% if project.quarterly_plan %}
                             {{ project.quarterly_plan.team.name }}
@@ -225,7 +225,7 @@ function loadProjectReassignTeamMembers() {
     userSelect.disabled = true;
 
     if (!teamId) {
-        userSelect.innerHTML = '<option value="">Select Team First</option>';
+        userSelect.innerHTML = '<option value="">Select Team Meeting First</option>';
         return;
     }
 

@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.views import View
 import json
-from .models import Organization, OrganizationCoordinator, Team, TeamMember
+from .models import Organization, OrganizationCoordinator, Team, TeamMember, TeamMeetingType
 from .forms import OrganizationForm, TeamForm
 from .email_service import CoordinatorEmailService
 from accounts.models import User
@@ -208,8 +208,22 @@ class TeamCreateView(CoordinatorRequiredMixin, CreateView):
         return kwargs
 
     def form_valid(self, form):
-        messages.success(self.request, 'Team created successfully.')
+        import sys
+        sys.stderr.write("DEBUG: TeamCreateView form_valid called - form is valid!\n")
+        sys.stderr.flush()
+        messages.success(self.request, 'Team Meeting created successfully.')
         return super().form_valid(form)
+
+    def form_invalid(self, form):
+        import sys
+        sys.stderr.write("DEBUG: TeamCreateView form_invalid called - validation failed!\n")
+        sys.stderr.write(f"DEBUG: Form errors: {form.errors}\n")
+        sys.stderr.write(f"DEBUG: Form data: {form.data}\n")
+        for field_name, field in form.fields.items():
+            if field_name in form.errors:
+                sys.stderr.write(f"DEBUG: Field '{field_name}' error: {form.errors[field_name]}\n")
+        sys.stderr.flush()
+        return super().form_invalid(form)
 
 
 class TeamEditView(CoordinatorRequiredMixin, UpdateView):
@@ -224,7 +238,7 @@ class TeamEditView(CoordinatorRequiredMixin, UpdateView):
         return kwargs
 
     def form_valid(self, form):
-        messages.success(self.request, 'Team updated successfully.')
+        messages.success(self.request, 'Team Meeting updated successfully.')
         return super().form_valid(form)
 
 
@@ -234,7 +248,7 @@ class TeamToggleStatusView(CoordinatorRequiredMixin, TemplateView):
         team.is_active = not team.is_active
         team.save()
         status = 'activated' if team.is_active else 'deactivated'
-        messages.success(request, f'Team {status} successfully.')
+        messages.success(request, f'Team Meeting {status} successfully.')
         return redirect('organizations:teams')
 
 
@@ -571,6 +585,115 @@ class GetAvailableCoordinatorsView(AdminRequiredMixin, View):
                 'success': False,
                 'error': str(e)
             })
+
+@method_decorator(csrf_exempt, name='dispatch')
+class GetMeetingTypesView(CoordinatorRequiredMixin, View):
+    """AJAX view to get meeting types for a specific organization"""
+
+    def get(self, request, organization_id, *args, **kwargs):
+        try:
+            organization = get_object_or_404(Organization, id=organization_id)
+
+            # Get all active meeting types for this organization
+            meeting_types = TeamMeetingType.objects.filter(
+                organization=organization,
+                is_active=True
+            ).order_by('name')
+
+            meeting_types_data = [
+                {
+                    'id': mt.id,
+                    'name': mt.name
+                }
+                for mt in meeting_types
+            ]
+
+            return JsonResponse({
+                'success': True,
+                'meeting_types': meeting_types_data
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            })
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CreateMeetingTypeView(CoordinatorRequiredMixin, View):
+    """AJAX view to create a new meeting type"""
+
+    def post(self, request, *args, **kwargs):
+        try:
+            data = json.loads(request.body)
+            organization_id = data.get('organization_id')
+            name = data.get('name', '').strip()
+
+            if not organization_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Organization ID is required.'
+                })
+
+            if not name:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Meeting type name is required.'
+                })
+
+            # Get organization
+            organization = get_object_or_404(Organization, id=organization_id)
+
+            # Check if meeting type already exists for this organization
+            existing_type = TeamMeetingType.objects.filter(
+                organization=organization,
+                name__iexact=name
+            ).first()
+
+            if existing_type:
+                if existing_type.is_active:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'A meeting type with this name already exists for this organization.'
+                    })
+                else:
+                    # Reactivate if it was deactivated
+                    existing_type.is_active = True
+                    existing_type.save()
+                    return JsonResponse({
+                        'success': True,
+                        'meeting_type': {
+                            'id': existing_type.id,
+                            'name': existing_type.name
+                        }
+                    })
+
+            # Create new meeting type
+            meeting_type = TeamMeetingType.objects.create(
+                organization=organization,
+                name=name
+            )
+
+            return JsonResponse({
+                'success': True,
+                'meeting_type': {
+                    'id': meeting_type.id,
+                    'name': meeting_type.name
+                }
+            })
+
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON data.'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            })
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class GetTeamMembersView(View):

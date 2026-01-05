@@ -1,0 +1,541 @@
+{% load l10n %}
+<!-- PPI Tab Content -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">Project Performance Indicators (PPI)</h5>
+    <button class="btn btn-primary btn-sm" onclick="refreshPPITab()">
+        <i class="fas fa-sync-alt me-1"></i>Refresh
+    </button>
+</div>
+
+{% if meeting.review_type == 'weekly' or meeting.review_type == 'monthly' %}
+<!-- Radio buttons for Weekly/Monthly selection -->
+<div class="mb-3">
+    <div class="btn-group" role="group">
+        <input type="radio" class="btn-check" name="ppiTypeRadio" id="weeklyPPIRadio" value="weekly" checked>
+        <label class="btn btn-outline-primary" for="weeklyPPIRadio">Weekly PPI</label>
+
+        <input type="radio" class="btn-check" name="ppiTypeRadio" id="monthlyPPIRadio" value="monthly">
+        <label class="btn btn-outline-primary" for="monthlyPPIRadio">Monthly PPI</label>
+    </div>
+</div>
+
+<!-- Quarter Selector Dropdown -->
+<div class="mb-3">
+    <label for="quarterSelector" class="form-label fw-bold">Select Quarter:</label>
+    <select id="quarterSelector" class="form-select" style="max-width: 400px;">
+        <option value="">Loading quarters...</option>
+    </select>
+</div>
+
+<!-- Weekly PPI Section -->
+<div id="weeklyPPISection">
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
+                        <tr>
+                            <th>PPI</th>
+                            <th>Completion Criteria</th>
+                            <th>Original Due Date</th>
+                            <th>% Completion</th>
+                            <th>Status</th>
+                            <th>Revised Due Date</th>
+                            <th>Assigned To</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="weeklyPPITableBody">
+                        <tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Monthly PPI Section -->
+<div id="monthlyPPISection" style="display: none;">
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-container" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
+                        <tr>
+                            <th>PPI</th>
+                            <th>Completion Criteria</th>
+                            <th>Original Due Date</th>
+                            <th>% Completion</th>
+                            <th>Status</th>
+                            <th>Revised Due Date</th>
+                            <th>Assigned To</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monthlyPPITableBody">
+                        <tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- For quarterly and annual meetings -->
+<div class="text-center py-5">
+    <i class="fas fa-info-circle fa-4x text-muted mb-3"></i>
+    <h5 class="text-muted mb-3">PPI Tab Not Available</h5>
+    <p class="text-muted">
+        PPI tracking is only available for weekly and monthly review meetings.
+    </p>
+</div>
+{% endif %}
+
+<script>
+// Global variables for PPI tab
+let currentPPIType = 'weekly';
+let currentQuarter = {{ current_quarter|default:1 }};
+let availableQuarters = [];
+let isCurrentQuarterEditable = true;
+
+// Initialize PPI tab
+(function() {
+    console.log('🎯 Initializing PPI tab');
+
+    const meetingType = '{{ meeting.review_type }}';
+
+    // Only initialize for weekly/monthly meetings
+    if (meetingType === 'weekly' || meetingType === 'monthly') {
+        // Load available quarters
+        loadAvailableQuarters();
+
+        // Setup radio button listeners
+        const weeklyRadio = document.getElementById('weeklyPPIRadio');
+        const monthlyRadio = document.getElementById('monthlyPPIRadio');
+
+        if (weeklyRadio) {
+            weeklyRadio.addEventListener('change', function() {
+                if (this.checked) {
+                    currentPPIType = 'weekly';
+                    showWeeklyPPI();
+                }
+            });
+        }
+
+        if (monthlyRadio) {
+            monthlyRadio.addEventListener('change', function() {
+                if (this.checked) {
+                    currentPPIType = 'monthly';
+                    showMonthlyPPI();
+                }
+            });
+        }
+
+        // Setup quarter selector listener
+        const quarterSelector = document.getElementById('quarterSelector');
+        if (quarterSelector) {
+            quarterSelector.addEventListener('change', function() {
+                const selectedQuarter = parseInt(this.value);
+                if (selectedQuarter) {
+                    currentQuarter = selectedQuarter;
+                    loadPPIDataForQuarter(selectedQuarter);
+                }
+            });
+        }
+    }
+})();
+
+function showWeeklyPPI() {
+    document.getElementById('weeklyPPISection').style.display = 'block';
+    document.getElementById('monthlyPPISection').style.display = 'none';
+    loadPPIDataForQuarter(currentQuarter);
+}
+
+function showMonthlyPPI() {
+    document.getElementById('weeklyPPISection').style.display = 'none';
+    document.getElementById('monthlyPPISection').style.display = 'block';
+    loadPPIDataForQuarter(currentQuarter);
+}
+
+function loadAvailableQuarters() {
+    const meetingId = {{ meeting.pk }};
+    const teamId = {{ meeting.team.id }};
+
+    // Fetch available quarters from API
+    fetch(`/api/ppi-available-quarters/?meeting_id=${meetingId}&team_id=${teamId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                availableQuarters = data.quarters;
+                populateQuarterSelector(data.quarters, data.current_quarter);
+            } else {
+                console.error('Error loading quarters:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading available quarters:', error);
+        });
+}
+
+function populateQuarterSelector(quarters, defaultQuarter) {
+    const selector = document.getElementById('quarterSelector');
+    selector.innerHTML = '';
+
+    quarters.forEach(quarter => {
+        const option = document.createElement('option');
+        option.value = quarter.number;
+        option.textContent = quarter.display_name;
+
+        // Select the current quarter by default
+        if (quarter.number === defaultQuarter) {
+            option.selected = true;
+            currentQuarter = defaultQuarter;
+        }
+
+        selector.appendChild(option);
+    });
+
+    // Load data for the default quarter
+    if (defaultQuarter) {
+        loadPPIDataForQuarter(defaultQuarter);
+    }
+}
+
+function loadPPIDataForQuarter(quarterNumber) {
+    const meetingId = {{ meeting.pk }};
+    const teamId = {{ meeting.team.id }};
+
+    // Show loading state
+    const tbody = currentPPIType === 'weekly'
+        ? document.getElementById('weeklyPPITableBody')
+        : document.getElementById('monthlyPPITableBody');
+
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+    }
+
+    // Fetch PPI data
+    fetch(`/api/ppi-data/?meeting_id=${meetingId}&team_id=${teamId}&quarter=${quarterNumber}&tracking_type=${currentPPIType}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                isCurrentQuarterEditable = data.is_current_quarter;
+                renderPPIData(data.projects);
+            } else {
+                console.error('Error loading PPI data:', data.error);
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Error loading data: ${data.error}</td></tr>`;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching PPI data:', error);
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading data</td></tr>';
+            }
+        });
+}
+
+function renderPPIData(projects) {
+    const tbody = currentPPIType === 'weekly'
+        ? document.getElementById('weeklyPPITableBody')
+        : document.getElementById('monthlyPPITableBody');
+
+    if (!tbody) {
+        console.error('Table body not found');
+        return;
+    }
+
+    if (!projects || projects.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No PPI projects available for this quarter</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+
+    projects.forEach(project => {
+        const row = document.createElement('tr');
+        row.id = `project-row-${project.id}`;
+
+        // Format dates
+        const originalDueDate = project.original_due_date || '-';
+        const revisedDueDate = project.revised_due_date || '-';
+
+        // Format status badge
+        let statusBadgeClass = 'secondary';
+        if (project.status === 'completed') statusBadgeClass = 'success';
+        else if (project.status === 'on_track') statusBadgeClass = 'primary';
+        else if (project.status === 'at_risk') statusBadgeClass = 'warning';
+        else if (project.status === 'danger') statusBadgeClass = 'danger';
+
+        // Progress bar color
+        let progressClass = 'danger';
+        if (project.completion_percentage >= 100) progressClass = 'success';
+        else if (project.completion_percentage >= 75) progressClass = 'info';
+        else if (project.completion_percentage >= 50) progressClass = 'warning';
+
+        // Determine which buttons should be enabled/disabled
+        const isCompleted = project.status === 'completed';
+        const isOnHold = project.status === 'on_hold';
+        const isDropped = project.status === 'dropped';
+        const allTasksCompleted = project.all_tasks_completed;
+
+        row.innerHTML = `
+            <td>
+                <strong>${project.project_name}</strong>
+                <span class="badge bg-primary ms-2">PPI</span>
+            </td>
+            <td>${project.completion_criteria ? project.completion_criteria.substring(0, 80) : '-'}${project.completion_criteria && project.completion_criteria.length > 80 ? '...' : ''}</td>
+            <td>${originalDueDate}</td>
+            <td>
+                <div class="progress" style="height: 20px;">
+                    <div class="progress-bar bg-${progressClass}"
+                         role="progressbar"
+                         style="width: ${project.completion_percentage}%">
+                        ${Math.round(project.completion_percentage)}%
+                    </div>
+                </div>
+            </td>
+            <td>
+                <span class="badge bg-${statusBadgeClass}">
+                    ${project.status_display}
+                </span>
+            </td>
+            <td>${revisedDueDate}</td>
+            <td>${project.assigned_to || 'Unassigned'}</td>
+            <td>
+                <small class="text-muted d-block mb-1">Tasks: ${project.completed_tasks}/${project.total_tasks}</small>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-danger"
+                            onclick="addPPIIssue(${project.id})"
+                            title="Issues">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </button>
+                    <button class="btn btn-outline-success"
+                            onclick="addPPIAction(${project.id})"
+                            title="Action Items">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                    <button class="btn btn-outline-info"
+                            onclick="viewPPIDetails(${project.id}, '${currentPPIType}')"
+                            title="Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary"
+                            onclick="reassignPPI(${project.id})"
+                            title="Reassign">
+                        <i class="fas fa-user-edit"></i>
+                    </button>
+                    ${isCompleted ? `
+                        <button class="btn btn-outline-secondary"
+                                onclick="undoPPIComplete(${project.id})"
+                                title="Undo Complete">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                    ` : `
+                        <button class="btn btn-outline-success"
+                                onclick="markPPIComplete(${project.id})"
+                                title="Mark Complete"
+                                ${!allTasksCompleted ? 'disabled' : ''}>
+                            <i class="fas fa-check"></i>
+                        </button>
+                    `}
+                    ${isOnHold ? `
+                        <button class="btn btn-outline-primary"
+                                onclick="resumePPI(${project.id})"
+                                title="Resume">
+                            <i class="fas fa-play"></i>
+                        </button>
+                    ` : `
+                        <button class="btn btn-outline-secondary"
+                                onclick="markPPIOnHold(${project.id})"
+                                title="Mark On Hold"
+                                ${isCompleted ? 'disabled' : ''}>
+                            <i class="fas fa-pause"></i>
+                        </button>
+                    `}
+                    ${isDropped ? `
+                        <button class="btn btn-outline-success"
+                                onclick="markPPIActive(${project.id})"
+                                title="Mark Active">
+                            <i class="fas fa-power-off"></i>
+                        </button>
+                    ` : `
+                        <button class="btn btn-outline-danger"
+                                onclick="markPPIDropped(${project.id})"
+                                title="Mark Dropped"
+                                ${isCompleted ? 'disabled' : ''}>
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `}
+                </div>
+            </td>
+        `;
+
+        tbody.appendChild(row);
+    });
+}
+
+function refreshPPITab() {
+    loadPPIDataForQuarter(currentQuarter);
+}
+
+// PPI Action Functions
+window.addPPIIssue = function(projectId) {
+    console.log(`Adding issue for PPI project ${projectId}`);
+    // Use existing issue modal functionality
+    addProjectIssue(projectId, 'PPI');
+};
+
+window.addPPIAction = function(projectId) {
+    console.log(`Adding action for PPI project ${projectId}`);
+    // Use existing action modal functionality
+    addProjectAction(projectId, 'PPI');
+};
+
+window.viewPPIDetails = function(projectId, trackingType) {
+    console.log(`Opening PPI details for project ${projectId}, tracking: ${trackingType}`);
+
+    // Create or get the modal
+    let modal = document.getElementById('ppiDetailsModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'ppiDetailsModal';
+        modal.setAttribute('tabindex', '-1');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content" id="ppiDetailsContent">
+                    <div class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                        <p class="text-muted mt-2">Loading details...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const content = document.getElementById('ppiDetailsContent');
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    // Fetch PPI details
+    const meetingId = {{ meeting.pk }};
+    fetch(`/review/${meetingId}/ppi-details/?project_id=${projectId}&tracking_type=${trackingType}&quarter=${currentQuarter}`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute scripts in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.body.appendChild(newScript);
+                setTimeout(() => {
+                    if (newScript.parentNode) {
+                        newScript.parentNode.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading PPI details:', error);
+            content.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading details</p>
+                </div>
+            `;
+        });
+};
+
+window.reassignPPI = function(projectId) {
+    console.log(`Reassigning PPI project ${projectId}`);
+    // Use existing reassign functionality
+    // TODO: Implement PPI-specific reassignment
+    alert('Reassign functionality to be implemented');
+};
+
+window.markPPIComplete = function(projectId) {
+    if (!confirm('Mark this project as completed?')) return;
+
+    updatePPIStatus(projectId, 'completed');
+};
+
+window.undoPPIComplete = function(projectId) {
+    if (!confirm('Undo completion status?')) return;
+
+    updatePPIStatus(projectId, 'undo_complete');
+};
+
+window.markPPIOnHold = function(projectId) {
+    if (!confirm('Put this project on hold?')) return;
+
+    updatePPIStatus(projectId, 'on_hold');
+};
+
+window.resumePPI = function(projectId) {
+    if (!confirm('Resume this project?')) return;
+
+    updatePPIStatus(projectId, 'resume');
+};
+
+window.markPPIDropped = function(projectId) {
+    if (!confirm('Mark this project as dropped?')) return;
+
+    updatePPIStatus(projectId, 'dropped');
+};
+
+window.markPPIActive = function(projectId) {
+    if (!confirm('Mark this project as active?')) return;
+
+    updatePPIStatus(projectId, 'active');
+};
+
+function updatePPIStatus(projectId, action) {
+    const meetingId = {{ meeting.pk }};
+
+    fetch(`/review/${meetingId}/update-ppi-status/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({
+            project_id: projectId,
+            action: action
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Refresh the current view
+            loadPPIDataForQuarter(currentQuarter);
+        } else {
+            alert('Error updating status: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error updating PPI status:', error);
+        alert('Error updating status');
+    });
+}
+
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+    return '';
+}
+</script>

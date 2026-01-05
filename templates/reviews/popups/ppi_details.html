@@ -1,0 +1,199 @@
+<!-- PPI Details Popup -->
+<div class="modal-header">
+    <h5 class="modal-title">PPI Details - {{ project.project_name }}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+
+<div class="modal-body">
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <p class="mb-1"><strong>Completion Criteria:</strong></p>
+            <p class="text-muted">{{ project.completion_criteria|default:"Not specified" }}</p>
+        </div>
+        <div class="col-md-3">
+            <p class="mb-1"><strong>Responsible User:</strong></p>
+            <p class="text-muted">{{ project.responsible_user.get_full_name|default:"Unassigned" }}</p>
+        </div>
+        <div class="col-md-3">
+            <p class="mb-1"><strong>Start Date:</strong></p>
+            <p class="text-muted">{{ project.start_date|date:"M d, Y"|default:"-" }}</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <p class="mb-1"><strong>Due Date:</strong></p>
+            <p class="text-muted">{{ project.original_due_date|date:"M d, Y"|default:"-" }}</p>
+        </div>
+        <div class="col-md-3">
+            <p class="mb-1"><strong>Revised Due Date:</strong></p>
+            <p class="text-muted">{{ project.revised_due_date|date:"M d, Y"|default:"-" }}</p>
+        </div>
+        <div class="col-md-6">
+            <p class="mb-1"><strong>Quarter:</strong></p>
+            <p class="text-muted">Q{{ quarter_number }}</p>
+        </div>
+    </div>
+
+    <!-- Weekly or Monthly Grid -->
+    <div class="table-responsive">
+        <table class="table table-bordered table-sm">
+            <thead class="table-light">
+                <tr>
+                    <th>Period</th>
+                    <th>Tasks</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for period in periods %}
+                <tr id="period-row-{{ period }}">
+                    <td class="fw-bold">{{ period_label }}{{ period }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary period-cell"
+                                data-period="{{ period }}"
+                                data-project-id="{{ project.id }}"
+                                data-tracking-type="{{ tracking_type }}"
+                                onclick="openPeriodTasks({{ period }}, {{ project.id }}, '{{ tracking_type }}')">
+                            {% with period_tasks=tasks_by_period|get_item:period %}
+                                {% if period_tasks %}
+                                    {{ period_tasks|length }} task{{ period_tasks|length|pluralize }}
+                                {% else %}
+                                    No tasks
+                                {% endif %}
+                            {% endwith %}
+                        </button>
+                    </td>
+                    <td>
+                        {% with period_tasks=tasks_by_period|get_item:period %}
+                            {% if period_tasks %}
+                                {% with completed_count=period_tasks|filter_by_status:"completed"|length total_count=period_tasks|length %}
+                                    {% if completed_count == total_count %}
+                                        <span class="badge bg-success">Complete</span>
+                                    {% elif completed_count > 0 %}
+                                        <span class="badge bg-warning">In Progress ({{ completed_count }}/{{ total_count }})</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not Started</span>
+                                    {% endif %}
+                                {% endwith %}
+                            {% else %}
+                                <span class="badge bg-light text-muted">-</span>
+                            {% endif %}
+                        {% endwith %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+</div>
+
+<style>
+.period-cell {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.period-cell:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Color coding for period cells based on completion */
+.period-complete {
+    background-color: #d1f4e0 !important;
+    border-color: #28a745 !important;
+}
+
+.period-incomplete-past {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+}
+
+.period-danger {
+    color: #dc3545 !important;
+}
+
+.period-warning {
+    color: #ffc107 !important;
+}
+
+.period-success {
+    color: #28a745 !important;
+}
+</style>
+
+<script>
+// Function to open period tasks
+window.openPeriodTasks = function(period, projectId, trackingType) {
+    console.log(`Opening tasks for ${trackingType} period ${period}, project ${projectId}`);
+
+    // Get meeting ID from the data attribute
+    const meetingId = {{ meeting_id }};
+
+    // Create or get tasks modal
+    let tasksModal = document.getElementById('periodTasksModal');
+    if (!tasksModal) {
+        tasksModal = document.createElement('div');
+        tasksModal.className = 'modal fade';
+        tasksModal.id = 'periodTasksModal';
+        tasksModal.setAttribute('tabindex', '-1');
+        tasksModal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content" id="periodTasksContent">
+                    <div class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                        <p class="text-muted mt-2">Loading tasks...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(tasksModal);
+    }
+
+    const content = document.getElementById('periodTasksContent');
+    const bsModal = new bootstrap.Modal(tasksModal);
+    bsModal.show();
+
+    // Fetch period tasks - this will use the existing action items popup
+    fetch(`/review/${meetingId}/project-actions/?project_id=${projectId}&project_type=PPI&period=${period}`)
+        .then(response => response.text())
+        .then(html => {
+            content.innerHTML = html;
+
+            // Execute scripts in the loaded content
+            const scripts = content.querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                if (script.src) {
+                    newScript.src = script.src;
+                } else {
+                    newScript.textContent = script.textContent;
+                }
+                document.body.appendChild(newScript);
+                setTimeout(() => {
+                    if (newScript.parentNode) {
+                        newScript.parentNode.removeChild(newScript);
+                    }
+                }, 100);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading period tasks:', error);
+            content.innerHTML = `
+                <div class="modal-header">
+                    <h5 class="modal-title">Period {{ period }} Tasks</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                    <p class="text-danger mt-2">Error loading tasks</p>
+                </div>
+            `;
+        });
+};
+</script>

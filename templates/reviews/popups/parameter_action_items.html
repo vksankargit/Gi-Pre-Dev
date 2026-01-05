@@ -197,9 +197,9 @@
                     </div>
 
                     <div class="col-md-12">
-                        <label for="parameterActionTeam" class="form-label">Assigned To Team <span class="text-danger">*</span></label>
+                        <label for="parameterActionTeam" class="form-label">Assigned To Team Meeting <span class="text-danger">*</span></label>
                         <select class="form-select" id="parameterActionTeam" name="assigned_to_team" required onchange="loadParameterActionTeamMembers()">
-                            <option value="">Select Team</option>
+                            <option value="">Select Team Meeting</option>
                             {% for team in available_teams %}
                             <option value="{{ team.id }}">{{ team.name }}</option>
                             {% endfor %}

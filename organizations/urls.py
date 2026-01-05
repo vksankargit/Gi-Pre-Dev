@@ -27,5 +27,7 @@ urlpatterns = [
     path('ajax/remove-coordinator/<int:pk>/', views.RemoveCoordinatorView.as_view(), name='remove_coordinator'),
     path('ajax/get-available-coordinators/<int:organization_id>/', views.GetAvailableCoordinatorsView.as_view(), name='get_available_coordinators'),
     path('ajax/get-users/<int:organization_id>/', views.GetUsersView.as_view(), name='get_users'),
+    path('ajax/get-meeting-types/<int:organization_id>/', views.GetMeetingTypesView.as_view(), name='get_meeting_types'),
+    path('ajax/create-meeting-type/', views.CreateMeetingTypeView.as_view(), name='create_meeting_type'),
     path('ajax/get-team-members/<int:team_id>/', views.GetTeamMembersView.as_view(), name='get_team_members'),
 ]

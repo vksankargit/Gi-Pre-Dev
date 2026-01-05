@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from plans.models import GPIParameter, FPIParameter
+from plans.models import GPIParameter
 from datetime import date
 
 
@@ -92,24 +92,8 @@ class Command(BaseCommand):
                     gpi.save()
                     gpi_count += 1
 
-        # Update all FPI parameters (monthly only)
-        fpi_count = 0
-        if today.day <= 7:  # First week of month
-            for fpi in FPIParameter.objects.all():
-                if fpi.current_month_plan is not None:
-                    if current_month_in_quarter > 1:
-                        # Within same quarter, copy goal
-                        fpi.last_month_goal = fpi.current_month_plan
-                    else:
-                        # Month 1 of new quarter - last_month_goal will be fetched from previous quarter by view
-                        pass
-
-                    # Always reset current month fields for the new month
-                    fpi.current_month_plan = None
-                    fpi.last_month_actual = None
-                    fpi.save()
-                    fpi_count += 1
+        # FPI has been removed from the system
 
         self.stdout.write(self.style.SUCCESS(
-            f'Weekly rollover completed: {gpi_count} GPI parameters and {fpi_count} FPI parameters updated'
+            f'Weekly rollover completed: {gpi_count} GPI parameters updated'
         ))
